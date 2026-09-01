@@ -1,0 +1,48 @@
+{
+    "item": "ADD-10",
+    "title": "UNKNOWN reconciler",
+    "status": "IN_PROGRESS",
+    "local_status": "COMPLETE",
+    "branch": "local-only",
+    "implementation": [
+        "新增 internal/unknownreconciler.Sweep 对账周期：以确定性顺序（attempt_id）从数据库枚举全部 UNKNOWN 尝试（JOIN job/intent/ACTIVE reservation/ACTIVE waiter），不依赖内存状态，进程重启后自动恢复扫描集",
+        "证据规则：仅接受 SnapshotProvider 返回的实例最新完整合并快照；快照必须严格晚于 Add 前基线（generation/revision 递进且 digest 不同），陈旧或离线证据不产生任何决定",
+        "快照证明 Identity 已存在时复用 firstconfirm 8.7.3 原子事务进入 RECONCILED_CONFIRMED（binding RESERVATION owner、Reservation REFLECTING、固定 qb_torrent_id 与确认证据），随后关闭 waiter",
+        "快照证明 Identity 不存在时单事务进入 RECONCILED_NO_EFFECT：关闭 waiter 并以 NO_EFFECT 释放 Reservation（released_unconsumed_bytes 如实计算），写 attempt/job 事件",
+        "无决定性证据且已过 sync_waiters.reconciliation_deadline 时单事务进入 EXPIRED_UNKNOWN：关闭 waiter 停止自动对账，但保留 Reservation 与 current_attempt_id，等待两条受审计人工闭环；deadline 之前保持 UNKNOWN 等待下一周期",
+        "组件内无任何网络发送路径，绝不自动重放 Add；pre_add_identity_fact=PRESENT 的尝试拒绝进入确认/无副作用路径（归 ADD-09 分支）",
+        "firstconfirm 扩展：接受 UNKNOWN 尝试与 UNKNOWN Job，推进目标 RECONCILED_CONFIRMED，幂等重放同时覆盖 HASH_SEEN 与 RECONCILED_CONFIRMED，事件 from/to 按来源状态动态写入"
+    ],
+    "outputs": [
+        {
+            "path": "internal/unknownreconciler/reconciler.go",
+            "sha256": "4f963798903e98e9683792501f65c15ef2d099ec4a34dba45b1ef44219517771"
+        },
+        {
+            "path": "internal/unknownreconciler/reconciler_test.go",
+            "sha256": "1f92d7a6ad9e63ff1d7e87d65ddb5fc7b2e22a69afdc2537047e771d2686d1d3"
+        },
+        {
+            "path": "internal/firstconfirm/confirm.go",
+            "sha256": "62cbe10b66a647498ac8e43a0ed028bf97e465314323d985df72e02900254113"
+        },
+        {
+            "path": "internal/firstconfirm/confirm_test.go",
+            "sha256": "8ec54947753f5b2082ed59a10dd5c2b143133f33ee00989ada5970e57b106849"
+        }
+    ],
+    "checks": {
+        "unit": "PASS: go test ./internal/unknownreconciler ./internal/firstconfirm -count=1",
+        "all_tests": "PASS: go test ./... -count=1",
+        "vet": "PASS: go vet ./...",
+        "fresh_evidence_only": "PASS: 陈旧快照（同代同 revision 或 digest 相同）不驱动决策，deadline 前保持 UNKNOWN",
+        "no_auto_replay": "PASS: 包内无网络发送路径，UNKNOWN 只被对账、确认或过期，从不重发 Add",
+        "deadline_semantics": "PASS: 过 reconciliation_deadline 且无决定性证据进入 EXPIRED_UNKNOWN，Reservation 保持 ACTIVE、current_attempt_id 保留",
+        "no_effect_release": "PASS: 新鲜快照证明不存在时以 NO_EFFECT 释放 Reservation 并关闭 waiter",
+        "restart_recovery": "PASS: Sweep 候选完全来自数据库，二次调用（模拟重启）直接从 UNKNOWN 状态继续对账并收敛",
+        "offline_hold": "PASS: qB/qui 离线（provider 无快照）在 deadline 前无任何写入，Reservation 与 waiter 不变",
+        "no_external_service_calls": "PASS"
+    },
+    "blocker": "本项仅完成 local-only UNKNOWN reconciler；真实 qB/qui 快照提供方接线、EXPIRED_UNKNOWN 人工闭环命令（ADD-11）、启动恢复重排（ADD-13）与故障矩阵（ADD-14）仍待后续，未连接外部服务。",
+    "no_external_service_calls": true
+}

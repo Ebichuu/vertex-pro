@@ -1,0 +1,30 @@
+{
+  "item": "BOOT-07",
+  "title": "React 应用骨架",
+  "status": "IN_PROGRESS",
+  "local_status": "PASS",
+  "branch": "local-only",
+  "toolchain": {
+    "node": "24.14.0",
+    "pnpm": "10.33.0",
+    "react": "18.3.1",
+    "vite": "5.4.21",
+    "vitest": "2.1.9"
+  },
+  "checks": {
+    "unit": "PASS: pnpm --dir web test -- --run (16 test files, 78/78)",
+    "typecheck": "PASS: pnpm --dir web typecheck",
+    "build": "PASS: pnpm --dir web build",
+    "build_note": "Vite reports a 593.61 kB main JS chunk; this is a non-blocking size warning",
+    "route_api": "PASS: Sites and Rules routes use the generated local API client paths",
+    "no_external_service_calls": "PASS"
+  },
+  "outputs": [
+    { "path": "web/src/app/router.tsx", "sha256": "21dd567e79d049e38bbf67145e2b45ca510ab59b156f9433fdd274ce68999ff6" },
+    { "path": "web/src/components/sites/SitesRssPage.tsx", "sha256": "c77ac38afd40512d8640794f45ceeda45f136aabd2868b120710f259ad3b42b1" },
+    { "path": "web/src/test/app-shell.test.tsx", "sha256": "41f2aa2c2310015452e865cd0584cde403f41954dff42d2fa43f7d1a7c67e492" },
+    { "path": "web/src/generated/api-client.ts", "sha256": "ed8aebdb940e5849a7a62eccd718237cd137f93d8c731ccd5f6af0ea2759fa0c" }
+  ],
+  "blocker": "The frontend local-only routes and build are green; real qui/qB, worker lifecycle, browser main-flow E2E, and complete Gate evidence remain future work.",
+  "no_external_service_calls": true
+}

@@ -1,0 +1,31 @@
+{
+  "item": "DB-11",
+  "status": "IN_PROGRESS",
+  "branch": "local-only",
+  "implementation": [
+    "cold file backup before upgrade",
+    "supported old schema upgrade via embedded migrations",
+    "fail-closed restore when migration or consistency check fails",
+    "explicit backup restore with SQLite sidecar cleanup"
+  ],
+  "test_commands": {
+    "package": "go test ./internal/db -count=1",
+    "all": "go test ./... -count=1",
+    "vet": "go vet ./...",
+    "race": "pwsh -NoProfile -File tools/dev/test-race.ps1"
+  },
+  "results": {
+    "package": "PASS",
+    "all": "PASS",
+    "vet": "PASS",
+    "race": "PASS in Docker Desktop Linux container"
+  },
+  "inputs": [
+    { "path": "internal/db/upgrade.go", "sha256": "68dc112b4bf60a6b06eb2ad96eed6bb1ccd3f3fcf266737f4cd9d2a59bc6a523" },
+    { "path": "internal/db/upgrade_test.go", "sha256": "9ae0b51be470b5f8ae60e55068526daea16f682bddacb7bc605ab892d74ba3fc" },
+    { "path": "internal/db/migration.go", "sha256": "9efd5915bb2bf19d7bb59384de322af8e6d0f89ceef6d0083049783c00a3ad42" },
+    { "path": "internal/db/consistency.go", "sha256": "083a59f7f8addedc22498426b7ed0caee86e19bed675d07c4c557d035c8cb9fe" }
+  ],
+  "blocker": "DB-11 remains IN_PROGRESS because operational backup retention/restore acceptance and the baseline merge commit are not closed; implementation tests and Docker Linux race are green.",
+  "no_external_service_calls": true
+}

@@ -1,0 +1,35 @@
+﻿{
+    "item":  "ADD-06",
+    "title":  "响应事实分类",
+    "status":  "IN_PROGRESS",
+    "local_status":  "COMPLETE",
+    "branch":  "local-only",
+    "implementation":  [
+                           "将 NOT_STARTED/FAILED_NO_EFFECT 分类为 ADD_FAILED，明确无副作用事实",
+                           "将已开始响应分类为 POSSIBLE_EFFECT，并根据响应格式给出 ADD_SENT 或 UNKNOWN hint",
+                           "qB Torrent ID 只作为 OBSERVED_EFFECT hint，不作为权威身份或 HASH_SEEN 事实",
+                           "所有已开始响应均要求后续 Sync/Identity 确认，分类器不写 Job 或 Attempt 状态",
+                           "拒绝缺失 API version、非法 dispatch/side-effect 组合，保持 fail-closed"
+                       ],
+    "outputs":  [
+                    {
+                        "path":  "internal/addfacts/facts.go",
+                        "sha256":  "688f544b9a44163082abdfaa17c556205a3421969d4dd0fc570ac4d5377c7d49"
+                    },
+                    {
+                        "path":  "internal/addfacts/facts_test.go",
+                        "sha256":  "81de9a1561bf5d3d9c7257fa8c13d426ed71b317bef67081503bb516b4b1080c"
+                    }
+                ],
+    "checks":  {
+                   "unit":  "PASS: go test ./internal/addfacts -count=1",
+                   "all_tests":  "PASS: go test ./... -count=1",
+                   "vet":  "PASS: go vet ./...",
+                   "not_sent_no_effect":  "PASS",
+                   "started_requires_sync":  "PASS",
+                   "observed_effect_hint_non_authoritative":  "PASS",
+                   "invalid_fact_rejection":  "PASS"
+               },
+    "blocker":  "本项仅提供 local-only 响应事实分类；真实 qui/qB Add、SyncWatcher、IdentityMatcher 和后续 Attempt 原子状态接线仍待后续；未连接外部服务。",
+    "no_external_service_calls":  true
+}

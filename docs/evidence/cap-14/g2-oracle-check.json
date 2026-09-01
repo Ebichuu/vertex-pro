@@ -1,0 +1,39 @@
+﻿{
+  "item": "CAP-14",
+  "title": "G2 oracle 工具",
+  "status": "IN_PROGRESS",
+  "local_status": "COMPLETE",
+  "branch": "local-only",
+  "implementation": [
+    "提供固定 P0 场景集合，覆盖 Reservation rollback、UNKNOWN 对账、完成释放、权威删除和连续稳定快照",
+    "每个场景记录 initial_data、fault_points、operations、最终 SQL assertions 和 expected_events",
+    "按断言名称、SQL、期望值与观测值执行 fail-closed 校验",
+    "对事件序列计算 SHA-256 digest",
+    "同一 case 使用相同输入重跑并校验 status、failures、event digest 完全一致",
+    "拒绝空场景、不完整断言、断言数量不一致和重复场景 ID"
+  ],
+  "outputs": [
+    {"path": "internal/g2oracle/oracle.go", "sha256": "f8215c9765a66439acc47dd829c5da23fbca2efc256927d040b891fd6601ecc8"},
+    {"path": "internal/g2oracle/oracle_test.go", "sha256": "28b9d912bef3394dac6a1ed0f4adf7de414b4509429401c531e76f188fd3d953"}
+  ],
+  "p0_cases": [
+    {"id": "G2-CAP-08-ROLLBACK", "event_digest": "ad9b7177ca251a43f50d17105dd69f62a9941d81b778cd69c9329b0e964cad9b"},
+    {"id": "G2-CAP-13-UNKNOWN", "event_digest": "4add34726824514d6eaa7832f6f169d00bf42b8685e8ff77aa80ff95309eb0de"},
+    {"id": "G2-CAP-11-COMPLETED", "event_digest": "e2646357a5d89919ebea2349484fa940885b2d0a16fbea66328013003fb4e6d1"},
+    {"id": "G2-CAP-12-REMOVED", "event_digest": "590b544a4a64588fa02d05ba2f3bcfbff906668f54f60d3c2f8071f8f7ffe1b5"},
+    {"id": "G2-CAP-13-STABLE", "event_digest": "aa29e28e3fbfbf637aef57a829896bc1314229447550ce02239e0122cb579820"}
+  ],
+  "checks": {
+    "unit": "PASS: go test ./internal/g2oracle -count=1",
+    "all_tests": "PASS: go test ./... -count=1",
+    "vet": "PASS: go vet ./...",
+    "p0_case_suite": "PASS",
+    "sql_assertion_gate": "PASS",
+    "event_digest": "PASS",
+    "deterministic_rerun": "PASS",
+    "fail_closed_invalid_case": "PASS"
+  },
+  "blocker": "CAP-14 当前是 local-only oracle harness；真实 qB/qui 故障注入、DB-10/真实服务启动集成和 G2 正式通过裁决仍待后续，不标记正式 G2_PASS。",
+  "no_external_service_calls": true
+}
+

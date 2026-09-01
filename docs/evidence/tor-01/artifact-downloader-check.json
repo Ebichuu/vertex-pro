@@ -1,0 +1,33 @@
+{
+  "item": "TOR-01",
+  "status": "IN_PROGRESS",
+  "branch": "local-only",
+  "implementation": [
+    "injectable HTTP client for in-memory torrent artifact download",
+    "exact host allowlist validation for initial URL and every redirect",
+    "response body size limit with Content-Length and bounded streaming reads",
+    "torrent-compatible Content-Type allowlist",
+    "HTTP status, invalid URL, unsupported content type, redirect, read, and cancellation failures fail closed",
+    "no filesystem writes, qB/qui calls, or real external artifact calls"
+  ],
+  "test_commands": {
+    "package": "go test ./internal/torrentdownload -count=1",
+    "all": "go test ./... -count=1",
+    "vet": "go vet ./...",
+    "race_docker": "docker run --rm -v \"${PWD}:/src\" -w /src golang:1.26.3-bookworm sh -c 'export PATH=/usr/local/go/bin:$PATH; CGO_ENABLED=1 go test -race ./internal/torrentdownload -count=1'"
+  },
+  "results": {
+    "package": "PASS",
+    "all": "PASS",
+    "vet": "PASS",
+    "race_docker": "PASS"
+  },
+  "inputs": [
+    {"path": "internal/torrentdownload/downloader.go", "sha256": "46442330710f7c3d40f0945fefd8f59c952a161933df02b45933121168f6efc1"},
+    {"path": "internal/torrentdownload/downloader_test.go", "sha256": "d9b51874b32a461cdbbea9cf5cddf4f15e9a6fdb06b01dac67e44f87e32be7af"},
+    {"path": "internal/rssfetch/fetch.go", "sha256": "54e690df84c70a81017c9b69507d05ea0784709a11396c3b6cd1db738b9d6459"},
+    {"path": "internal/rsssource/source.go", "sha256": "d2c6f373a2be324a8861b9bb7bd2cfee5f98d14480d18922363b5455376d2eee"}
+  ],
+  "blocker": "TOR-02 bencode security parsing, TOR-03 identity calculation, and TOR-04 Source/Identity association remain pending; no external artifact calls were made.",
+  "no_external_service_calls": true
+}

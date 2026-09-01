@@ -1,0 +1,45 @@
+{
+    "item":  "DB-08",
+    "status":  "IN_PROGRESS",
+    "branch":  "local-only",
+    "implementation":  [
+                           "active delivery chain and current attempt partial unique indexes",
+                           "reservation reflection step uniqueness and query indexes",
+                           "PlacementAttempt target fact immutable trigger",
+                           "Reservation-to-Attempt target, epoch and byte match guard",
+                           "event stream aggregate revision monotonicity and append-only update guard",
+                           "API command identity immutability and lifecycle revision/state transition guard"
+                       ],
+    "test_commands":  {
+                          "package":  "go test ./internal/db -count=1",
+                          "all":  "go test ./... -count=1",
+                          "vet":  "go vet ./...",
+                          "race":  "CGO_ENABLED=1 go test -race ./internal/db -count=1"
+                      },
+    "results":  {
+                    "package":  "PASS",
+                    "all":  "PASS",
+                    "vet":  "PASS",
+                    "race":  "BLOCKED: CGO_ENABLED=1 requires gcc, which is unavailable in the current environment"
+                },
+    "inputs":  [
+                   {
+                       "path":  "internal/db/migrations/0007_indexes_triggers.sql",
+                       "sha256":  "92fba9bc19a4d727a5b830f17a2ea5472357f8489f546e7e202c3f82cb73136a"
+                   },
+                   {
+                       "path":  "internal/db/db08_test.go",
+                       "sha256":  "db304aa2904e8db904962cba984cf0d34e3b247cba2d558a48bb50c4e3f58703"
+                   },
+                   {
+                       "path":  "internal/db/migration_test.go",
+                       "sha256":  "be8a75ab841e8b661118ebb640f0889923a7c7fb590341466de9c57b76301b44"
+                   },
+                   {
+                       "path":  "internal/db/db06_test.go",
+                       "sha256":  "4dc0a1b6a8dbf3ab50bd03706d914f6881bf01f33ac52add5e3be0bc2402c605"
+                   }
+               ],
+    "blocker":  "TxRunner BEGIN IMMEDIATE, repository allowlists, startup reconciliation and C1 runtime trigger inventory remain future DB-09/DB-10 stages; race test is environment-blocked because gcc is unavailable.",
+    "no_external_service_calls":  true
+}

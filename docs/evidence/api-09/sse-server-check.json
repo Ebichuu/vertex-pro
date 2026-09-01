@@ -1,0 +1,38 @@
+{
+    "item": "API-09",
+    "title": "SSE 服务",
+    "status": "IN_PROGRESS",
+    "local_status": "COMPLETE",
+    "branch": "local-only",
+    "implementation": [
+        "新增 internal/sseserver：实现 §16.6 冻结协议——无 Last-Event-ID 时发送 stream.ready 只订阅 live 事件不回放历史；Last-Event-ID 在保留范围内按 event_id ASC 重放后进入 live",
+        "stream.reset_required 三种触发：ID 晚于当前最大、早于最老保留事件（保留清理造成的缺口）、需重放超过 5000 上限；payload 携带 oldest_event_id/current_event_id 后关闭连接，客户端重新拉取 REST 快照再连接",
+        "事件编码按合同：id 为持久化单调整数、data 为单行 UTF-8 JSON（schema_version=1，含 event_id/occurred_at/aggregate_type/aggregate_id/revision/payload）；stats.realtime 瞬时事件不带 id、不可重放",
+        "每 15s 心跳为 SSE 注释（: heartbeat <utc>），不占 event ID；先订阅后重放避免漏事件，live 循环按 ID 去重",
+        "慢客户端策略：Hub 订阅缓冲耗尽即摘除并关闭通道，客户端凭 Last-Event-ID 重连恢复；每次写操作带写超时；客户端断线自动取消订阅",
+        "真实 httptest.Server 集成测试：ready/live、重放+ready、超限 reset、陈旧 ID reset（模拟保留清理删除旧事件）、心跳、慢客户端摘除、断线退订全部覆盖"
+    ],
+    "outputs": [
+        {
+            "path": "internal/sseserver/server.go",
+            "sha256": "b3611330c641aeaee37e803bbc8a14fd4cd6d27b3432b0722aa9634d5114674b"
+        },
+        {
+            "path": "internal/sseserver/server_test.go",
+            "sha256": "10d1ead9aba9c3b9bc1759e7cb8dedfe2c92400eb59236cc7c8f6e52a41e9b73"
+        }
+    ],
+    "checks": {
+        "unit": "PASS: go test ./internal/sseserver -count=1",
+        "all_tests": "PASS: go test ./... -count=1（74 包全绿）",
+        "vet": "PASS: go vet ./...",
+        "ready_and_live_only": "PASS: 无 Last-Event-ID 不回放历史",
+        "replay_in_retention": "PASS: 保留范围内按序重放后进入 live",
+        "reset_required_three_cases": "PASS: 超上限/晚于最大/早于最老保留均 reset 并携带 oldest/current",
+        "heartbeat_comment": "PASS: 心跳为注释不占 event ID",
+        "slow_client_drop": "PASS: 缓冲耗尽摘除订阅者，凭 Last-Event-ID 可恢复",
+        "disconnect_unsubscribe": "PASS: 客户端断线零泄漏",
+        "no_external_service_calls": "PASS"
+    },
+    "blocker": "本项仅完成 local-only SSE 服务端；事件发布方（SyncWatcher/命令层）接线与 7 天保留清理（OBS-03）待后续，未连接外部服务。"
+}

@@ -1,0 +1,72 @@
+{
+  "item": "QUI-12 / ADD-06 / ADD-07 / ADD-08",
+  "status": "IN_PROGRESS",
+  "executed_at": "2026-09-01T13:41:00Z",
+  "isolation": {
+    "docker_network": "dedicated internal lab network",
+    "production_qui_called": false,
+    "production_qb_called": false,
+    "lab_qb_started_empty": true,
+    "lab_qb_returned_empty": true
+  },
+  "builds": {
+    "qui": {
+      "upstream_tag": "v1.0.0",
+      "upstream_commit": "d5526ca59e7d04cc1e31377f0bcde844ad914212",
+      "local_image_digest": "sha256:bbc4f629a5ffa2d5751bc2d547428f53b1de5b865958b2e3fc75de8603e1dc8d",
+      "required_lock_commit": "8fcfc4d2beaf5e68ccebe837d7c0d9be965c8896",
+      "matches_required_lock": false
+    },
+    "qb": {
+      "version": "5.0.4",
+      "build_label": "5.0.4-r0-ls390",
+      "image_digest": "sha256:46f4e80af074fa2ffc0214fe0b7d59384748cfb34685892a53b7a3c87407a333"
+    }
+  },
+  "production_go_add": {
+    "status": "PASS",
+    "dispatch_worker_used": true,
+    "http_status": 200,
+    "response_format": "legacy_text",
+    "side_effect_fact": "POSSIBLE_EFFECT",
+    "sync_identity_matched": true,
+    "final_state": "stoppedDL"
+  },
+  "protocol_lifecycle": {
+    "status": "PASS",
+    "duplicate_add_http_status": 200,
+    "duplicate_add_body_class": "legacy_fails",
+    "duplicate_task_delta": 0,
+    "invalid_add_http_status": 415,
+    "invalid_add_task_delta": 0,
+    "trackers_read": "PASS",
+    "transfer_info_read": "PASS",
+    "delete_http_status": 200,
+    "incremental_removed_event_observed": true,
+    "task_absent_after_delete": true
+  },
+  "compatibility_findings": [
+    "The v1.0.0 qui Client Proxy supports the required qB proxy lifecycle used by the QB_504 adapter.",
+    "The v1.0.0 qui Control API does not provide the newer transfer-info and capabilities endpoints used by the production Control client.",
+    "The Add probe must wait through transient checkingResumeData until stoppedDL rather than treating the first Identity sighting as the final inactive assertion."
+  ],
+  "verification_decision": {
+    "profile_state": "EXPECTED",
+    "may_promote_to_verified": false,
+    "reasons": [
+      "The tested qui commit does not match third_party/qui/UPSTREAM_LOCK.yaml.",
+      "Response-loss, timeout, 202/204/409 and restart fault cases are not complete.",
+      "QB_438 and QB_522 profiles are not available in the lab."
+    ]
+  },
+  "evidence": [
+    {
+      "path": "docs/evidence/qui-12/lab-qb504-go-inactive-add.json",
+      "sha256": "cc3086c37cd9d73eb5922ae94f7b38f674271005a218899053b251f1cceec58a"
+    },
+    {
+      "path": "docs/evidence/qui-12/lab-qb504-protocol-lifecycle.json",
+      "sha256": "698d6a369e51e02d38ae57f0819939ca2f1124e0bb63b7b1a964420c96d576ef"
+    }
+  ]
+}

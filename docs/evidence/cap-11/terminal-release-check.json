@@ -1,0 +1,40 @@
+{
+    "item":  "CAP-11",
+    "title":  "完成终态释放",
+    "status":  "IN_PROGRESS",
+    "local_status":  "COMPLETE",
+    "branch":  "local-only",
+    "implementation":  [
+                           "仅接受 HASH_SEEN/RECONCILED_CONFIRMED Attempt 与 Job",
+                           "要求 amount_left=KNOWN 且值为 0",
+                           "要求新鲜 TRUSTED physical_free 证据与 generation/revision/digest 一致",
+                           "一个 BEGIN IMMEDIATE 事务写入 reservation_reflections",
+                           "将 RESERVATION binding 转为 UNMANAGED 并清除 uncertainty debit",
+                           "将 reflected_physical_bytes 更新到 reserved_bytes",
+                           "以 TERMINAL_COMPLETED 释放 Reservation 并推进 Attempt/Job 完成事实",
+                           "重复释放、stale 证据或非零 amount_left 整体拒绝"
+                       ],
+    "outputs":  [
+                    {
+                        "path":  "internal/terminalrelease/release.go",
+                        "sha256":  "fc9f8740dfe8824664a70da3317a6d57bde19fd7ff6b2253c2c7396fd8705dae"
+                    },
+                    {
+                        "path":  "internal/terminalrelease/release_test.go",
+                        "sha256":  "917d2567c1b18e6b4544b8767663c2899f28d693f83caecd200b8ec96c810974"
+                    }
+                ],
+    "checks":  {
+                   "unit":  "PASS: go test ./internal/terminalrelease -count=1",
+                   "all_tests":  "PASS: go test ./... -count=1",
+                   "vet":  "PASS: go vet ./...",
+                   "reflection_once":  "PASS",
+                   "binding_to_unmanaged":  "PASS",
+                   "fresh_physical_free":  "PASS",
+                   "known_zero_amount_left":  "PASS",
+                   "reservation_release":  "PASS",
+                   "rollback_and_duplicate_guard":  "PASS"
+               },
+    "blocker":  "CAP-12 权威删除终态、CAP-13 reconciliation 及后续状态机/真实 Add 接线尚未实现；本项不开放真实 Add 路径。",
+    "no_external_service_calls":  true
+}

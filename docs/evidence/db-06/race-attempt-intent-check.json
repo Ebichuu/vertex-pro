@@ -1,0 +1,40 @@
+{
+    "item":  "DB-06",
+    "status":  "IN_PROGRESS",
+    "branch":  "local-only",
+    "implementation":  [
+                           "RaceJob state axes and current Attempt pointer",
+                           "rule match aggregation records",
+                           "PlacementAttempt target and confirmation fields",
+                           "SubmitIntent unique attempt relation and frozen pre-add facts",
+                           "circular race_jobs/placement_attempts table creation order",
+                           "Reservation-to-Attempt insertion guard",
+                           "SubmitIntent identity/instance match guard"
+                       ],
+    "test_commands":  {
+                          "package":  "go test ./internal/db -count=1",
+                          "all":  "go test ./... -count=1",
+                          "vet":  "go vet ./..."
+                      },
+    "results":  {
+                    "package":  "PASS",
+                    "all":  "PASS",
+                    "vet":  "PASS"
+                },
+    "inputs":  [
+                   {
+                       "path":  "internal/db/migrations/0005_race_attempt_intent.sql",
+                       "sha256":  "8f18b29c22f127a393d1d485883db6aee4a2b366500128afe69393ce9c3a6a9e"
+                   },
+                   {
+                       "path":  "internal/db/db05_test.go",
+                       "sha256":  "959101d535d1eeb4f168e5f6a77e0b07afac977140128a0e6a3fb1054f4c8240"
+                   },
+                   {
+                       "path":  "internal/db/migration_test.go",
+                       "sha256":  "be8a75ab841e8b661118ebb640f0889923a7c7fb590341466de9c57b76301b44"
+                   }
+               ],
+    "blocker":  "Attempt immutable trigger, full current-pointer invariant audit, TxRunner BEGIN IMMEDIATE service and event publication remain DB-08/DB-09 stages.",
+    "no_external_service_calls":  true
+}

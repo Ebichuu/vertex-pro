@@ -1,0 +1,35 @@
+{
+    "item": "ADD-14",
+    "title": "故障矩阵",
+    "status": "IN_PROGRESS",
+    "local_status": "COMPLETE",
+    "branch": "local-only",
+    "implementation": [
+        "新增 internal/addfaultmatrix：阶段 H P0 故障用例清单 Manifest()、故障注入点 Hook（驱动在注入点返回错误即模拟 kill -9 中断，可从中断状态重新驱动收敛）与终态 Oracle（按主键规范化序列化 placement_attempts/race_jobs/capacity_reservations/sync_waiters/capacity_task_bindings/race_events/submit_intents 全部行取 SHA-256，覆盖 DB 与事件流）",
+        "P0 用例映射 RC8 第 19 节故障矩阵与第 16 节 Add/恢复纪律：F01 waiter 注册前崩溃、F02 dispatch 持久化前崩溃（恢复不 dispatch）、F03 UNKNOWN+新鲜快照证明无副作用（RECONCILED_NO_EFFECT+释放）、F04 UNKNOWN+快照确认已存在（RECONCILED_CONFIRMED+REFLECTING）、F05 qB 离线过对账 deadline（EXPIRED_UNKNOWN 且 Reservation 保留）、F06 确认事务崩溃后重复确认（幂等同一终态）、F07 ALREADY_PRESENT 原子分支崩溃后补记、F08 旧 Attempt 已关闭但新 Placement 未执行（READY 且无半创建 Attempt）",
+        "Gate H 验收：每个 P0 用例连续运行三次（第三次在首个注入点模拟 kill -9 后重启续跑）均得到相同数据库终态摘要",
+        "全部用例仅驱动阶段 H 已实现的 local-only 事务组件（startuprecover/unknownreconciler/firstconfirm/alreadypresent/saferetry），不发送网络请求"
+    ],
+    "outputs": [
+        {
+            "path": "internal/addfaultmatrix/matrix.go",
+            "sha256": "9c64807dd7a026708169b605f9fa59bbc8ccb6b4c319982081d5c58382c13795"
+        },
+        {
+            "path": "internal/addfaultmatrix/matrix_test.go",
+            "sha256": "dd5ed1828167578271db51ec908825ad9f99274ffa30561bc3cffaf0d8bd49bb"
+        }
+    ],
+    "checks": {
+        "unit": "PASS: go test ./internal/addfaultmatrix -count=1",
+        "all_tests": "PASS: go test ./... -count=1",
+        "vet": "PASS: go vet ./...",
+        "three_run_deterministic_terminal_state": "PASS: 8/8 P0 用例三次运行 Oracle 摘要一致",
+        "kill9_resume_convergence": "PASS: 注入点中断后从持久化状态重新驱动收敛到相同终态",
+        "rc8_section_19_mapping": "PASS: 用例清单逐条映射故障矩阵行",
+        "no_auto_replay": "PASS: 恢复与对账路径不重发 Add",
+        "no_external_service_calls": "PASS"
+    },
+    "blocker": "本项仅覆盖阶段 H local-only P0 故障用例；真实 qB/qui 在环故障注入（超时/断流/qB 重启）、RSS/qui 侧故障行与 G3 全量矩阵仍待后续阶段接线，未连接外部服务。",
+    "no_external_service_calls": true
+}

@@ -1,0 +1,43 @@
+{
+    "item": "API-01",
+    "title": "HTTP 基础中间件",
+    "status": "IN_PROGRESS",
+    "local_status": "COMPLETE",
+    "branch": "local-only",
+    "implementation": [
+        "新增 internal/httpapi：请求中间件链固定为 request ID 最外层 -> 日志 -> panic recovery -> body 上限 -> 超时，保证日志与错误 envelope 均携带关联标识",
+        "request ID：接收 X-Request-ID 或生成新 ID，写入响应头与 context（observability 新增 RequestID 读取器）",
+        "panic recovery：recover 后输出合同 INTERNAL_ERROR envelope，panic 值仅进入日志、绝不进入响应 details",
+        "body limit：http.MaxBytesReader 全局与 DecodeJSON 双重限制，超限映射 INVALID_REQUEST(400)",
+        "timeout：每请求 context deadline，超时输出 INTERNAL_ERROR envelope；客户端取消时不写任何响应",
+        "错误 envelope：实现 OpenAPI ErrorEnvelope { error: { code, message, request_id, retryable, details? } }，HTTP status 与 retryable 按 error_codes.yaml 冻结映射；TypedError 供 handler 按合同错误码而非字符串决定响应",
+        "合同守护测试：TestErrorCodesMatchContract 解析 contracts/error_codes.yaml 逐码比对 status/retryable；TestEnvelopeMatchesOpenAPISchema 校验 OpenAPI Error/ErrorEnvelope required 字段"
+    ],
+    "outputs": [
+        {
+            "path": "internal/httpapi/middleware.go",
+            "sha256": "8841022d6cc32b64987117c228d244419d6826e45ce3829531395486328bd803"
+        },
+        {
+            "path": "internal/httpapi/middleware_test.go",
+            "sha256": "cd5d8d416d9411a7a39debce17695ccb1d36793f607d780dd0c6b9a66c43eb1c"
+        },
+        {
+            "path": "internal/observability/logging.go",
+            "sha256": "c0e7d41a0583a147088b2cf1d9a4fb54e52f9bf7dfc6f115c663a772cb30c5bc"
+        }
+    ],
+    "checks": {
+        "unit": "PASS: go test ./internal/httpapi -count=1",
+        "all_tests": "PASS: go test ./... -count=1",
+        "vet": "PASS: go vet ./...",
+        "panic_envelope_no_leak": "PASS: panic 值不出现在响应体",
+        "body_limit_envelope": "PASS: 超限请求得到 INVALID_REQUEST envelope",
+        "timeout_and_cancel": "PASS: 超时输出 envelope；客户端取消零写入",
+        "request_id_propagation": "PASS: 入站 ID 透传、缺失时生成并进入日志与 envelope",
+        "contract_guard": "PASS: 错误码 status/retryable 与 YAML 一致，envelope 与 OpenAPI 一致",
+        "no_external_service_calls": "PASS"
+    },
+    "blocker": "已知环境问题：Windows 下并发 go test 偶发 cmd/link panic（modernc/libc 链接），受影响包单独重跑均通过；本项仅 local-only，真实路由注册与上游接线属 API-04 及后续任务。",
+    "no_external_service_calls": true
+}

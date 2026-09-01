@@ -1,0 +1,34 @@
+{
+    "item": "API-05",
+    "title": "Revision 与 cursor",
+    "status": "IN_PROGRESS",
+    "local_status": "COMPLETE",
+    "branch": "local-only",
+    "implementation": [
+        "新增 internal/apipaging：opaque cursor 为 (稳定排序键, 唯一 ID) 元组的 HMAC-SHA256 签名 base64url 编码——分页基于键元组而非偏移量，翻页间隙的插入/删除不会重复或跳漏；签名防止客户端伪造排序键",
+        "CheckRevision 乐观并发守卫：If-Match 修订号与存储当前值不一致返回冲突错误（API 层映射 REVISION_CONFLICT 409 retryable）",
+        "解码失败/签名不匹配/载荷畸形统一映射 CURSOR 类 ErrInvalidCursor；资源 API 的 list 端点可直接采用该键元组分页"
+    ],
+    "outputs": [
+        {
+            "path": "internal/apipaging/paging.go",
+            "sha256": "46d775d24425847515d4ce45e41f061e0ba6661940d16679d213fad392d1495d"
+        },
+        {
+            "path": "internal/apipaging/paging_test.go",
+            "sha256": "1f424e524fb56e7e20c44fe06be7fff5031c53261b4b742adaba19be2d5604db"
+        }
+    ],
+    "checks": {
+        "unit": "PASS: go test ./internal/apipaging -count=1",
+        "all_tests": "PASS: go test ./... -count=1",
+        "vet": "PASS: go vet ./...",
+        "cursor_roundtrip": "PASS: 编解码往返一致",
+        "tamper_protection": "PASS: 篡改载荷/签名均拒绝",
+        "deletion_during_pagination": "PASS: 翻页间隙删除记录后继续分页无重复、无跳漏",
+        "revision_conflict": "PASS: 修订号不匹配返回冲突错误",
+        "no_external_service_calls": "PASS"
+    },
+    "blocker": "本项仅完成 local-only 分页与并发原语；jobs/rules 端点的 If-Match 写路径在 POST 写端点（后续任务）接入，未连接外部服务。",
+    "no_external_service_calls": true
+}

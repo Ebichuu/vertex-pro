@@ -1,0 +1,12 @@
+{
+    "check":  "BOOT-04 qui upstream lock",
+    "status":  "PASS",
+    "commit":  "8fcfc4d2beaf5e68ccebe837d7c0d9be965c8896",
+    "candidate_count":  5,
+    "missing_candidates":  [
+
+                           ],
+    "missing_markers":  [
+
+                        ]
+}

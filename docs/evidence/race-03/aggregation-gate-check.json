@@ -1,0 +1,35 @@
+{
+  "item": "RACE-03",
+  "status": "IN_PROGRESS",
+  "branch": "local-only",
+  "implementation": [
+    "pure aggregation of Rule MATCHED, Torrent READY, and Placement PREPARED",
+    "fail-closed preparation states for incomplete workers",
+    "REJECTED and FAILED mapping to PREPARE_FAILED with reason codes",
+    "WAITING_CAPACITY never becomes Reservation eligible",
+    "final candidate AVAILABLE required before Reservation eligibility",
+    "current job READY and empty current attempt required before Reservation eligibility",
+    "invalid state values rejected",
+    "no Reservation, Attempt, database, Add, or external service side effects"
+  ],
+  "test_commands": {
+    "package": "go test ./internal/racegate -count=1",
+    "all": "go test ./... -count=1",
+    "vet": "go vet ./...",
+    "race_docker": "docker run --rm -v \"${PWD}:/src\" -w /src golang:1.26.3-bookworm sh -c 'export PATH=/usr/local/go/bin:$PATH; CGO_ENABLED=1 go test -race ./internal/racegate -count=1'"
+  },
+  "results": {
+    "package": "PASS",
+    "all": "PASS",
+    "vet": "PASS",
+    "race_docker": "PASS"
+  },
+  "inputs": [
+    {"path": "internal/racegate/aggregate.go", "sha256": "462abeb5b1bec11182d2a47f6e86824f379ccfc0a7683f2b7055c4f821d7ed05"},
+    {"path": "internal/racegate/aggregate_test.go", "sha256": "5fe2ec711db0b0b915937b783a465c6ec8827669b2a2868b9025aa242806df84"},
+    {"path": "internal/raceprep/supervisor.go", "sha256": "b149e68dc3c2eed91c6d43ca72003629f82eab442323542532ffa9b679cab3cc"},
+    {"path": "internal/racejob/job.go", "sha256": "32e19236b009f94d5ae375067d2ff8ef693e8ed37dbfb7614473442d31f81221"}
+  ],
+  "blocker": "Reservation transaction, final capability/snapshot/capacity revision recheck, and persistent RaceJob state transitions remain pending; no external services were called.",
+  "no_external_service_calls": true
+}

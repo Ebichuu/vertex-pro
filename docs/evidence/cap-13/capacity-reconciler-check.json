@@ -1,0 +1,34 @@
+﻿{
+  "item": "CAP-13",
+  "title": "Capacity reconciler",
+  "status": "IN_PROGRESS",
+  "local_status": "COMPLETE",
+  "branch": "local-only",
+  "implementation": [
+    "在 BEGIN IMMEDIATE 事务中读取并锁定当前 StorageTarget capacity epoch",
+    "进入 RECONCILING，清空旧 physical/effective free，停止把旧 epoch 当作可信容量",
+    "要求完整基线、owner 唯一、全部负债覆盖、无 UNKNOWN amount_left、无未量化风险",
+    "要求至少连续两次稳定快照后才允许发布新 allocation epoch",
+    "从 ACTIVE/REFLECTING Reservation、UNMANAGED liability 与 safety margin 重建唯一账本",
+    "使用 capacityprojection.Project 校验物理空间、溢出和有效可用空间",
+    "条件不足或投影不可信时永久保持 fail-closed，不估算、不发布 TRUSTED epoch",
+    "条件全部满足时原子发布新的 TRUSTED capacity epoch"
+  ],
+  "outputs": [
+    {"path": "internal/capacityreconciler/reconciler.go", "sha256": "d29864f88ded7ff91791f565bcc6640bfc2dee1a1a6f07cc742b4fddd06bb983"},
+    {"path": "internal/capacityreconciler/reconciler_test.go", "sha256": "f5f1d4c795c18eac09339df8ee2d75150a6e828a2680e3fb4f04f76182e327c3"}
+  ],
+  "checks": {
+    "unit": "PASS: go test ./internal/capacityreconciler -count=1",
+    "all_tests": "PASS: go test ./... -count=1",
+    "vet": "PASS: go vet ./...",
+    "stable_snapshot_gate": "PASS",
+    "unknown_amount_gate": "PASS",
+    "ledger_projection": "PASS",
+    "new_epoch_publish": "PASS",
+    "fail_closed_no_epoch": "PASS"
+  },
+  "blocker": "真实 QUI-08/QUI-09 SyncWatcher、qB 完整基线和 CAP-14 G2 oracle 尚未接线；本项仅提供 local-only 对账事务与证据门槛。",
+  "no_external_service_calls": true
+}
+

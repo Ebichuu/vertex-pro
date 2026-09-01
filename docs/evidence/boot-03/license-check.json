@@ -1,0 +1,11 @@
+{
+    "check":  "BOOT-03 license files",
+    "status":  "PASS",
+    "license":  "GPL-2.0 text markers present",
+    "missing_files":  [
+
+                      ],
+    "missing_markers":  [
+
+                        ]
+}

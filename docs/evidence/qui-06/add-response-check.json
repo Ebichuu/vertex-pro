@@ -1,0 +1,41 @@
+{
+    "item":  "QUI-06",
+    "status":  "IN_PROGRESS",
+    "branch":  "local-only",
+    "implementation":  [
+                           "legacy Ok/Fails normalization",
+                           "JSON success/pending/failure normalization",
+                           "200/202/204/409 handling",
+                           "transport error and not-sent distinction",
+                           "raw body digest and added torrent ID hint",
+                           "never promotes Add response directly to HASH_SEEN"
+                       ],
+    "test_commands":  {
+                          "package":  "go test ./internal/qbresponse -count=1",
+                          "all":  "go test ./... -count=1",
+                          "vet":  "go vet ./...",
+                          "race":  "CGO_ENABLED=1 go test -race ./internal/qbresponse -count=1"
+                      },
+    "results":  {
+                    "package":  "PASS",
+                    "all":  "PASS",
+                    "vet":  "PASS",
+                    "race":  "BLOCKED: CGO_ENABLED=1 requires gcc, unavailable in current environment"
+                },
+    "inputs":  [
+                   {
+                       "path":  "internal/qbresponse/adapter.go",
+                       "sha256":  "0963ab880877755eb04fcc0669a285b0bb48fc1ab06f2ce7f60875cfe971291b"
+                   },
+                   {
+                       "path":  "internal/qbresponse/adapter_test.go",
+                       "sha256":  "68de205814c19d6c4206b11dc28d919ecc34c00808db7c1ebc4a45bd0a459098"
+                   },
+                   {
+                       "path":  "internal/qbadd/request.go",
+                       "sha256":  "7fdb2407aee508c2872368be1a1388187d02e4a27e4df78ef712def10cec2d0a"
+                   }
+               ],
+    "blocker":  "StateMachine/Sync confirmation remains later ADD and QUI-07 work; race test is environment-blocked because gcc is unavailable.",
+    "no_external_service_calls":  true
+}

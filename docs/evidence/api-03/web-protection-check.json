@@ -1,0 +1,37 @@
+{
+    "item": "API-03",
+    "title": "Web 防护",
+    "status": "IN_PROGRESS",
+    "local_status": "COMPLETE",
+    "branch": "local-only",
+    "implementation": [
+        "internal/httpapi 新增 WebProtection 中间件（第 20.3 节 Web 安全线）：Host 与 Origin 严格允许清单校验，未配置即全拒（fail closed），恶意/伪造 Host 与跨站 Origin 一律 403 FORBIDDEN envelope",
+        "CSRF 双提交令牌：非安全方法（POST/PUT/PATCH/DELETE）要求 vertex_csrf cookie 与 X-CSRF-Token header 一致且非空（常量时间比较）；/api/v1/auth/login 与 /api/v1/auth/initialize 豁免（无会话端点，由 Origin/Host 校验与 SameSite=Strict 防 cross-site），该豁免决定已记录",
+        "会话 cookie 对：vertex_session（Secure/HttpOnly/SameSite=Strict/Path=/api/v1）与前端可读的 vertex_csrf（Secure/SameSite=Strict，不可 HttpOnly 以便双提交）；ClearSessionCookies 以 MaxAge=-1 过期",
+        "安全响应头：Content-Security-Policy default-src 'self' + frame-ancestors 'none' + form-action 'self' + base-uri 'none'、X-Content-Type-Options nosniff、Referrer-Policy no-referrer、X-Frame-Options DENY",
+        "与 API-01 中间件正交：建议链序 request ID -> 日志 -> recovery -> WebProtection -> 路由"
+    ],
+    "outputs": [
+        {
+            "path": "internal/httpapi/websec.go",
+            "sha256": "7776c8dc3ca401726c94415fbdf7d9d9d95d3f659dfbe8c8dd16be1d4fefed11"
+        },
+        {
+            "path": "internal/httpapi/websec_test.go",
+            "sha256": "2e0338059e9e0273399fd855831933d12860976abd263a9227601e254ca6c728"
+        }
+    ],
+    "checks": {
+        "unit": "PASS: go test ./internal/httpapi -count=1",
+        "all_tests": "PASS: go test ./... -count=1",
+        "vet": "PASS: go vet ./...",
+        "malicious_host_rejected": "PASS: evil.example.com、vertex.local.evil.com、空 Host 均 403，大小写伪装通过合法项",
+        "cross_site_origin_rejected": "PASS: 跨站 Origin 与 scheme 降级均 403",
+        "csrf_negative_tests": "PASS: 缺失/单边/不匹配令牌均 403，匹配通过，GET 与认证前端点豁免",
+        "cookie_hardening": "PASS: session cookie HttpOnly+Secure+Strict，csrf cookie 可读但 Secure+Strict",
+        "security_headers": "PASS: CSP/nosniff/frame-options/referrer-policy 全部落头",
+        "no_external_service_calls": "PASS"
+    },
+    "blocker": "本项仅完成 local-only Web 防护中间件；登录/初始化端点与路由注册属 API-04，未连接外部服务。",
+    "no_external_service_calls": true
+}

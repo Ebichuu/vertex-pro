@@ -1,0 +1,31 @@
+{
+    "item": "API-11",
+    "title": "Data quality API",
+    "status": "IN_PROGRESS",
+    "local_status": "COMPLETE",
+    "branch": "local-only",
+    "implementation": [
+        "GET /api/v1/instances 响应新增 data_quality 字段组：freshness（SYNC READY=FRESH 其余 NOT_FRESH）、realtime_source（STAT-01 来源标记）、capacity_state（capacity_epochs 聚合）、storage_state、realtime_freshness",
+        "reason_codes 原样暴露 SNAPSHOT_STALE/CAPACITY_UNCERTAIN/RECONCILING/STORAGE_UNVERIFIED——UNKNOWN/STALE 不美化为 healthy（合同红线）",
+        "嵌套查询死锁修复：instances 处理器先关闭外层 rows 再执行单连接 SQLite 嵌套查询（回归中发现的 10 分钟超时挂起）"
+    ],
+    "outputs": [
+        {
+            "path": "internal/resourcesapi/api.go",
+            "sha256": "4230b727771b1ced166d91051dd360c5592b3646c8c04a1d576dcf298dba4e6e"
+        },
+        {
+            "path": "internal/resourcesapi/api_test.go",
+            "sha256": "642ea43b5afcd7271654180067b27f79854e3f5f99f94971f3428db9cb3145f3"
+        }
+    ],
+    "checks": {
+        "unit": "PASS: go test ./internal/resourcesapi -count=1",
+        "all_tests": "PASS: go test ./... -count=1（75 包全绿）",
+        "vet": "PASS: go vet ./...",
+        "quality_fields_exposed": "PASS: instances 返回 data_quality/freshness/reason_codes",
+        "no_beautification": "PASS: 未 READY 状态输出 SNAPSHOT_STALE 原因码",
+        "no_external_service_calls": "PASS"
+    },
+    "blocker": "本项仅完成 local-only data quality 读模型；Profile 验证状态与容量状态的生产接线（QUI-10/CAP 管线）完成后字段自动丰富，未连接外部服务。"
+}

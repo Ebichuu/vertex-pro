@@ -1,0 +1,45 @@
+﻿{
+    "item":  "RULE-06",
+    "status":  "IN_PROGRESS",
+    "branch":  "local-only",
+    "implementation":  [
+                           "POST /rules/dry-run evaluates a supplied condition tree and facts",
+                           "POST /rules/{id}/dry-run supports saved-rule-shaped route dispatch",
+                           "strict JSON decoding rejects unknown fields, multiple values, and malformed trailing data",
+                           "returns TRUE, FALSE, or UNKNOWN state with stable reason tree",
+                           "optionally aggregates supplied rule matches with deterministic winner and constraint intersection",
+                           "no RSS fetch, torrent download, external service, Reservation, RaceJob, or Add side effects"
+                       ],
+    "test_commands":  {
+                          "package":  "go test ./internal/ruledryrun -count=1",
+                          "all":  "go test ./... -count=1",
+                          "vet":  "go vet ./...",
+                          "race_docker":  "docker run --rm -v \"${PWD}:/src\" -w /src golang:1.26.3-bookworm sh -c \u0027export PATH=/usr/local/go/bin:$PATH; CGO_ENABLED=1 go test -race ./internal/ruledryrun -count=1\u0027"
+                      },
+    "results":  {
+                    "package":  "PASS",
+                    "all":  "PASS",
+                    "vet":  "PASS",
+                    "race_docker":  "PASS"
+                },
+    "inputs":  [
+                   {
+                       "path":  "internal/ruledryrun/handler.go",
+                       "sha256":  "53c3f245414f25de68b2264484d63e2a140e833fc67a6b268fff994b18d0fd6e"
+                   },
+                   {
+                       "path":  "internal/ruledryrun/handler_test.go",
+                       "sha256":  "c96654f6342b169f1f7d6ae5798b18fe66302d6b52fa2dddb42264b26cbbe417"
+                   },
+                   {
+                       "path":  "internal/rules/evaluator.go",
+                       "sha256":  "1694ab7031546b9433486c4505a2a8bafbe91e9ca01078ff009aac8ed051ba57"
+                   },
+                   {
+                       "path":  "internal/ruleaggregate/aggregate.go",
+                       "sha256":  "2058780514ec9659655d6e3b3bd8bd9e23e440dac1d75a19178bc5980d193344"
+                   }
+               ],
+    "blocker":  "HTTP router integration, recent RSS fact loading, persisted dry-run history, and downstream UI/API wiring remain pending; no external services were called.",
+    "no_external_service_calls":  true
+}

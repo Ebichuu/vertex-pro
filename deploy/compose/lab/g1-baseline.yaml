@@ -1,0 +1,24 @@
+﻿version: 1
+name: vertex-pro-g1
+qui:
+  image: UNSET
+  digest: UNSET
+harness:
+  image: UNSET
+external_calls: false
+profiles:
+  - id: QB_438
+    qb_version: 4.3.8
+    webapi_version: 2.8.1
+    libtorrent: 1.2.x
+    verification_state: EXPECTED
+  - id: QB_504
+    qb_version: 5.0.4
+    webapi_version: 2.11.x
+    libtorrent: 2.0.x
+    verification_state: EXPECTED
+  - id: QB_522
+    qb_version: 5.2.2
+    webapi_version: 2.14.x
+    libtorrent: 2.0.x
+    verification_state: EXPECTED

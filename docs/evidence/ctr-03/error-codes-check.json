@@ -1,0 +1,54 @@
+{
+    "mode":  "local-only",
+    "checks":  [
+                   {
+                       "result":  "PASS",
+                       "command":  "PowerShell ConvertFrom-Json contracts/openapi/openapi.json"
+                   },
+                   {
+                       "result":  "PASS",
+                       "command":  "go test ./... -count=1"
+                   },
+                   {
+                       "result":  "PASS",
+                       "command":  "go vet ./..."
+                   }
+               ],
+    "security":  [
+                     "All non-2xx JSON responses use an error envelope",
+                     "Client branching uses stable code, not localized message",
+                     "INTERNAL_ERROR details exclude stack, SQL, Secret, Proxy URL and announce URL"
+                 ],
+    "updated_at":  "2026-08-24T00:00:00Z",
+    "contract":  "contracts/error_codes.yaml",
+    "codes":  [
+                  "INVALID_REQUEST",
+                  "VALIDATION_FAILED",
+                  "UNAUTHENTICATED",
+                  "FORBIDDEN",
+                  "NOT_FOUND",
+                  "REVISION_CONFLICT",
+                  "IDEMPOTENCY_KEY_REUSED",
+                  "CURSOR_EXPIRED",
+                  "JOB_STATE_CONFLICT",
+                  "IDENTITY_ACTIVE_CHAIN_EXISTS",
+                  "PROFILE_UNVERIFIED",
+                  "INSTANCE_UNAVAILABLE",
+                  "SNAPSHOT_STALE",
+                  "STORAGE_UNVERIFIED",
+                  "CAPACITY_UNCERTAIN",
+                  "INSUFFICIENT_EFFECTIVE_FREE",
+                  "QUI_UNREACHABLE",
+                  "QB_PROXY_UNREACHABLE",
+                  "RATE_LIMITED",
+                  "INTERNAL_ERROR"
+              ],
+    "openapi_contract":  "contracts/openapi/openapi.json",
+    "owner":  "Codex",
+    "status":  "IN_PROGRESS",
+    "item":  "CTR-03",
+    "boundaries":  [
+                       "HTTP handlers and generated clients remain pending",
+                       "No real qui/qB or Add connection"
+                   ]
+}

@@ -1,0 +1,35 @@
+{
+  "item": "DB-10",
+  "status": "IN_PROGRESS",
+  "branch": "local-only",
+  "implementation": [
+    "startup foreign_keys pragma assertion",
+    "PRAGMA foreign_key_check fail-closed validation",
+    "Attempt to SubmitIntent exact-one cardinality check",
+    "current Attempt/job/Intent cross-link check",
+    "Reservation/Attempt frozen fact and owner integrity check",
+    "event revision sequence and DB-08 object inventory check",
+    "Runtime.Ready ping and consistency validation"
+  ],
+  "test_commands": {
+    "package": "go test ./internal/db -count=1",
+    "all": "go test ./... -count=1",
+    "vet": "go vet ./...",
+    "race": "pwsh -NoProfile -File tools/dev/test-race.ps1"
+  },
+  "results": {
+    "package": "PASS",
+    "all": "PASS",
+    "vet": "PASS",
+    "race": "PASS in Docker Desktop Linux container"
+  },
+  "inputs": [
+    { "path": "internal/db/consistency.go", "sha256": "083a59f7f8addedc22498426b7ed0caee86e19bed675d07c4c557d035c8cb9fe" },
+    { "path": "internal/db/consistency_test.go", "sha256": "69715b14b5d7b5a75c02c0937f4f1bdaf24f37cdec12652f1fd58fa6b46155b0" },
+    { "path": "internal/db/migration_test.go", "sha256": "be8a75ab841e8b661118ebb640f0889923a7c7fb590341466de9c57b76301b44" },
+    { "path": "internal/app/app.go", "sha256": "a463c5113f04eb5bf5f37e1083e4718d50b87cf69c4e1f1f06f9a85ea8e5b127" },
+    { "path": "internal/app/app_test.go", "sha256": "87c38c9f2f98c0655f2f6bd1cccfa1636765ba4eb3c098a63cfcbd3a7c71c969" }
+  ],
+  "blocker": "Runtime consistency is covered and Docker Linux race is green, but DB-10 remains IN_PROGRESS until the baseline commit, full production repository boundary, and downstream Gate evidence are closed.",
+  "no_external_service_calls": true
+}

@@ -1,0 +1,27 @@
+{
+  "status": "PASS",
+  "safety": {
+    "read_only_http": true,
+    "network_write_attempts": 0,
+    "paths_redacted": true,
+    "secrets_redacted": true
+  },
+  "evidence": {
+    "default_save_path_present": true,
+    "physical_free_present": true,
+    "physical_free_valid": true,
+    "snapshot_rid_present": true,
+    "snapshot_fresh": true,
+    "operator_device_evidence_present": true,
+    "default_path_matches_managed_root": true,
+    "filesystem_key_present": true
+  },
+  "assessment": {
+    "capacity_snapshot_state": "TRUSTED",
+    "storage_verification_state": "VERIFIED",
+    "placement_allowed": false,
+    "profile_promotion_allowed": false,
+    "missing_evidence": [],
+    "fail_closed_reason": "storage evidence is verified, but the live QB_504 product profile remains EXPECTED rather than VERIFIED"
+  }
+}

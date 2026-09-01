@@ -1,0 +1,33 @@
+{
+  "item": "ADD-01",
+  "title": "RaceJob StateMachine",
+  "status": "IN_PROGRESS",
+  "local_status": "COMPLETE",
+  "branch": "local-only",
+  "implementation": [
+    "集中定义 RaceJob 主状态枚举和允许转换",
+    "覆盖准备、容量等待、Reservation、Add 确认、UNKNOWN、对账和终态路径",
+    "READY 转换要求 MATCHED + READY + PREPARED + AVAILABLE",
+    "需要 Attempt 的主状态强制要求 current_attempt_id，离开在途状态时强制清除指针",
+    "非法转换、同状态转换、终态复用和缺失 guard 均 fail-closed",
+    "每次合法转换递增 preparation_revision 并生成确定性 TransitionEvent"
+  ],
+  "outputs": [
+    {"path": "internal/racejob/job.go", "sha256": "32e19236b009f94d5ae375067d2ff8ef693e8ed37dbfb7614473442d31f81221"},
+    {"path": "internal/racejob/state_machine.go", "sha256": "7cd2298cbb598c009a8a069ce85ef36dc435f4d4d23a365cb16361c6f189ea53"},
+    {"path": "internal/racejob/state_machine_test.go", "sha256": "8e1e6fc3e98302e94235cc6475501465c83feaff14ac6a560b6063ecf2b8853e"}
+  ],
+  "checks": {
+    "unit": "PASS: go test ./internal/racejob -count=1",
+    "all_tests": "PASS: go test ./... -count=1",
+    "vet": "PASS: go vet ./...",
+    "allowed_transition_matrix": "PASS",
+    "ready_guard": "PASS",
+    "current_attempt_pointer_guard": "PASS",
+    "terminal_reuse_guard": "PASS",
+    "revision_and_event": "PASS"
+  },
+  "blocker": "ADD-02 Attempt StateMachine、ADD-03 SubmitIntent、真实 Add/Sync 接线尚未实现；本项仅提供 RaceJob 领域状态机，不开放真实 qB Add。",
+  "no_external_service_calls": true
+}
+

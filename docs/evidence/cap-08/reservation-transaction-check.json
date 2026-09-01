@@ -1,0 +1,38 @@
+{
+    "item":  "CAP-08",
+    "title":  "Reservation 事务",
+    "status":  "IN_PROGRESS",
+    "local_status":  "COMPLETE",
+    "branch":  "local-only",
+    "implementation":  [
+                           "使用 db.RunImmediate 开启 BEGIN IMMEDIATE",
+                           "校验 RaceJob READY/current_attempt=NULL、准备状态和 preparation_revision",
+                           "校验 StorageTarget instance 归属与 VERIFIED",
+                           "校验 TRUSTED capacity epoch、effective_free、allocation/snapshot revision",
+                           "校验 instance inflight \u003c max_inflight",
+                           "按 PlacementAttempt -\u003e SubmitIntent -\u003e Reservation -\u003e RaceJob current_attempt 固定顺序写入",
+                           "任一步失败整体回滚"
+                       ],
+    "outputs":  [
+                    {
+                        "path":  "internal/reservation/reservation.go",
+                        "sha256":  "4302ec243d8a10fa73cd4a5cb481ef4c2bda47b4a04bc3d345e9a5093d38bc75"
+                    },
+                    {
+                        "path":  "internal/reservation/reservation_test.go",
+                        "sha256":  "00ccf90afc986f9d892f02f6b5538b6b989d7a1ff04582ef59fb2d66e1559bd0"
+                    }
+                ],
+    "checks":  {
+                   "unit":  "PASS: go test ./internal/reservation -count=1",
+                   "all_tests":  "PASS: go test ./... -count=1",
+                   "vet":  "PASS: go vet ./...",
+                   "atomic_insert_order":  "PASS",
+                   "rollback_after_late_insert_failure":  "PASS",
+                   "capacity_fail_closed":  "PASS",
+                   "inflight_guard":  "PASS",
+                   "no_external_service_calls":  true
+               },
+    "blocker":  "CAP-09 Final recheck、后续状态机接线和真实 Add 路径尚未实现；本项不开放真实 Add 路径。",
+    "no_external_service_calls":  true
+}

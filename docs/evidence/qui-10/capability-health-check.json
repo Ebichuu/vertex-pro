@@ -1,0 +1,44 @@
+﻿{
+  "item": "QUI-10",
+  "status": "IN_PROGRESS",
+  "branch": "local-only",
+  "implementation": [
+    "fail-closed capability and health aggregation",
+    "EXPECTED profile state is never promoted to VERIFIED",
+    "unreachable/offline, probe failure, non-ready sync, missing snapshot evidence, stale snapshot, and runtime errors block placement and Add",
+    "AVAILABLE requires verified profile, READY sync state, fresh persisted snapshot, and reachable control plane"
+  ],
+  "test_commands": {
+    "package": "go test ./internal/quihealth -count=1",
+    "all": "go test ./... -count=1",
+    "vet": "go vet ./...",
+    "race": "CGO_ENABLED=1 go test -race ./internal/quihealth -count=1"
+  },
+  "results": {
+    "package": "PASS",
+    "all": "PASS",
+    "vet": "PASS",
+    "race": "BLOCKED: CGO_ENABLED=1 requires gcc, unavailable in current environment"
+  },
+  "inputs": [
+    {
+      "path": "internal/quihealth/health.go",
+      "sha256": "0652aced2e320ab5af1c8dcdf2d4e8d241a1e3d6e865c7d552b340e4bcc11f3d"
+    },
+    {
+      "path": "internal/quihealth/health_test.go",
+      "sha256": "8c7cb72ba9a76332cc6956415f8fcc34bf4992c5ffc02ce9d8a42ae809e6b2d5"
+    },
+    {
+      "path": "internal/qbprofile/probe.go",
+      "sha256": "6d00d6025eaabf1c2e81426a1c11c2ad5b4ab9ec8723296c2ad9837fb4722e60"
+    },
+    {
+      "path": "internal/syncwatcher/watcher.go",
+      "sha256": "0ef0481b713e17049c5cd8dea795cbdb84c76c19b3277be5924894390d135173"
+    }
+  ],
+  "blocker": "Runtime integration with Control/Proxy, persisted instance health state, and real qui/qB lab verification remain later integration work; race test is environment-blocked because gcc is unavailable.",
+  "no_external_service_calls": true
+}
+

@@ -1,0 +1,39 @@
+{
+  "item": "CTR-06",
+  "title": "Go/TS 代码生成",
+  "status": "IN_PROGRESS",
+  "branch": "local-only",
+  "mode": "local-only",
+  "generator": "tools/codegen/main.go",
+  "checks": [
+    { "command": "go run ./tools/codegen -check", "result": "PASS" },
+    { "command": "go vet ./...", "result": "PASS" },
+    { "command": "pnpm --dir web typecheck", "result": "PASS" },
+    { "command": "pnpm --dir web test -- --run", "result": "PASS: 16 test files, 78/78" },
+    { "command": "pnpm --dir web build", "result": "PASS" },
+    { "command": "go test -p 1 ./... -count=1", "result": "BLOCKED: Windows Go 1.26.3 linker panic in internal/capacitysnapshot; the package passes alone" },
+    { "command": "make generate-check", "result": "BLOCKED: make is not installed on this Windows host" }
+  ],
+  "outputs": [
+    { "path": "internal/generated/contracts.go", "sha256": "dfc71bcd46009bfb9c925348677d2f755e0daef3f1ec946c14925fd48223b0d2" },
+    { "path": "web/src/generated/contracts.ts", "sha256": "23e93105edda1f9b471a76f5d2527df8822d1f989bc23d6fc5cb1427003a95ed" },
+    { "path": "web/src/generated/api-client.ts", "sha256": "ed8aebdb940e5849a7a62eccd718237cd137f93d8c731ccd5f6af0ea2759fa0c" }
+  ],
+  "inputs": [
+    "contracts/openapi/openapi.json",
+    "contracts/state_enums.yaml",
+    "contracts/error_codes.yaml",
+    "contracts/event_types.yaml",
+    "contracts/user_status_mapping.yaml"
+  ],
+  "guarantees": [
+    "Generated Go and TypeScript outputs include the same source digest",
+    "Operation IDs, error codes, event types, state values, and user status IDs are source-derived",
+    "Map traversal is sorted for deterministic output"
+  ],
+  "owner": "Codex",
+  "boundaries": [
+    "Generated types are foundational constants, not full API client/server implementations",
+    "No real qui/qB or Add connection"
+  ]
+}

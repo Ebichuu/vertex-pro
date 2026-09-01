@@ -1,0 +1,44 @@
+﻿{
+    "boot":  "BOOT-09",
+    "checks":  [
+                   {
+                       "result":  "PASS",
+                       "command":  "gofmt -w internal/observability/logging.go internal/observability/logging_test.go cmd/vertex-pro/main.go"
+                   },
+                   {
+                       "result":  "PASS",
+                       "command":  "go test ./..."
+                   },
+                   {
+                       "result":  "PASS",
+                       "command":  "go vet ./..."
+                   },
+                   {
+                       "reason":  "当前环境未安装 gcc，CGO_ENABLED=1 时提示 C compiler gcc not found；CGO_ENABLED=0 时 Go 明确要求 cgo",
+                       "command":  "go test -race ./...",
+                       "result":  "BLOCKED"
+                   }
+               ],
+    "updated_at":  "2026-08-24T00:00:00Z",
+    "notes":  [
+                  "日志统一使用 log/slog JSON handler",
+                  "敏感字段和 URL query secret 在 ReplaceAttr 层脱敏",
+                  "未连接真实 qui/qB，未执行真实 Add"
+              ],
+    "owner":  "Codex",
+    "requirements":  [
+                         "request_id",
+                         "command_id",
+                         "job_id",
+                         "attempt_id",
+                         "instance_id",
+                         "Secret redaction unit tests"
+                     ],
+    "mode":  "local-only",
+    "status":  "IN_PROGRESS",
+    "implementation":  [
+                           "internal/observability/logging.go",
+                           "internal/observability/logging_test.go",
+                           "cmd/vertex-pro/main.go"
+                       ]
+}

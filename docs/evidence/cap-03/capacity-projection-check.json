@@ -1,0 +1,35 @@
+{
+    "item":  "CAP-03",
+    "title":  "容量投影",
+    "status":  "IN_PROGRESS",
+    "local_status":  "COMPLETE",
+    "branch":  "local-only",
+    "implementation":  [
+                           "按 physical_free - safety_margin - active unreflected reservation - unmanaged future liability - uncertainty debit 计算 effective free",
+                           "所有账本项必须有唯一 key，避免同一字节风险跨 Reservation/unmanaged/uncertainty 重复计入",
+                           "负值、非法 kind、缺失 key、重复 key、溢出和总扣减超过 physical free 均 fail closed",
+                           "可信结果只返回非负 effective free 和总扣减字节"
+                       ],
+    "outputs":  [
+                    {
+                        "path":  "internal/capacityprojection/projection.go",
+                        "sha256":  "0bde91029791d5876a1c181be50f339a16a0ce65ca8ab0f47e7f204be1b6609d"
+                    },
+                    {
+                        "path":  "internal/capacityprojection/projection_test.go",
+                        "sha256":  "43f2ad5f275e6aa6ae60933b68640e8d68b44ce5725fecf46ac192a3cedf9cc1"
+                    }
+                ],
+    "checks":  {
+                   "unit":  "PASS: go test ./internal/capacityprojection -count=1",
+                   "all_tests":  "PASS: go test ./... -count=1",
+                   "vet":  "PASS: go vet ./...",
+                   "formula":  "PASS",
+                   "duplicate_ledger_key":  "PASS",
+                   "negative_values":  "PASS",
+                   "overflow":  "PASS",
+                   "overcommit":  "PASS"
+               },
+    "blocker":  "CAP-04 及后续 Reservation 持久化、事务和 Placement 接线尚未实现；本项不开放真实 Add 路径。",
+    "no_external_service_calls":  true
+}

@@ -1,0 +1,38 @@
+{
+    "item":  "CAP-05",
+    "title":  "Task binding owner",
+    "status":  "IN_PROGRESS",
+    "local_status":  "COMPLETE",
+    "branch":  "local-only",
+    "implementation":  [
+                           "Reservation owner 必须引用同一 StorageTarget 的 ACTIVE/REFLECTING Reservation",
+                           "UNMANAGED owner 禁止 reservation_id",
+                           "同一 StorageTarget/qB Torrent 唯一 owner",
+                           "KNOWN amount_left 必须无 uncertainty debit",
+                           "UNKNOWN Reservation 不额外计 debit",
+                           "UNKNOWN UNMANAGED 必须使用 UNKNOWN_AMOUNT_LEFT_BOUND 或 UNBOUNDED_AMOUNT_LEFT",
+                           "绑定 owner、amount_left 和 debit 组合全部结构化校验"
+                       ],
+    "outputs":  [
+                    {
+                        "path":  "internal/taskbinding/binding.go",
+                        "sha256":  "69e1cca41eb73452bccd326033cadaf6d5323fe65330e4919d24b2388659fa3f"
+                    },
+                    {
+                        "path":  "internal/taskbinding/binding_test.go",
+                        "sha256":  "3a231993bd1c274e7e9898fca8a4ae8c463633af34e3b6ae279b0895bf0e423f"
+                    }
+                ],
+    "checks":  {
+                   "unit":  "PASS: go test ./internal/taskbinding -count=1",
+                   "all_tests":  "PASS: go test ./... -count=1",
+                   "vet":  "PASS: go vet ./...",
+                   "active_same_target_reservation":  "PASS",
+                   "released_or_cross_target_reservation":  "PASS",
+                   "unmanaged_owner_guard":  "PASS",
+                   "duplicate_owner_guard":  "PASS",
+                   "unknown_amount_debit_combinations":  "PASS"
+               },
+    "blocker":  "CAP-06 及后续 CandidateFilter、SQLite 事务和 Reservation 持久化接线尚未实现；本项不开放真实 Add 路径。",
+    "no_external_service_calls":  true
+}

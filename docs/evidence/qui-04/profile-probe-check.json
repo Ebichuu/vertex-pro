@@ -1,0 +1,40 @@
+{
+    "item":  "QUI-04",
+    "status":  "IN_PROGRESS",
+    "branch":  "local-only",
+    "implementation":  [
+                           "three frozen qB profile classification rules",
+                           "WebAPI/buildInfo/libtorrent capability derivation",
+                           "optional processInfo capability detection",
+                           "EXPECTED verification state until real proxy evidence",
+                           "fail-closed malformed fact handling"
+                       ],
+    "test_commands":  {
+                          "package":  "go test ./internal/qbprofile -count=1",
+                          "all":  "go test ./... -count=1",
+                          "vet":  "go vet ./...",
+                          "race":  "CGO_ENABLED=1 go test -race ./internal/qbprofile -count=1"
+                      },
+    "results":  {
+                    "package":  "PASS",
+                    "all":  "PASS",
+                    "vet":  "PASS",
+                    "race":  "BLOCKED: CGO_ENABLED=1 requires gcc, unavailable in current environment"
+                },
+    "inputs":  [
+                   {
+                       "path":  "internal/qbprofile/probe.go",
+                       "sha256":  "6d00d6025eaabf1c2e81426a1c11c2ad5b4ab9ec8723296c2ad9837fb4722e60"
+                   },
+                   {
+                       "path":  "internal/qbprofile/probe_test.go",
+                       "sha256":  "809a77c2bddabbb2d510e5dde82d66216ae72c1128e2b2c5a23e8d719497174c"
+                   },
+                   {
+                       "path":  "internal/qui/proxy/client.go",
+                       "sha256":  "3155982d8272c4974a626b5d5edb3a351f1ef1c1955c60a2c06b091fd0845de6"
+                   }
+               ],
+    "blocker":  "Real qui Proxy lab verification and persistent profile verification runs remain QUI-12/future integration; race test is environment-blocked because gcc is unavailable.",
+    "no_external_service_calls":  true
+}

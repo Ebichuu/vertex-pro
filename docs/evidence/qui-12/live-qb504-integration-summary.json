@@ -1,0 +1,104 @@
+{
+  "item": "QUI-12",
+  "status": "IN_PROGRESS",
+  "executed_at": "2026-09-01T10:07:00Z",
+  "external_calls": true,
+  "profile": {
+    "profile_id": "QB_504",
+    "qb_version": "v5.0.4",
+    "webapi_version": "2.11.2",
+    "libtorrent_version": "2.0.11.0",
+    "transport_verification": "READ_ONLY_VERIFIED",
+    "product_verification_state": "EXPECTED",
+    "reason": "Control, Profile, Transfer, Capabilities, initial full Sync and RID-followup Sync passed through real qui; this live qui Proxy returned full_update=true for follow-up RIDs, so incremental semantics are not claimed. Add and response/identity confirmation were intentionally not executed during this read-only phase."
+  },
+  "safety": {
+    "existing_qb_had_active_tasks": true,
+    "task_mutation_endpoints_called": false,
+    "task_set_unchanged_during_probe": true,
+    "task_set_unchanged_during_runtime_check": true,
+    "torrent_names_or_hashes_persisted": false,
+    "credentials_persisted_in_repository": false
+  },
+  "configuration_changes": {
+    "qui_control_api_key_created": true,
+    "qui_per_instance_client_proxy_key_created": true,
+    "qb_task_configuration_changed": false
+  },
+  "implementation": [
+    "QuiControlClient uses the documented X-API-Key header and accepts numeric qui instance IDs plus current connectionStatus/isActive fields.",
+    "QbProxyClient accepts real qB plain-text version responses and adapts sync/maindata into the SyncWatcher delta contract.",
+    "The service optionally starts a read-only qui runtime, performs fail-closed startup probing, persists complete Sync snapshots, and stops its watcher before closing SQLite.",
+    "tools/quprobe emits a redacted read-only report without torrent names, hashes, hosts, credentials, or proxy URLs."
+  ],
+  "checks": {
+    "control_instances": "PASS",
+    "control_transfer_info": "PASS",
+    "control_capabilities": "PASS",
+    "proxy_app_version": "PASS",
+    "proxy_webapi_version": "PASS",
+    "proxy_build_info": "PASS",
+    "proxy_full_sync": "PASS",
+    "proxy_rid_followup_sync": "PASS: upstream returned a safe full_update reset rather than an incremental delta",
+    "runtime_snapshot_persistence": "PASS",
+    "runtime_authenticated_instances_api": "PASS",
+    "runtime_authenticated_dashboard_api": "PASS",
+    "existing_task_safety": "PASS"
+  },
+  "test_commands": {
+    "go": "go test ./... -count=1",
+    "vet": "go vet ./...",
+    "format": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/format.ps1 -Check",
+    "codegen": "go run ./tools/codegen -check",
+    "contracts": "go run ./tools/contractcheck",
+    "frontend": "pnpm --dir web test && pnpm --dir web build"
+  },
+  "results": {
+    "go": "PASS",
+    "vet": "PASS",
+    "format": "PASS",
+    "codegen": "PASS",
+    "contracts": "PASS",
+    "frontend_tests": "PASS: 16 files, 81 tests",
+    "frontend_build": "PASS with existing non-blocking 595.61 kB chunk warning"
+  },
+  "evidence": [
+    {
+      "path": "docs/evidence/qui-12/live-qb504-readonly-probe.json",
+      "sha256": "39297223c91e68c3117fc6c6e3f0f6038fc6b6fe004eaf68d0f91851908168c5"
+    },
+    {
+      "path": "docs/evidence/qui-12/live-qb504-runtime-check.json",
+      "sha256": "7b370b7555043a7eb9c85e18c5c33bebf9847c37da8032b1ce59ae12518480f3"
+    }
+  ],
+  "inputs": [
+    {
+      "path": "internal/qui/control/client.go",
+      "sha256": "40c7c3bf7d5945d65a27e5bfe4e371f549b6902cd6a28f1de7507c4cdec68a80"
+    },
+    {
+      "path": "internal/qui/proxy/client.go",
+      "sha256": "43ba03bec25e1dd1cbb48619fed57b85e5cd2d17fb2888e129c2896a663fa6b0"
+    },
+    {
+      "path": "internal/app/app.go",
+      "sha256": "ce28e95813f1821b7fb792c7d49d41a7fe4b6c6cc3d8e1295c0d2f2deabde18a"
+    },
+    {
+      "path": "cmd/vertex-pro/main.go",
+      "sha256": "a7432b44f5fe0c653f37bfe0334a6201dea8485de67d7b4f94d1b14e042b78e3"
+    },
+    {
+      "path": "tools/quprobe/main.go",
+      "sha256": "f2babf5334a721192d3523f8e009b811acb5373f11270508b070bf4619fd2fff"
+    }
+  ],
+  "remaining_blockers": [
+    "No Add request was sent to the active qB instance, so Add response classification and Identity confirmation remain unverified.",
+    "The tested qui Proxy returns full_update=true for RID follow-up requests; true incremental-delta behavior still requires a compatible lab profile or a documented polling strategy.",
+    "QB_438 and QB_522 still require real fixed-version qui Proxy runs.",
+    "Capacity and storage evidence are not yet sufficient to enable real Placement/Add.",
+    "Profile remains EXPECTED and must not promote the instance to AVAILABLE."
+  ]
+}

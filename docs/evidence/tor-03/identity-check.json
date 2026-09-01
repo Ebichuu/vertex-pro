@@ -1,0 +1,33 @@
+{
+  "item": "TOR-03",
+  "status": "IN_PROGRESS",
+  "branch": "local-only",
+  "implementation": [
+    "strong Version type for v1, v2, and hybrid identities",
+    "v1 SHA-1 and v2 SHA-256 over canonical bencoded info dictionary",
+    "identity detection from v1 pieces and v2 meta version/file tree fields",
+    "strict hex digest outputs with no false upgrade from malformed fields",
+    "negative tests for missing, malformed, unsorted, and invalid version fields",
+    "no external services, filesystem writes, or qB/qui calls"
+  ],
+  "test_commands": {
+    "package": "go test ./internal/torrentidentity -count=1",
+    "all": "go test ./... -count=1",
+    "vet": "go vet ./...",
+    "race_docker": "docker run --rm -v \"${PWD}:/src\" -w /src golang:1.26.3-bookworm sh -c 'export PATH=/usr/local/go/bin:$PATH; CGO_ENABLED=1 go test -race ./internal/torrentidentity -count=1'"
+  },
+  "results": {
+    "package": "PASS",
+    "all": "PASS",
+    "vet": "PASS",
+    "race_docker": "PASS"
+  },
+  "inputs": [
+    {"path": "internal/torrentidentity/identity.go", "sha256": "d4d443a38b16051b42171c0254095142c719c47cf4b495b4b025ade45f9240db"},
+    {"path": "internal/torrentidentity/identity_test.go", "sha256": "8ebc413f4dbdfecac5b6bd33c11f246099b2c170deac9d2297d2abeffd672395"},
+    {"path": "internal/torrentparse/parser.go", "sha256": "e07295ed368080e71bd2397a70711029a821fcf644a3607ae7568b74d37016c8"},
+    {"path": "internal/torrentdownload/downloader.go", "sha256": "46442330710f7c3d40f0945fefd8f59c952a161933df02b45933121168f6efc1"}
+  ],
+  "blocker": "TOR-04 Source/Identity association and later repository/API wiring remain pending; no external services were called.",
+  "no_external_service_calls": true
+}

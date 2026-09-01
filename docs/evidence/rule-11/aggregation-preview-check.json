@@ -1,0 +1,28 @@
+﻿{
+  "id": "RULE-11",
+  "title": "aggregation preview UI",
+  "status": "IN_PROGRESS",
+  "scope": "local-only fixture-backed React page",
+  "inputs": [
+    "web/src/features/rules/aggregation-preview.ts",
+    "web/src/components/rules/RuleAggregationPreview.tsx",
+    "web/src/components/rules/RuleAggregationPreview.test.tsx",
+    "web/src/components/rules/RuleList.tsx",
+    "web/src/app/router.tsx",
+    "web/src/styles.css"
+  ],
+  "checks": [
+    { "name": "matched state shows winner and final target", "result": "PASS" },
+    { "name": "blocked state shows all blockers", "result": "PASS" },
+    { "name": "preview declares no download, reservation, or Add side effect", "result": "PASS" },
+    { "name": "web tests", "command": "pnpm --dir web test -- --run", "result": "PASS", "tests": 18 },
+    { "name": "web build", "command": "pnpm --dir web build", "result": "PASS" },
+    { "name": "go tests", "command": "go test ./... -count=1", "result": "PASS" },
+    { "name": "go vet", "command": "go vet ./...", "result": "PASS" }
+  ],
+  "non_claims": [
+    "does not call real RSS, qB, or external services",
+    "does not persist rules or preview history",
+    "fixture data is not VERIFIED, AVAILABLE, or DONE"
+  ]
+}

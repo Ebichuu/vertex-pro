@@ -1,0 +1,49 @@
+{
+    "item":  "RULE-10",
+    "status":  "IN_PROGRESS",
+    "branch":  "local-only",
+    "implementation":  [
+                           "deterministic rule list ordering by priority DESC, revision DESC, rule_id ASC",
+                           "optimistic enabled and priority updates increment revision",
+                           "stale expected revision returns 409 REVISION_CONFLICT semantics",
+                           "rule duplication creates a disabled copy with fresh identity and revision 1",
+                           "UI exposes priority editing, enable/disable, and copy actions",
+                           "no API persistence or external service call is performed"
+                       ],
+    "test_commands":  {
+                          "frontend_test":  "pnpm --dir web test -- --run",
+                          "frontend_build":  "pnpm --dir web build",
+                          "go_all":  "go test ./... -count=1",
+                          "go_vet":  "go vet ./..."
+                      },
+    "results":  {
+                    "frontend_test":  "PASS (16 tests)",
+                    "frontend_build":  "PASS",
+                    "go_all":  "PASS",
+                    "go_vet":  "PASS"
+                },
+    "inputs":  [
+                   {
+                       "path":  "web/src/features/rules/rule-list.ts",
+                       "sha256":  "36697352985b95e5bf2396a414713952b86524713c14385d21448096b51d924d"
+                   },
+                   {
+                       "path":  "web/src/components/rules/RuleList.tsx",
+                       "sha256":  "79309c0aa12a09d18347a098a217b07c0d11d4863e2077be1740f4e5183bccc3"
+                   },
+                   {
+                       "path":  "web/src/components/rules/RuleList.test.tsx",
+                       "sha256":  "861d06f173db84e706f47321d6ea718404c6f9f7bbb478c510035c0306a32d29"
+                   },
+                   {
+                       "path":  "web/src/styles.css",
+                       "sha256":  "9c233c175bad00ac9dc4d6d5cf76e6898417e40b4a80d304d5912ac3becccc4f"
+                   },
+                   {
+                       "path":  "internal/ruleversion/store.go",
+                       "sha256":  "faf66efcfe4290a881e8ae7f1ee1e6170f309a90774c4ee0e92bb4b8bd69b04d"
+                   }
+               ],
+    "blocker":  "Rules route/API persistence, backend optimistic revision endpoint, database ordering, and full edit page integration remain pending; no external services were called.",
+    "no_external_service_calls":  true
+}

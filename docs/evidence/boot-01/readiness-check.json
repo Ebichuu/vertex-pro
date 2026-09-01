@@ -1,0 +1,13 @@
+{
+    "check":  "BOOT-01 readiness",
+    "repository_root":  "D:\\Projects\\Vertex-pro",
+    "layout_check":  "PASS",
+    "git_directory":  "PASS",
+    "baseline_commit":  "MISSING",
+    "codeowners":  "MISSING_OWNER",
+    "status":  "BLOCKED",
+    "blocking_reasons":  [
+                             "baseline_commit_missing",
+                             "codeowners_owner_missing"
+                         ]
+}

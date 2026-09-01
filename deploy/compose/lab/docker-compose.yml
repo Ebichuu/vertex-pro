@@ -1,0 +1,12 @@
+﻿services:
+  vertex-pro:
+    build:
+      context: ../../..
+      dockerfile: deploy/docker/Dockerfile
+    ports:
+      - "8080:8080"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp

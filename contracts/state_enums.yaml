@@ -1,0 +1,77 @@
+schema_version: 1
+source_of_truth: docs/产品方案设计/VERTEX_PRO_COMPLETE_REDESIGN_V1_RC8_FINAL.md
+status_domains:
+  job_state:
+    owner: race_jobs.job_state
+    default: DISCOVERED
+    values: [DISCOVERED, PREPARING, READY, WAITING_CAPACITY, PREPARE_FAILED, RESERVED, ADD_SENT, AWAITING_CONFIRMATION, HASH_SEEN, ALREADY_PRESENT, ADD_FAILED, UNKNOWN, RECONCILED_CONFIRMED, RECONCILED_NO_EFFECT, EXPIRED_UNKNOWN, EXPIRED]
+    terminal: [ALREADY_PRESENT, ADD_FAILED, RECONCILED_CONFIRMED, RECONCILED_NO_EFFECT, EXPIRED]
+  rule_state:
+    owner: race_jobs.rule_state
+    default: PENDING
+    values: [PENDING, RUNNING, MATCHED, REJECTED]
+    terminal: [MATCHED, REJECTED]
+  torrent_state:
+    owner: race_jobs.torrent_state
+    default: PENDING
+    values: [PENDING, FETCHING, READY, FAILED]
+    terminal: [READY, FAILED]
+  placement_state:
+    owner: race_jobs.placement_state
+    default: PENDING
+    values: [PENDING, PREPARED, WAITING_CAPACITY]
+    terminal: []
+  observation_state:
+    owner: race_jobs.observation_state
+    default: NOT_STARTED
+    values: [NOT_STARTED, ACTIVE, CLOSED, NOT_APPLICABLE]
+    terminal: [CLOSED, NOT_APPLICABLE]
+  attempt_state:
+    owner: placement_attempts.attempt_state
+    values: [RESERVED, ADD_SENT, AWAITING_CONFIRMATION, HASH_SEEN, ALREADY_PRESENT, ADD_FAILED, UNKNOWN, RECONCILED_CONFIRMED, RECONCILED_NO_EFFECT, EXPIRED_UNKNOWN]
+    active_delivery_chain: [RESERVED, ADD_SENT, AWAITING_CONFIRMATION, UNKNOWN, HASH_SEEN, RECONCILED_CONFIRMED, EXPIRED_UNKNOWN]
+  dispatch_state:
+    owner: submit_intents.dispatch_state
+    values: [NOT_STARTED, STARTED]
+  side_effect_fact:
+    owner: placement_attempts.side_effect_fact
+    nullable: true
+    values: [FAILED_NO_EFFECT, POSSIBLE_EFFECT, OBSERVED_EFFECT]
+  reservation_state:
+    owner: capacity_reservations.reservation_state
+    values: [ACTIVE, REFLECTING, RELEASED]
+  health_state:
+    owner: instances.health_state
+    values: [DISCOVERING, AVAILABLE, DEGRADED, OFFLINE, INCOMPATIBLE, STORAGE_UNVERIFIED, SNAPSHOT_STALE]
+  capacity_state:
+    owner: capacity_epochs.capacity_state
+    values: [TRUSTED, CAPACITY_UNCERTAIN, RECONCILING]
+  storage_verification_state:
+    owner: storage_targets.storage_verification_state
+    values: [UNVERIFIED, VERIFIED]
+  profile_verification_state:
+    owner: instance_capabilities.profile_verification_state
+    values: [EXPECTED, VERIFIED, FAILED]
+  amount_left_state:
+    owner: capacity_task_bindings.amount_left_state
+    values: [KNOWN, UNKNOWN]
+  owner_kind:
+    owner: capacity_task_bindings.owner_kind
+    values: [RESERVATION, UNMANAGED]
+  pre_add_identity_fact:
+    owner: submit_intents.pre_add_identity_fact
+    values: [ABSENT, PRESENT]
+  waiter_state:
+    owner: sync_waiters.waiter_state
+    values: [ACTIVE, CLOSED]
+  command_status:
+    owner: api_commands.command_status
+    values: [ACCEPTED, RUNNING, SUCCEEDED, FAILED]
+  idempotency_state:
+    owner: api_idempotency_records.state
+    values: [IN_FLIGHT, COMPLETED]
+transitions:
+  rule_state: [PENDING -> RUNNING, RUNNING -> MATCHED, RUNNING -> REJECTED]
+  torrent_state: [PENDING -> FETCHING, FETCHING -> READY, FETCHING -> FAILED]
+  placement_state: [PENDING -> PREPARED, PENDING -> WAITING_CAPACITY, PREPARED -> WAITING_CAPACITY]
+  reservation_state: [ACTIVE -> REFLECTING, ACTIVE -> RELEASED, REFLECTING -> RELEASED]

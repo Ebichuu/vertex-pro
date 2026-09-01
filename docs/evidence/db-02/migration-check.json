@@ -1,0 +1,44 @@
+{
+  "item": "DB-02",
+  "status": "IN_PROGRESS",
+  "branch": "local-only",
+  "implementation": [
+    "embedded SQL migrations",
+    "ordered version execution",
+    "schema_migrations metadata table",
+    "SHA-256 checksum verification",
+    "idempotent repeat execution",
+    "transactional rollback on migration failure",
+    "placement decision audit table with safe candidate snapshots and Add result state"
+  ],
+  "migration_count": 10,
+  "test_commands": {
+    "package": "go test -p 1 ./internal/db -count=1",
+    "all": "go test -p 1 ./... -count=1",
+    "vet": "go vet ./...",
+    "contract": "go run ./tools/contractcheck -run-id 20260831T182500Z"
+  },
+  "results": {
+    "package": "PASS",
+    "all": "PASS: go test -p 1 ./... -count=1 (this run); Windows linker failures remain an intermittent environment risk",
+    "vet": "PASS",
+    "contract": "PASS"
+  },
+  "inputs": [
+    { "path": "internal/db/migration.go", "sha256": "9efd5915bb2bf19d7bb59384de322af8e6d0f89ceef6d0083049783c00a3ad42" },
+    { "path": "internal/db/migration_test.go", "sha256": "be8a75ab841e8b661118ebb640f0889923a7c7fb590341466de9c57b76301b44" },
+    { "path": "internal/db/upgrade_test.go", "sha256": "9ae0b51be470b5f8ae60e55068526daea16f682bddacb7bc605ab892d74ba3fc" },
+    { "path": "internal/db/migrations/embed.go", "sha256": "c4ba4e212cc0ded0e9f93a631e5612e1aebb92bf9e482872097e7bc2e64561c8" },
+    { "path": "internal/db/migrations/0001_baseline.sql", "sha256": "4b3fa2ea50b3780285b27c788aac147f23647b861661ca18ea0a2f1c0c86cea5" },
+    { "path": "internal/db/migrations/0002_site_feed_rule_identity.sql", "sha256": "35b1b8ec3e514023fa8a63a6e9017629abbd0115666d725496a269daecdc2c5a" },
+    { "path": "internal/db/migrations/0003_sync_snapshot_waiter.sql", "sha256": "f9bc8ede5f2abc5edd9304a5893e4b2388649b6128355cef4ab3752880e9e6ed" },
+    { "path": "internal/db/migrations/0004_storage_capacity.sql", "sha256": "f33db2155c147fdb077910caee67e89dac1927a43f1e508695c9716b893cb676" },
+    { "path": "internal/db/migrations/0005_race_attempt_intent.sql", "sha256": "8f18b29c22f127a393d1d485883db6aee4a2b366500128afe69393ce9c3a6a9e" },
+    { "path": "internal/db/migrations/0006_events_commands_stats.sql", "sha256": "ba5c729c431e628cdae7b8303d61f28633aa71ccc5a6f533a70ac1ee8e8a2fa1" },
+    { "path": "internal/db/migrations/0007_indexes_triggers.sql", "sha256": "92fba9bc19a4d727a5b830f17a2ea5472357f8489f546e7e202c3f82cb73136a" },
+    { "path": "internal/db/migrations/0008_history_deletion.sql", "sha256": "b8fb1919c13270f05a5c088085e5016faa05f937899f687b52ad02caf3f32bdb" },
+    { "path": "internal/db/migrations/0009_feed_poll_interval.sql", "sha256": "480d16222cc751433620d6c525c42558f8b739a5c194da6ff6c47148a8f94b62" },
+    { "path": "internal/db/migrations/0010_placement_decision_audit.sql", "sha256": "240c15dc802801501ed7fa4e8017c46ee42c3c67a99f6712d4ca376002b7885c" }  ],
+  "blocker": "DB-02 remains IN_PROGRESS because the repository has no baseline merge commit and downstream integration is not complete. The focused DB suite, fresh/upgrade behavior, and C1 schema checks pass; the Windows full-suite linker failure and isolated Docker network remain environment blockers.",
+  "no_external_service_calls": true
+}

@@ -1,0 +1,43 @@
+{
+  "item": "CTR-08",
+  "status": "IN_PROGRESS",
+  "branch": "local-only",
+  "implementation": [
+    "OpenAPI-shaped Dashboard and Page fixtures for instances, Sites & RSS, and Rules",
+    "stable ErrorEnvelope and stale snapshot fixtures",
+    "MSW node server starts before test module imports, fails on unhandled requests, and resets handlers per test",
+    "MSW GET/PUT Rules and POST Sites/Feeds handlers cover generated-client read/write paths",
+    "MSW Feed update and read-only test handlers cover If-Match and Idempotency-Key client paths",
+    "schema mismatch assertions and router-level Sites & RSS Feed update/test regressions"
+  ],
+  "test_commands": {
+    "typecheck": "pnpm --dir web typecheck",
+    "test": "pnpm --dir web test -- --run",
+    "build": "pnpm --dir web build"
+  },
+  "results": {
+    "typecheck": "PASS",
+    "tests": "PASS: 16 test files, 81/81",
+    "build": "PASS: pnpm --dir web build"
+  },
+  "inputs": [
+    { "path": "web/src/api/client.ts", "sha256": "aead9f8d9543f086d256b19e22d0a10dd448b7233ed6663e2b9e30c1e7f0ecf3" },
+    { "path": "web/src/mocks/fixtures.ts", "sha256": "f514e07b005bab90f4fef65e8b8fd28aa6bbb4c56e55b9f527996785caae97c3" },
+    { "path": "web/src/mocks/handlers.ts", "sha256": "7af9db669b1e69321313bd7940d3efc09a85a028bedef3d2b6d6e169305c20b3" },
+    { "path": "web/src/mocks/server.ts", "sha256": "0763ba24bbe6a27a7a1e12efdcbbabe1f0c18de5932d6a7fd890a7a6d6b7f383" },
+    { "path": "web/src/test/mocks.test.ts", "sha256": "1fdd3005619bde26764ed9dc44784a320021c3c283d9fa51eb8f2905b58d4c05" },
+    { "path": "web/src/test/setup.ts", "sha256": "eff655dccf232c03fdbb7123c3d3dc337f13e5d8acac5e41591338ba912a18" },
+    { "path": "web/src/app/router.tsx", "sha256": "21dd567e79d049e38bbf67145e2b45ca510ab59b156f9433fdd274ce68999ff6" },
+    { "path": "web/src/test/app-shell.test.tsx", "sha256": "41f2aa2c2310015452e865cd0584cde403f41954dff42d2fa43f7d1a7c67e492" },
+    { "path": "web/package.json", "sha256": "f8cea6c1684af784764720b8b870a076875478d19dd7ea2ac6ced7fc670a3ab0" }
+  ],
+  "checks": {
+    "feed_update_mock": "PASS: MSW PUT handler returns updated feed and ETag path is exercised by /sites",
+    "feed_test_mock": "PASS: MSW POST handler returns 202 SUCCEEDED read-only command result",
+    "schema_mismatch": "PASS",
+    "unhandled_requests": "PASS: server remains configured to fail on unhandled requests",
+    "no_real_upstream_calls": "PASS"
+  },
+  "blocker": "Only frontend mock transport is implemented. Real API worker lifecycle, database workers, qui/qB adapters, browser worker integration, and main-flow E2E remain future work.",
+  "no_real_upstream_calls": true
+}

@@ -1,0 +1,36 @@
+{
+    "mode":  "local-only",
+    "checks":  [
+                   {
+                       "result":  "PASS",
+                       "command":  "PowerShell ConvertFrom-Json contracts/openapi/openapi.json"
+                   },
+                   {
+                       "result":  "PASS",
+                       "command":  "go test ./... -count=1"
+                   },
+                   {
+                       "result":  "PASS",
+                       "command":  "go vet ./..."
+                   }
+               ],
+    "covered":  [
+                    "/api/v1 server base",
+                    "dashboard/sites/feeds/rules/jobs/commands/instances/stats/events paths",
+                    "cursor and limit pagination parameters",
+                    "Idempotency-Key and If-Match headers",
+                    "async command response and command state query",
+                    "SSE text/event-stream and Last-Event-ID",
+                    "stable Error, Page and Command schemas"
+                ],
+    "contract":  "contracts/openapi/openapi.json",
+    "openapi":  "3.1.0",
+    "updated_at":  "2026-08-24T00:00:00Z",
+    "owner":  "Codex",
+    "status":  "IN_PROGRESS",
+    "item":  "CTR-01",
+    "boundaries":  [
+                       "业务 handler、OpenAPI 代码生成、数据库和真实 qui/qB 连接尚未实现",
+                       "CTR-02 到 CTR-08 仍保持 PENDING"
+                   ]
+}

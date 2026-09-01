@@ -1,0 +1,22 @@
+{
+  "status": "PASS",
+  "safety": {
+    "read_only": true,
+    "add_endpoint_called": false,
+    "delete_endpoint_called": false,
+    "existing_task_set_unchanged": true,
+    "torrent_name_or_hash_persisted": false
+  },
+  "already_present": {
+    "identity_present_in_pre_add_snapshot": true,
+    "identity_present_in_repeat_snapshot": true,
+    "inactive": true,
+    "state": "stoppedDL",
+    "preflight_decision": "SKIP_DISPATCH"
+  },
+  "idempotency": {
+    "repeat_read_same_identity_set": true,
+    "task_count_first": 9,
+    "task_count_second": 9
+  }
+}

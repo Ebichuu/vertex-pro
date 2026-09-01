@@ -1,0 +1,69 @@
+{
+    "item": "UI-08",
+    "title": "History Detail",
+    "status": "IN_PROGRESS",
+    "local_status": "COMPLETE",
+    "branch": "local-only",
+    "implementation": [
+        "新增 /history/$jobId 详情路由；History 列表标题提供明确的详情入口和可访问名称",
+        "详情模型与组件通过异步 HistoryDetailLoader 注入数据；默认路由只使用确定性本地 fixture，不请求真实 API、数据库、qui、qB 或外部服务",
+        "普通视图展示最后用户状态、来源、目标下载器、发现/添加/确认时间、最后累计上传量/下载量/分享率、命中规则、Winner、最终分类/Tags/保存路径和稳定时间线",
+        "已删除记录单独显示删除确认时间与用户可读证据来源，并继续保留最后传输数据；页面明确不会自动重新添加",
+        "Candidate/Placement/Reservation/Reflection/SubmitIntent/capacity epoch、原始事件类型、revision 和 digest 仅位于默认折叠的高级诊断区域",
+        "覆盖加载、失败重试、返回历史、用户语言时间线顺序、普通视图术语隔离和路由直达测试",
+        "浏览器验收覆盖 1440/1024/390px、亮暗主题、折叠诊断和根文档零横向溢出；干净页面无控制台错误"
+    ],
+    "outputs": [
+        {
+            "path": "docs/superpowers/specs/2026-08-30-history-detail-design.md",
+            "sha256": "c4fe1ed261a141d06fd3cbf1716cafb7c928ad0df276e77be57ad0b3dfe77e31"
+        },
+        {
+            "path": "web/src/features/history/history-detail.ts",
+            "sha256": "3a187e149e083e01936036337e6deb7047e1e771c775ebebf6e5e258c527a043"
+        },
+        {
+            "path": "web/src/components/history/HistoryDetailPage.tsx",
+            "sha256": "e37de067f345f8c6bbf92e98becac0446def98e49032824ce588f5b131b69fdc"
+        },
+        {
+            "path": "web/src/components/history/HistoryDetailPage.test.tsx",
+            "sha256": "8c120cf5fdf80057d523edfbbbafcc28f7fe08b8e4071234e9c977ed53be9642"
+        },
+        {
+            "path": "web/src/components/history/HistoryTable.tsx",
+            "sha256": "f20ddf7749d3c5ab0ae281a98284b18205aea367db0c4710ac44673f68c5c4ec"
+        },
+        {
+            "path": "web/src/test/history.test.tsx",
+            "sha256": "a911fe01e7c569393414e7757266add45bfc872ef7223d09eca7850db0a25591"
+        },
+        {
+            "path": "web/src/app/router.tsx",
+            "sha256": "21dd567e79d049e38bbf67145e2b45ca510ab59b156f9433fdd274ce68999ff6"
+        },
+        {
+            "path": "web/src/test/smoke.test.tsx",
+            "sha256": "8f285c7d1a7c8707bebb67258be6f54ef408c4d2a93453e3dd152d75f35c533f"
+        },
+        {
+            "path": "web/src/styles.css",
+            "sha256": "9c233c175bad00ac9dc4d6d5cf76e6898417e40b4a80d304d5912ac3becccc4f"
+        }
+    ],
+    "checks": {
+        "unit": "PASS: pnpm --dir web test（14 个测试文件，65/65；HistoryDetailPage 6/6、History 6/6、route smoke 2/2）",
+        "typecheck": "PASS: pnpm --dir web typecheck",
+        "build": "PASS: pnpm --dir web build（主 JS chunk 575.34 kB，体积提示非阻塞）",
+        "go": "PASS: go test ./... -count=1 + go vet ./...",
+        "codegen": "PASS: go run ./tools/codegen -check",
+        "timeline": "PASS: 发现、准备、添加、确认、上传、删除按发生时间展示",
+        "deletion_retention": "PASS: 删除确认时间、来源、最后上传量和分享率同时保留",
+        "ordinary_language": "PASS: 普通区域无 Candidate/Placement/Reservation/Reflection/SubmitIntent/capacity epoch",
+        "diagnostics": "PASS: 高级诊断默认折叠，展开后显示 7 项原始诊断字段",
+        "browser_responsive": "PASS: 1440/1024/390px 亮暗主题、折叠/展开均无根文档横向溢出",
+        "browser_console": "PASS: 新开干净页面无控制台错误",
+        "no_external_service_calls": "PASS"
+    },
+    "blocker": "本项仅完成 local-only History Detail 投影与页面；真实 GET /api/v1/jobs/{id} 详情聚合、HIS-03 时间线 API、鉴权/错误合同及数据库/qui/qB 运行链路尚未接通，故保持 IN_PROGRESS。"
+}

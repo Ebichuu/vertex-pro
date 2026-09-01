@@ -1,0 +1,54 @@
+{
+    "mode":  "local-only",
+    "source":  "docs/产品方案设计/VERTEX_PRO_COMPLETE_REDESIGN_V1_RC8_FINAL.md",
+    "updated_at":  "2026-08-24T00:00:00Z",
+    "contract":  "contracts/state_enums.yaml",
+    "domains":  [
+                    "job_state",
+                    "rule_state",
+                    "torrent_state",
+                    "placement_state",
+                    "observation_state",
+                    "attempt_state",
+                    "dispatch_state",
+                    "side_effect_fact",
+                    "reservation_state",
+                    "health_state",
+                    "capacity_state",
+                    "storage_verification_state",
+                    "profile_verification_state",
+                    "amount_left_state",
+                    "owner_kind",
+                    "pre_add_identity_fact",
+                    "waiter_state",
+                    "command_status",
+                    "idempotency_state"
+                ],
+    "owner":  "Codex",
+    "invariants":  [
+                       "active delivery chain retains UNKNOWN and EXPIRED_UNKNOWN until reconciliation",
+                       "rule/torrent/placement preparation transitions remain explicit",
+                       "amount_left UNKNOWN is distinct from KNOWN",
+                       "capacity_state is fail-closed outside TRUSTED"
+                   ],
+    "status":  "IN_PROGRESS",
+    "item":  "CTR-02",
+    "boundaries":  [
+                       "CTR-03 error codes, CTR-04 event types and CTR-06 generated Go/TS types remain pending",
+                       "No real qui/qB or Add connection"
+                   ],
+    "checks":  [
+                   {
+                       "result":  "PASS",
+                       "command":  "state enum contract UTF-8/BOM and required values test"
+                   },
+                   {
+                       "result":  "PASS",
+                       "command":  "go test ./... -count=1"
+                   },
+                   {
+                       "result":  "PASS",
+                       "command":  "go vet ./..."
+                   }
+               ]
+}

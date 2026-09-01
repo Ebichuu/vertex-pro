@@ -1,0 +1,47 @@
+{
+    "item": "ADD-09",
+    "title": "Already-present 分支",
+    "status": "IN_PROGRESS",
+    "local_status": "COMPLETE",
+    "branch": "local-only",
+    "implementation": [
+        "新增 internal/alreadypresent：单个 BEGIN IMMEDIATE 内先幂等确保唯一 UNMANAGED binding（同 Identity 已存在则确认，RESERVATION owner 或 Identity 冲突拒绝），随后以 ALREADY_PRESENT 原子释放本次 Reservation",
+        "binding 证据固定为 SubmitIntent 冻结的 Add 前基线快照（generation/revision/digest），KNOWN 纳入 unmanaged 聚合，UNKNOWN 同事务将 capacity_epochs 置为 CAPACITY_UNCERTAIN 并按规则建立 uncertainty 保护",
+        "Attempt 由 RESERVED 推进到 ALREADY_PRESENT（OBSERVED_EFFECT、固定 qb_torrent_id），Job 同步推进并清空 current_attempt_id、observation_state 置 NOT_APPLICABLE，写 attempt.state.changed 与 job.state.changed 事件",
+        "Reservation 以 release_reason=ALREADY_PRESENT 释放，released_unconsumed_bytes=reserved_bytes-reflected_physical_bytes；重复请求幂等返回同一结果，不产生第二个 binding、事件或 revision",
+        "attemptstate 状态机放宽：ALREADY_PRESENT 及其唯一后继 RECONCILED_NO_EFFECT 允许 dispatch_state 保持 NOT_STARTED（Add 前检测到已存在时请求从未发出），并新增 DISPATCH_STATE_DOWNGRADE_NOT_ALLOWED 禁止 STARTED 回退",
+        "失败路径整体回滚：Job/Reservation 事实不匹配时 Attempt 保持 RESERVED 且无 binding 残留"
+    ],
+    "outputs": [
+        {
+            "path": "internal/alreadypresent/present.go",
+            "sha256": "796ee723ce805abf7b3577cbded76711985ba9d56f1b66ec3a0dbdba54a344a0"
+        },
+        {
+            "path": "internal/alreadypresent/present_test.go",
+            "sha256": "e9c1178ae4a28fcbf6f72ca5bbea06e52930de8dcc32a079bdfa1e97d5271bb8"
+        },
+        {
+            "path": "internal/attemptstate/attempt.go",
+            "sha256": "b979fd4e7add022ba13b55df0cfb8f75dd10ddc2d3d2cbaa62f779a827b493b7"
+        },
+        {
+            "path": "internal/attemptstate/attempt_test.go",
+            "sha256": "01e25cab96d834ce55343ff1e10443ab6e756d956ba320e52fd69a56340cba16"
+        }
+    ],
+    "checks": {
+        "unit": "PASS: go test ./internal/alreadypresent ./internal/attemptstate -count=1",
+        "all_tests": "PASS: go test ./... -count=1",
+        "vet": "PASS: go vet ./...",
+        "no_dispatch_guarantee": "PASS: 分支执行后 submit_intents.dispatch_state 保持 NOT_STARTED（数据库 CHECK 禁止 PRESENT 意图开始 dispatch），Attempt dispatch_state 保持 NOT_STARTED",
+        "no_success_attribution": "PASS: Attempt/Job 终态为 ALREADY_PRESENT 而非 HASH_SEEN，确认字段保持 NULL，binding 为 UNMANAGED 且不引用本次 Reservation",
+        "unmanaged_binding_before_release": "PASS: binding 先落库，Reservation 后释放，无零负债窗口",
+        "unknown_amount_fail_closed": "PASS: UNKNOWN amount_left 同事务置 CAPACITY_UNCERTAIN",
+        "idempotent_replay": "PASS: 重复请求返回 Idempotent 且事件数不变",
+        "rollback_on_mismatch": "PASS: 事务内任一 UPDATE 行数不符即整体失败，无部分写入",
+        "no_external_service_calls": "PASS"
+    },
+    "blocker": "本项仅完成 local-only Already-present 原子分支；真实 qB/qui 接线、UNKNOWN reconciler（ADD-10）与恢复故障矩阵仍待后续，未连接外部服务。",
+    "no_external_service_calls": true
+}

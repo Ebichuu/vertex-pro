@@ -1,0 +1,33 @@
+{
+  "item": "RSS-03",
+  "status": "IN_PROGRESS",
+  "branch": "local-only",
+  "implementation": [
+    "injectable HTTP client with context cancellation",
+    "HTTP(S) URL validation and bounded response body reads",
+    "conditional If-None-Match and If-Modified-Since request headers",
+    "200 body response and 304 not-modified response handling",
+    "non-2xx, transport, cancellation, invalid input, and oversized body failures fail closed",
+    "no SQLite writes, Feed cursor mutation, RaceJob creation, or real external feed calls"
+  ],
+  "test_commands": {
+    "package": "go test ./internal/rssfetch -count=1",
+    "all": "go test ./... -count=1",
+    "vet": "go vet ./...",
+    "race_docker": "docker run --rm -v \"${PWD}:/src\" -w /src golang:1.26.3-bookworm sh -c 'export PATH=/usr/local/go/bin:$PATH; CGO_ENABLED=1 go test -race ./internal/rssfetch -count=1'"
+  },
+  "results": {
+    "package": "PASS",
+    "all": "PASS",
+    "vet": "PASS",
+    "race_docker": "PASS"
+  },
+  "inputs": [
+    {"path": "internal/rssfetch/fetch.go", "sha256": "54e690df84c70a81017c9b69507d05ea0784709a11396c3b6cd1db738b9d6459"},
+    {"path": "internal/rssfetch/fetch_test.go", "sha256": "efdf25422eedc825493c6b6628b77a1b3ce68b5273f9715b4d148daf0338c923"},
+    {"path": "internal/rssservice/service.go", "sha256": "4864fbee28ce51ee895e798ca54d69d2c990d628d29546d3d7cb7e8b7e97053e"},
+    {"path": "internal/secrets/store.go", "sha256": "840d6fc9d5582ba735b3c4725a336cdfc86970d6bf393d7d76e38ca067fa4a00"}
+  ],
+  "blocker": "Scheduler, baseline persistence, source deduplication, and API command wiring remain RSS-04..06 work; no external feed calls were made.",
+  "no_external_service_calls": true
+}

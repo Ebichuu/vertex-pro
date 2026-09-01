@@ -1,0 +1,63 @@
+﻿import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, describe, expect, it } from 'vitest'
+import { RuleList } from './RuleList'
+import { sortRules, updateRuleOptimistically, type RuleSummary } from '../../features/rules/rule-list'
+
+afterEach(cleanup)
+
+const rules: RuleSummary[] = [
+  { id: 'rule-b', name: '低优先级', priority: 10, enabled: true, revision: 1, matchCount: 7, target: 'qB-B', updatedAt: '2026-08-25T00:00:00Z' },
+  { id: 'rule-a', name: '高优先级', priority: 100, enabled: true, revision: 1, matchCount: 42, target: '高速组', updatedAt: '2026-08-25T00:00:00Z' },
+]
+
+describe('RuleList', () => {
+  it('shows match count and target, then toggles enabled state with a revision increment', async () => {
+    let latest = rules
+    render(<RuleList rules={rules} onChange={(nextRules) => { latest = nextRules }} />)
+    expect(screen.getAllByRole('article')[0]).toHaveTextContent('高优先级')
+    expect(screen.getAllByRole('article')[0]).toHaveTextContent('42')
+    expect(screen.getAllByRole('article')[0]).toHaveTextContent('高速组')
+    fireEvent.click(screen.getByRole('checkbox', { name: '高优先级 启用' }))
+    await screen.findByText(/v2/)
+    expect(latest.find((rule) => rule.id === 'rule-a')).toMatchObject({ enabled: false, revision: 2 })
+  })
+
+  it('duplicates a rule disabled with a fresh revision', () => {
+    let latest = rules
+    render(<RuleList rules={rules} onChange={(nextRules) => { latest = nextRules }} />)
+    fireEvent.click(screen.getAllByRole('button', { name: '复制' })[0])
+    expect(latest).toHaveLength(3)
+    expect(latest[2]).toMatchObject({ name: '高优先级 副本', enabled: false, revision: 1, matchCount: 0 })
+  })
+
+  it('returns a 409 result for a stale optimistic revision', () => {
+    const result = updateRuleOptimistically(rules[0], 0, { enabled: false })
+    expect(result).toMatchObject({ ok: false, status: 409, code: 'REVISION_CONFLICT' })
+  })
+
+  it('surfaces a 409 conflict and loads the current revision', async () => {
+    const current = { ...rules[1], revision: 4, enabled: false }
+    render(<RuleList rules={rules} onUpdateRule={() => ({ ok: false, status: 409, code: 'REVISION_CONFLICT', current })} />)
+    fireEvent.click(screen.getByRole('checkbox', { name: '高优先级 启用' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('已加载当前 v4')
+    expect(screen.getByRole('checkbox', { name: '高优先级 启用' })).not.toBeChecked()
+  })
+
+  it('reorders after a priority edit and creates unique duplicate identities', async () => {
+    let latest = rules
+    render(<RuleList rules={rules} onChange={(nextRules) => { latest = nextRules }} />)
+    const priority = screen.getByRole('spinbutton', { name: '低优先级 优先级' })
+    fireEvent.change(priority, { target: { value: '200' } })
+    fireEvent.blur(priority)
+    await screen.findByDisplayValue('200')
+    expect(screen.getAllByRole('article')[0]).toHaveTextContent('低优先级')
+    fireEvent.click(screen.getAllByRole('button', { name: '复制' })[0])
+    fireEvent.click(screen.getAllByRole('button', { name: '复制' })[0])
+    expect(new Set(latest.map((rule) => rule.id)).size).toBe(latest.length)
+  })
+
+  it('uses the winner ordering as the stable list order', () => {
+    expect(sortRules([{ ...rules[0], priority: 10, id: 'b' }, { ...rules[0], priority: 10, id: 'a' }]).map((rule) => rule.id)).toEqual(['a', 'b'])
+  })
+})
+

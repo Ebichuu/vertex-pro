@@ -1,0 +1,34 @@
+{
+  "item": "ADD-02",
+  "title": "Attempt StateMachine",
+  "status": "IN_PROGRESS",
+  "local_status": "COMPLETE",
+  "branch": "local-only",
+  "implementation": [
+    "集中定义 Attempt 状态枚举和允许转换",
+    "RESERVED 只能进入受控 Add/确认路径，UNKNOWN 只能进入对账终态",
+    "HASH_SEEN/RECONCILED_CONFIRMED 必须携带 qB torrent、sync generation、snapshot revision 和 evidence digest",
+    "ADD_FAILED 必须使用 FAILED_NO_EFFECT，UNKNOWN/在途状态必须保留 POSSIBLE_EFFECT 或 OBSERVED_EFFECT",
+    "Attempt 的 job、identity、attempt_no、target、allocation epoch、reserved bytes、started_at 等目标事实在转换中不可修改",
+    "仅 RESERVED 且 dispatch 未开始的 Attempt 可挂接 RESERVED Job；已有 current_attempt 或非 RESERVED Job 均拒绝",
+    "历史 Attempt 不允许复活到可发送状态"
+  ],
+  "outputs": [
+    {"path": "internal/attemptstate/attempt.go", "sha256": "b979fd4e7add022ba13b55df0cfb8f75dd10ddc2d3d2cbaa62f779a827b493b7"},
+    {"path": "internal/attemptstate/attempt_test.go", "sha256": "01e25cab96d834ce55343ff1e10443ab6e756d956ba320e52fd69a56340cba16"},
+    {"path": "internal/racejob/job.go", "sha256": "32e19236b009f94d5ae375067d2ff8ef693e8ed37dbfb7614473442d31f81221"}
+  ],
+  "checks": {
+    "unit": "PASS: go test ./internal/attemptstate -count=1",
+    "all_tests": "PASS: go test ./... -count=1",
+    "vet": "PASS: go vet ./...",
+    "attempt_transition_matrix": "PASS",
+    "confirmation_evidence_guard": "PASS",
+    "immutable_target_fact": "PASS",
+    "job_current_pointer_guard": "PASS",
+    "historical_attempt_reuse_guard": "PASS"
+  },
+  "blocker": "ADD-03 SubmitIntent、ADD-04 waiter、真实 Add/Sync 接线尚未实现；本项仅提供 local-only Attempt 状态机和指针协同，不开放真实 qB Add。",
+  "no_external_service_calls": true
+}
+

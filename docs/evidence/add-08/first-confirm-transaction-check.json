@@ -1,0 +1,38 @@
+{
+    "item":  "ADD-08",
+    "title":  "首次确认原子事务",
+    "status":  "IN_PROGRESS",
+    "local_status":  "COMPLETE",
+    "branch":  "local-only",
+    "implementation":  [
+                           "使用 db.RunImmediate 在单个 BEGIN IMMEDIATE 中重读 Attempt、SubmitIntent、Reservation 与 Job 关系事实",
+                           "校验确认快照严格晚于 Add 前 generation/revision 且 digest 不同，陈旧事实 fail-closed",
+                           "原子创建 RESERVATION owner 的 capacity_task_binding 并固定 qB Torrent ID、Identity、snapshot digest",
+                           "通过已有状态约束将 Attempt 与 Job 推进到 HASH_SEEN，并将 Reservation 推进到 REFLECTING",
+                           "追加 attempt.state.changed 事件；数据库生成 append-only event_id",
+                           "同一确认事实重复到达时幂等成功，冲突确认或已有 binding 拒绝"
+                       ],
+    "outputs":  [
+                    {
+                        "path":  "internal/firstconfirm/confirm.go",
+                        "sha256":  "62cbe10b66a647498ac8e43a0ed028bf97e465314323d985df72e02900254113"
+                    },
+                    {
+                        "path":  "internal/firstconfirm/confirm_test.go",
+                        "sha256":  "8ec54947753f5b2082ed59a10dd5c2b143133f33ee00989ada5970e57b106849"
+                    }
+                ],
+    "checks":  {
+                   "unit":  "PASS: go test ./internal/firstconfirm -count=1",
+                   "all_tests":  "PASS: go test ./... -count=1",
+                   "vet":  "PASS: go vet ./...",
+                   "single_immediate_transaction":  "PASS",
+                   "fresh_snapshot_guard":  "PASS",
+                   "binding_attempt_job_reservation_atomicity":  "PASS",
+                   "repeat_confirmation_idempotency":  "PASS",
+                   "event_append":  "PASS",
+                   "no_external_service_calls":  "PASS"
+               },
+    "blocker":  "本项仅完成 local-only 首次确认事务；真实 qB/qui SyncWatcher、IdentityMatcher 生产接线和后续恢复故障矩阵仍待后续，未连接外部服务。",
+    "no_external_service_calls":  true
+}

@@ -1,0 +1,75 @@
+{
+  "item": "QUI-09 / ADD-09 / ADD-13",
+  "status": "IN_PROGRESS",
+  "executed_at": "2026-09-01T11:18:00Z",
+  "external_calls": true,
+  "transport": {
+    "production_go_clients_used": true,
+    "loopback_bridge_used": true,
+    "bridge_reason": "The coding harness sandbox blocks newly compiled Go child processes from direct non-loopback outbound sockets while allowing loopback. A loopback-only bridge forwarded unchanged HTTP requests to the real qui endpoint.",
+    "product_requirement_changed": false
+  },
+  "already_present": {
+    "status": "PASS",
+    "identity_matcher": "MATCHED",
+    "dispatch_decision": "not_dispatched_already_present",
+    "task_delta": 0,
+    "observed_state": "stoppedDL",
+    "delete_called": false
+  },
+  "already_present_transaction": {
+    "status": "PASS",
+    "live_identity_observed": true,
+    "network_transport_read_only": true,
+    "external_task_set_unchanged": true,
+    "reservation_atomic_created": true,
+    "attempt_state": "ALREADY_PRESENT",
+    "attempt_dispatch_state": "NOT_STARTED",
+    "job_state": "ALREADY_PRESENT",
+    "binding_owner_kind": "UNMANAGED",
+    "reservation_release_reason": "ALREADY_PRESENT",
+    "submit_intent_dispatch_state": "NOT_STARTED",
+    "replay_idempotent": true,
+    "temporary_database_removed": true
+  },
+  "restart_recovery": {
+    "status": "PASS",
+    "starts": 2,
+    "both_ready": true,
+    "both_graceful_exit": true,
+    "database_reused": true,
+    "snapshot_root_reused": true,
+    "revision_advanced": true,
+    "full_update_reset_observed": true,
+    "generation_advanced_safely": true,
+    "only_qui_method_observed": "GET",
+    "existing_task_set_unchanged": true
+  },
+  "sync_semantics": {
+    "initial_full_update": true,
+    "followup_rid_requests_succeeded": true,
+    "followup_returned_full_update": true,
+    "true_incremental_delta_verified": false,
+    "safety_result": "SyncWatcher treated every full_update as a deterministic reset and persisted newer complete snapshots."
+  },
+  "evidence": [
+    {
+      "path": "docs/evidence/qui-12/live-qb504-go-already-present-probe.json",
+      "sha256": "213725fd94bcc056f465fe9220396097b5dedd52b2d66c270d520e8209649c17"
+    },
+    {
+      "path": "docs/evidence/qui-12/live-qb504-go-restart-recovery.json",
+      "sha256": "78145fee387d525c4e7c0f82a7662e7e2e6ea43d123ef4691530cc1869fc067c"
+    },
+    {
+      "path": "docs/evidence/qui-12/live-qb504-go-already-present-transaction.json",
+      "sha256": "ff166f517620f9edad06406c90cfd37ac82181312d738624cf97119feafb1e2a"
+    }
+  ],
+  "remaining_blockers": [
+    "A direct non-loopback live run of the Go process is still required outside the coding harness sandbox.",
+    "The tested qui Proxy returns full_update=true for RID follow-ups, so true incremental-delta behavior remains unverified.",
+    "The production Already-present transaction was exercised against the live Identity using an isolated local database; startup recovery of an interrupted production RaceJob/Attempt remains unverified.",
+    "No additional external task was created during these checks."
+  ]
+}

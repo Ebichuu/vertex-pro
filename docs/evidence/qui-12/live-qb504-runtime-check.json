@@ -1,0 +1,38 @@
+{
+  "status": "PASS",
+  "safety": {
+    "external_runtime_read_only": true,
+    "external_task_mutation_endpoints_called": false,
+    "existing_task_set_unchanged": true,
+    "secrets_persisted_in_repository": false
+  },
+  "qui_setup": {
+    "control_api_key_created": true,
+    "per_instance_client_proxy_key_created": true,
+    "task_configuration_changed": false
+  },
+  "runtime": {
+    "healthz": 200,
+    "readyz": 200,
+    "root": 200,
+    "auth_initialize": 200,
+    "auth_login": 200,
+    "instances_api": 200,
+    "dashboard_api": 200,
+    "graceful_exit": true
+  },
+  "sync": {
+    "instance_id": "13",
+    "state": "READY",
+    "rid_present": true,
+    "snapshot_revision": 3,
+    "snapshot_rows": 3,
+    "snapshot_files": 3,
+    "task_count_before": 9,
+    "task_count_after": 9,
+    "rid_advanced_or_equal": true
+  },
+  "api": {
+    "instance_rows": 1
+  }
+}

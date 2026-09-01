@@ -1,0 +1,36 @@
+{
+  "item": "UI-09",
+  "title": "Downloader Detail",
+  "status": "IN_PROGRESS",
+  "local_status": "COMPLETE",
+  "branch": "local-only",
+  "implementation": [
+    "新增 /downloaders/$downloaderId 下载器详情路由，总览卡片提供详情入口",
+    "详情模型与组件通过异步 DownloaderDetailLoader 注入数据；默认路由只使用确定性本地 fixture，不请求真实 API、数据库、qui、qB 或外部服务",
+    "展示实时上传/下载速度、活动/下载/做种/暂停任务数、物理与 Vertex 可用容量、容量状态和观测时间",
+    "提供日/周/月流量摘要与可访问 CSS 柱状图；缺失小时留空并标注，counter reset 在数据质量区域说明",
+    "数据质量区分 FRESH、STALE、UNKNOWN 与健康状态；未知字段显示暂无数据，不美化为零或在线"
+  ],
+  "outputs": [
+    { "path": "docs/superpowers/specs/2026-08-31-downloader-detail-design.md", "sha256": "832900e39c658f3641948c8a4718bafb006758eabf5aad7eed78a2d99f9cfbea" },
+    { "path": "web/src/features/downloaders/downloader-detail.ts", "sha256": "6eac1cb9ad885742267853a788cf30f1b01c8011083fb574307c7ab2f5133268" },
+    { "path": "web/src/components/downloaders/DownloaderDetailPage.tsx", "sha256": "9e46624a4c131d3ebe03753f0d67845c61b235aabab7831fc9244b88c46a9b16" },
+    { "path": "web/src/components/downloaders/DownloaderDetailPage.test.tsx", "sha256": "3914e93e877152bb73f2100d44a8376d177b1f2df2275a361a72a5e1bad5562b" },
+    { "path": "web/src/components/dashboard/DashboardCards.tsx", "sha256": "bb9e638f8358e47eebcef029da10d1644ccacb82ea1e369aa2cd1330af9926f7" },
+    { "path": "web/src/app/router.tsx", "sha256": "21dd567e79d049e38bbf67145e2b45ca510ab59b156f9433fdd274ce68999ff6" },
+    { "path": "web/src/styles.css", "sha256": "9c233c175bad00ac9dc4d6d5cf76e6898417e40b4a80d304d5912ac3becccc4f" },
+    { "path": "web/src/test/smoke.test.tsx", "sha256": "8f285c7d1a7c8707bebb67258be6f54ef408c4d2a93453e3dd152d75f35c533f" }
+  ],
+  "checks": {
+    "unit": "PASS: pnpm --dir web test（15 个测试文件，70/70；DownloaderDetailPage 4/4、Dashboard 3/3、route smoke 3/3）",
+    "typecheck": "PASS: pnpm --dir web typecheck",
+    "build": "PASS: pnpm --dir web build（主 JS chunk 586.40 kB，gzip 179.77 kB，体积提示非阻塞）",
+    "realtime": "PASS: 实时上传/下载速度、活动/下载/做种/暂停任务数和来源/观测时间",
+    "capacity": "PASS: 总容量、物理可用、Vertex 可用、TRUSTED/RECONCILING 状态与未知值",
+    "periods": "PASS: 日/周/月切换、上传/下载/分享率摘要和可访问柱状图",
+    "data_quality": "PASS: FRESH/STALE/UNKNOWN、缺失小时留空、counter reset 说明",
+    "route": "PASS: /downloaders/$downloaderId 直达且总览详情入口可用",
+    "no_external_service_calls": "PASS"
+  },
+  "blocker": "本项仅完成 local-only Downloader Detail 投影与页面；真实 stats/downloaders API、qui/qB 数据采样、数据库持久化和 SSE 刷新尚未接通，故保持 IN_PROGRESS。"
+}

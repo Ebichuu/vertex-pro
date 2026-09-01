@@ -1,0 +1,35 @@
+{
+  "item": "RULE-05",
+  "status": "IN_PROGRESS",
+  "branch": "local-only",
+  "implementation": [
+    "deterministic winner ordering by priority DESC, rule_revision DESC, rule_id ASC",
+    "winner snapshot for target, category, single-value parameters, and participation window",
+    "deduplicated sorted Tags union with reserved-tag protection",
+    "AllowedProfiles and StorageLabels set intersection",
+    "empty constraint intersection rejection without widening constraints",
+    "duplicate rule-version match rejection",
+    "input-order independence and stable aggregation algorithm version",
+    "no RaceJob persistence, Reservation, Add, or external service side effects"
+  ],
+  "test_commands": {
+    "package": "go test ./internal/ruleaggregate -count=1",
+    "all": "go test ./... -count=1",
+    "vet": "go vet ./...",
+    "race_docker": "docker run --rm -v \"${PWD}:/src\" -w /src golang:1.26.3-bookworm sh -c 'export PATH=/usr/local/go/bin:$PATH; CGO_ENABLED=1 go test -race ./internal/ruleaggregate -count=1'"
+  },
+  "results": {
+    "package": "PASS",
+    "all": "PASS",
+    "vet": "PASS",
+    "race_docker": "PASS"
+  },
+  "inputs": [
+    {"path": "internal/ruleaggregate/aggregate.go", "sha256": "2058780514ec9659655d6e3b3bd8bd9e23e440dac1d75a19178bc5980d193344"},
+    {"path": "internal/ruleaggregate/aggregate_test.go", "sha256": "cb4848fa1d44ed6440cca6867a9f78a6d84ebe8160005299949efa3b13fa2bd2"},
+    {"path": "internal/ruleversion/store.go", "sha256": "faf66efcfe4290a881e8ae7f1ee1e6170f309a90774c4ee0e92bb4b8bd69b04d"},
+    {"path": "internal/rules/evaluator.go", "sha256": "1694ab7031546b9433486c4505a2a8bafbe91e9ca01078ff009aac8ed051ba57"}
+  ],
+  "blocker": "RaceJob rule-match persistence, aggregation snapshot persistence, RULE-06 dry-run API, and downstream Placement wiring remain pending; no external services were called.",
+  "no_external_service_calls": true
+}

@@ -1,0 +1,45 @@
+{
+  "item": "RSS-01",
+  "status": "IN_PROGRESS",
+  "branch": "local-only",
+  "implementation": [
+    "Site creation/listing backed by the DB-03 sites table",
+    "Feed creation/listing and single-feed reads backed by rssservice",
+    "Feed updates use an atomic updated_at ETag guard for name, URL, enabled, and poll_minutes",
+    "HTTP(S) URL validation without userinfo, query, or fragment",
+    "ID/name validation, site foreign-key enforcement, and duplicate source rejection",
+    "poll_minutes default of 15 and range validation from 1 through 1440"
+  ],
+  "test_commands": {
+    "package": "go test -p 1 ./internal/rssservice -count=1",
+    "focused_api": "go test -p 1 ./internal/resourcesapi ./internal/rssservice ./internal/app ./internal/ruleservice -count=1",
+    "all": "go test -p 1 ./... -count=1",
+    "vet": "go vet ./...",
+    "race_docker": "docker run --rm -v D:/Projects/Vertex-pro:/src -w /src golang:1.26.3-bookworm sh -c 'export PATH=/usr/local/go/bin:$PATH; CGO_ENABLED=1 go test -race ./internal/rssservice -count=1'"
+  },
+  "results": {
+    "package": "PASS",
+    "focused_api": "PASS",
+    "all": "PASS: go test -p 1 ./... -count=1 (this run); Windows linker failures remain an intermittent environment risk",
+    "vet": "PASS",
+    "race_docker": "BLOCKED: dependency download denied by the isolated Docker network"
+  },
+  "inputs": [
+    { "path": "internal/rssservice/service.go", "sha256": "4864fbee28ce51ee895e798ca54d69d2c990d628d29546d3d7cb7e8b7e97053e" },
+    { "path": "internal/rssservice/service_test.go", "sha256": "2435ac8f3c11e89022f735db2a83585425688b22a7e26362cd1fceea20b04bd8" },
+    { "path": "internal/db/migrations/0002_site_feed_rule_identity.sql", "sha256": "35b1b8ec3e514023fa8a63a6e9017629abbd0115666d725496a269daecdc2c5a" },
+    { "path": "internal/db/migrations/0009_feed_poll_interval.sql", "sha256": "480d16222cc751433620d6c525c42558f8b739a5c194da6ff6c47148a8f94b62" },
+    { "path": "contracts/openapi/openapi.json", "sha256": "d5a459684ffc0470ea5c654b9598f49ee38ea6c6d052581599e7f68bd14f1749" }
+  ],
+  "checks": {
+    "default_poll_minutes": "PASS: omitted poll_minutes persists as 15",
+    "poll_minutes_validation": "PASS: 1441 is rejected",
+    "foreign_key": "PASS: missing site is rejected by the service/API boundary",
+    "duplicate_feed": "PASS: duplicate feed ID maps to REVISION_CONFLICT at the API boundary",
+    "feed_get": "PASS: single-feed GET returns persisted fields and resource ETag",
+    "feed_update": "PASS: PUT updates enabled/poll fields and rejects stale updated_at ETag",
+    "no_external_service_calls": "PASS"
+  },
+  "blocker": "Scheduler registration from persisted poll_minutes, baseline refresh, source fan-out, and external-site calls remain RSS-03..06 work; no external site calls were made.",
+  "no_external_service_calls": true
+}

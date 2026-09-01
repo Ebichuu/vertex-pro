@@ -1,0 +1,48 @@
+{
+  "status": "PASS",
+  "profile": "QB_504",
+  "transport": "Vertex protocol harness -> qui v1.0.0 Client Proxy -> qB 5.0.4",
+  "fixture": {
+    "trackerless": true,
+    "size_bytes": 1,
+    "started_inactive": true,
+    "fixture_sha256": "5c85c5b080c6a347a77d4687abc97bafa9f860b868d027fdfd9c9b3f43815d28"
+  },
+  "baseline": {
+    "task_count": 1,
+    "test_identity_present": true,
+    "initial_full_update": true
+  },
+  "duplicate_add": {
+    "http_status": 200,
+    "body_class": "legacy_fails",
+    "task_set_unchanged": true
+  },
+  "invalid_add": {
+    "http_status": 415,
+    "body_class": "nonempty_error",
+    "request_rejected": true,
+    "task_set_unchanged": true
+  },
+  "reads": {
+    "trackers_http_status": 200,
+    "trackers_json": true,
+    "transfer_info_http_status": 200,
+    "transfer_info_json": true
+  },
+  "delete": {
+    "http_status": 200,
+    "response_empty": true,
+    "identity_absent_after": true,
+    "incremental_removed_observed": true,
+    "full_update_reset_observed": false
+  },
+  "safety": {
+    "isolated_lab_only": true,
+    "production_services_called": false,
+    "lab_task_count_before": 1,
+    "lab_task_count_after": 0,
+    "lab_returned_to_empty": true,
+    "secrets_redacted": true
+  }
+}

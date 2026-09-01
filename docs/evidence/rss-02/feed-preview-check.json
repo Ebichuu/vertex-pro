@@ -1,0 +1,46 @@
+{
+  "item": "RSS-02",
+  "status": "IN_PROGRESS",
+  "branch": "local-only",
+  "implementation": [
+    "read-only Feed preview test service with injectable fetcher",
+    "RSS and Atom XML parsing",
+    "bounded preview entry limit from 1 to 100",
+    "POST /api/v1/feeds/{id}/test persists a standard api_command result",
+    "test command uses Idempotency-Key and replays the same command without a second fetch",
+    "fetcher errors, empty bodies, invalid limits, nil fetcher, and empty feeds fail closed",
+    "no Source, RaceJob, Reservation, Add, or external calls in focused tests"
+  ],
+  "test_commands": {
+    "preview_package": "go test -p 1 ./internal/rsspreview -count=1",
+    "api_package": "go test -p 1 ./internal/resourcesapi -count=1",
+    "all": "go test -p 1 ./... -count=1",
+    "vet": "go vet ./...",
+    "race_docker": "docker run --rm -v D:/Projects/Vertex-pro:/src -w /src golang:1.26.3-bookworm sh -c 'export PATH=/usr/local/go/bin:$PATH; CGO_ENABLED=1 go test -race ./internal/rsspreview -count=1'"
+  },
+  "results": {
+    "preview_package": "PASS",
+    "api_package": "PASS",
+    "all": "PASS: go test -p 1 ./... -count=1 (this run); Windows linker failures remain an intermittent environment risk",
+    "vet": "PASS",
+    "race_docker": "BLOCKED: dependency download denied by the isolated Docker network"
+  },
+  "inputs": [
+    { "path": "internal/rsspreview/preview.go", "sha256": "a423cc84bafc8711bda6d09acdb972e73346be8bb1231754bdefd09458d2d9f0" },
+    { "path": "internal/rsspreview/preview_test.go", "sha256": "fb767cd2f6d51443192960b191695bf1f6cc3f6fd773df13770f19edf6b87893" },
+    { "path": "internal/rssservice/service.go", "sha256": "4864fbee28ce51ee895e798ca54d69d2c990d628d29546d3d7cb7e8b7e97053e" },
+    { "path": "internal/resourcesapi/feeds.go", "sha256": "29c627e92950d6eed337d0e0ed4d26a2a80020ed76a7d1015eba58a3efbf8791" },
+    { "path": "internal/resourcesapi/api_test.go", "sha256": "642ea43b5afcd7271654180067b27f79854e3f5f99f94971f3428db9cb3145f3" },
+    { "path": "internal/db/migrations/0006_events_commands_stats.sql", "sha256": "ba5c729c431e628cdae7b8303d61f28633aa71ccc5a6f533a70ac1ee8e8a2fa1" }
+  ],
+  "checks": {
+    "rss_atom_parse": "PASS",
+    "read_only_api": "PASS: successful command result contains feed preview entries and READ_ONLY_FETCH source",
+    "idempotency": "PASS: same key/body replays command and does not invoke FeedTest twice",
+    "csrf": "PASS: test command is rejected by WebProtection without CSRF",
+    "no_delivery_side_effect": "PASS: no Source/RaceJob/Reservation/Add writes are performed",
+    "no_external_service_calls": "PASS in focused tests; application wiring uses the real HTTP fetcher only when invoked"
+  },
+  "blocker": "Scheduler execution, conditional cache persistence, baseline refresh, feed-item fan-out, and real external-site validation remain RSS-03..06 work; current evidence is local-only.",
+  "no_external_service_calls": true
+}

@@ -1,0 +1,41 @@
+﻿{
+  "item": "QUI-08",
+  "status": "IN_PROGRESS",
+  "branch": "local-only",
+  "implementation": [
+    "atomic temporary snapshot file write with fsync and rename",
+    "digest-bound snapshot paths prevent concurrent coordinate overwrite",
+    "SQLite sync_snapshots reference and sync_instance_state update are committed transactionally",
+    "snapshot load verifies database reference, root containment, digest, JSON payload, and RID",
+    "stale coordinates, incomplete snapshots, missing references, corrupted files, and orphan crash-window files fail closed"
+  ],
+  "test_commands": {
+    "package": "go test ./internal/snapshot -count=1",
+    "all": "go test ./... -count=1",
+    "vet": "go vet ./...",
+    "race": "CGO_ENABLED=1 go test -race ./internal/snapshot -count=1"
+  },
+  "results": {
+    "package": "PASS",
+    "all": "PASS",
+    "vet": "PASS",
+    "race": "BLOCKED: CGO_ENABLED=1 requires gcc, unavailable in current environment"
+  },
+  "inputs": [
+    {
+      "path": "internal/snapshot/store.go",
+      "sha256": "4c4810f17b6d6c203f785a6494b8229121c0215e3c9071449d97af6741ed69a7"
+    },
+    {
+      "path": "internal/snapshot/store_test.go",
+      "sha256": "3ec11e079f5b4e12b5818c7de0275a0c2c330a853728e2419597f5dde8db7000"
+    },
+    {
+      "path": "internal/db/migrations/0003_sync_snapshot_waiter.sql",
+      "sha256": "f9bc8ede5f2abc5edd9304a5893e4b2388649b6128355cef4ab3752880e9e6ed"
+    }
+  ],
+  "blocker": "SyncWatcher integration remains later QUI-09 work; race test is environment-blocked because gcc is unavailable.",
+  "no_external_service_calls": true
+}
+

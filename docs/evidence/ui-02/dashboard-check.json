@@ -1,0 +1,58 @@
+{
+    "item": "UI-02",
+    "title": "Dashboard",
+    "status": "IN_PROGRESS",
+    "local_status": "COMPLETE",
+    "branch": "local-only",
+    "implementation": [
+        "后端 GET /api/v1/dashboard 升级为实例卡片汇总投影：单条聚合查询取全部实例的 sync 状态、capacity_state、physical/effective free 与存储验证状态，合并实时卡片（API-10 速率/任务数/freshness/source），浏览器不逐实例调用 qB",
+        "20 实例规模测试：stale/offline 实例 freshness 非 FRESH 且必带 SNAPSHOT_STALE 原因码（API-11 红线：不美化为健康）",
+        "前端 DashboardCards 组件：卡片网格（auto-fill 响应式）呈现标识/实时速率（KiB/MiB 口径）/下载做种计数/物理与 Vertex 可用容量/数据新鲜度/原因码 chips",
+        "formatRate/formatBytes 口径格式化：-1 未知容量显示未知不补造；cardTone 决定 ok/warn/bad 卡片语气",
+        "DashboardPage 以 react-query 挂载生成客户端 getDashboard，15 秒自动刷新（对齐 SSE 心跳节奏），加载/错误态齐备"
+    ],
+    "outputs": [
+        {
+            "path": "internal/resourcesapi/api.go",
+            "sha256": "4230b727771b1ced166d91051dd360c5592b3646c8c04a1d576dcf298dba4e6e"
+        },
+        {
+            "path": "internal/resourcesapi/dashboard.go",
+            "sha256": "cd391ad173a04e050b4e1ac024a5eeb1ab51ffbf321fa95b4facfa584c118c42"
+        },
+        {
+            "path": "internal/resourcesapi/dashboard_test.go",
+            "sha256": "becdddaa7b2c8bd8764c4ea4de31e8a58ad845484da89a5fddd8f39d0abf3bd2"
+        },
+        {
+            "path": "web/src/features/dashboard/dashboard.ts",
+            "sha256": "43aed2b9ec185687afa28ab1fe79d9e1881a14a386fa20e27c382cc9fdabbc50"
+        },
+        {
+            "path": "web/src/components/dashboard/DashboardCards.tsx",
+            "sha256": "bb9e638f8358e47eebcef029da10d1644ccacb82ea1e369aa2cd1330af9926f7"
+        },
+        {
+            "path": "web/src/app/router.tsx",
+            "sha256": "21dd567e79d049e38bbf67145e2b45ca510ab59b156f9433fdd274ce68999ff6"
+        },
+        {
+            "path": "web/src/test/dashboard.test.tsx",
+            "sha256": "bb7b5b3cd45463797e4034c8977066d1dd36c4693e3a770228a423141b63f2b3"
+        },
+        {
+            "path": "web/src/styles.css",
+            "sha256": "9c233c175bad00ac9dc4d6d5cf76e6898417e40b4a80d304d5912ac3becccc4f"
+        }
+    ],
+    "checks": {
+        "unit": "PASS: go test ./internal/resourcesapi + pnpm test（web 31/31）",
+        "all_tests": "PASS: go test ./... -count=1（75 包全绿）+ pnpm typecheck 干净",
+        "vet": "PASS: go vet ./...",
+        "twenty_instances": "PASS: 20 实例卡片单查询渲染",
+        "stale_offline_marking": "PASS: 非 FRESH 卡片必带原因码不美化",
+        "summary_projection_only": "PASS: 汇总投影，无逐实例 qB 调用",
+        "no_external_service_calls": "PASS"
+    },
+    "blocker": "本项仅完成 local-only Dashboard；实时数值来自内存 Registry，生产接续需 qui/qB 采样源（STAT-01）与 SSE 推送接续，未连接外部服务。"
+}

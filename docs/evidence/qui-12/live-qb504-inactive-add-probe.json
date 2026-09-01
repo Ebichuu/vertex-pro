@@ -1,0 +1,27 @@
+{
+  "status": "PASS",
+  "safety": {
+    "explicit_user_opt_in": true,
+    "start_inactive": true,
+    "trackerless": true,
+    "existing_tasks_preserved": true,
+    "delete_endpoint_called": false,
+    "test_task_retained": true,
+    "torrent_name_or_hash_persisted": false
+  },
+  "add": {
+    "http_status": 200,
+    "response_format": "legacy_text",
+    "success_count": 1,
+    "side_effect_fact": "POSSIBLE_EFFECT"
+  },
+  "confirmation": {
+    "observed_via_qui_sync": true,
+    "inactive": true,
+    "state": "stoppedDL",
+    "task_count_before": 7,
+    "task_count_after": 8,
+    "task_delta": 1,
+    "identity_match": "MATCHED"
+  }
+}

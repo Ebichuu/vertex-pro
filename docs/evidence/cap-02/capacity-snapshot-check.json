@@ -1,0 +1,38 @@
+{
+    "item":  "CAP-02",
+    "title":  "容量快照",
+    "status":  "IN_PROGRESS",
+    "local_status":  "COMPLETE",
+    "branch":  "local-only",
+    "implementation":  [
+                           "physical free bytes 使用可空输入，缺失不转成 0",
+                           "采集时间支持陈旧和未来时间 fail closed",
+                           "snapshot revision 使用可空输入并拒绝负数",
+                           "source 和 digest 必须存在",
+                           "fallback 快照显式拒绝，不允许回退字段伪装可信快照",
+                           "通过后才生成不可变 Snapshot，失败返回 CAPACITY_UNCERTAIN 和结构化原因"
+                       ],
+    "outputs":  [
+                    {
+                        "path":  "internal/capacitysnapshot/snapshot.go",
+                        "sha256":  "a7d21ec89f888cd9a16763f6dff35b87214a756165249a16720feb24d8c97b92"
+                    },
+                    {
+                        "path":  "internal/capacitysnapshot/snapshot_test.go",
+                        "sha256":  "c711bb9b987f2dc233e12939833fc5a3285ebbab79a069ad3ada496d0b93dc6d"
+                    }
+                ],
+    "checks":  {
+                   "unit":  "PASS: go test ./internal/capacitysnapshot -count=1",
+                   "all_tests":  "PASS: go test ./... -count=1",
+                   "vet":  "PASS: go vet ./...",
+                   "missing_physical_free":  "PASS",
+                   "negative_physical_free":  "PASS",
+                   "stale_snapshot":  "PASS",
+                   "future_snapshot":  "PASS",
+                   "missing_or_negative_revision":  "PASS",
+                   "fallback_rejected":  "PASS"
+               },
+    "blocker":  "CAP-03 及后续容量投影、SQLite 持久化和 Placement 接线尚未实现；本项不开放真实 Add 路径。",
+    "no_external_service_calls":  true
+}

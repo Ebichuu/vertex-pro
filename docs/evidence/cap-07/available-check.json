@@ -1,0 +1,40 @@
+{
+    "item":  "CAP-07",
+    "title":  "AVAILABLE 判定",
+    "status":  "IN_PROGRESS",
+    "local_status":  "COMPLETE",
+    "branch":  "local-only",
+    "implementation":  [
+                           "CandidateFilter 未通过时 fail-closed",
+                           "容量快照必须 TRUSTED 且存在 snapshot",
+                           "容量投影必须 TRUSTED 且存在 effective_free_bytes",
+                           "Storage 必须 VERIFIED",
+                           "effective_free_bytes \u003e= required_bytes",
+                           "inflight \u003c max_inflight",
+                           "任意 UNKNOWN 或非法数值返回 UNAVAILABLE/CAPACITY_UNCERTAIN 与结构化 reason code"
+                       ],
+    "outputs":  [
+                    {
+                        "path":  "internal/availability/availability.go",
+                        "sha256":  "d504137b97d042b5a5fb43f59157dd48d9c4d8fb287caf85efb2d93b0cc69996"
+                    },
+                    {
+                        "path":  "internal/availability/availability_test.go",
+                        "sha256":  "610c333ac4917d198b2d0e824d1cf632d4e682e04f6024ef45469581e891712d"
+                    }
+                ],
+    "checks":  {
+                   "unit":  "PASS: go test ./internal/availability -count=1",
+                   "all_tests":  "PASS: go test ./... -count=1",
+                   "vet":  "PASS: go vet ./...",
+                   "candidate_gate":  "PASS",
+                   "trusted_snapshot_gate":  "PASS",
+                   "trusted_projection_gate":  "PASS",
+                   "storage_gate":  "PASS",
+                   "required_bytes_gate":  "PASS",
+                   "inflight_gate":  "PASS",
+                   "fail_closed_unknown":  "PASS"
+               },
+    "blocker":  "CAP-08 Reservation 事务、SQLite 持久化和后续 recheck 尚未实现；本项不开放真实 Add 路径。",
+    "no_external_service_calls":  true
+}

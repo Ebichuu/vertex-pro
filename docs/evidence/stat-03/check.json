@@ -1,0 +1,32 @@
+{
+    "item": "stat-03",
+    "title": "小时桶",
+    "status": "IN_PROGRESS",
+    "local_status": "COMPLETE",
+    "branch": "local-only",
+    "implementation": [
+        "新增 internal/statshourly：BucketStart 统一落到 UTC 小时桶（任意输入时区先转 UTC），Accumulate 校验样本归属并累加 bytes/计数/revision，负增量拒绝；同一样本只归属一个桶",
+        "DisplayStart 仅在展示层把 UTC 桶起点换算到配置时区，跨日/月与 DST 语义由 time 包决定，不改变存储值"
+    ],
+    "outputs": [
+        {
+            "path": "internal/statshourly/bucket.go",
+            "sha256": "7955fd3ad0ba08ffef263f8d97a0df65da3a6eb5925e0e8b5218d7f6db700e47"
+        },
+        {
+            "path": "internal/statshourly/bucket_test.go",
+            "sha256": "a400deb4d1037947af879f158dab4c175d4afc2c92c4567b2c4ffda186d91dce"
+        }
+    ],
+    "checks": {
+        "unit": "PASS",
+        "all_tests": "PASS",
+        "vet": "PASS",
+        "utc_storage": "PASS",
+        "timezone_display": "PASS",
+        "bucket_membership": "PASS",
+        "no_external_service_calls": "PASS"
+    },
+    "no_external_service_calls": true,
+    "blocker": "本项仅完成 local-only 小时桶数学；DB 持久化合并与保留策略（OBS-03）待后续，未连接外部服务。"
+}

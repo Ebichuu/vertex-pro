@@ -1,0 +1,39 @@
+{
+    "item":  "DB-07",
+    "status":  "IN_PROGRESS",
+    "branch":  "local-only",
+    "implementation":  [
+                           "monotonic AUTOINCREMENT event_stream and race_events audit tables",
+                           "api_commands lifecycle, terminal-state and expiry constraints",
+                           "api_idempotency_records command uniqueness and expiry window",
+                           "instance counter samples and unique hourly traffic buckets",
+                           "stats collection result records and persisted system alerts",
+                           "event aggregate revision and retention indexes"
+                       ],
+    "test_commands":  {
+                          "package":  "go test ./internal/db -count=1",
+                          "all":  "go test ./... -count=1",
+                          "vet":  "go vet ./..."
+                      },
+    "results":  {
+                    "package":  "PASS",
+                    "all":  "PASS",
+                    "vet":  "PASS"
+                },
+    "inputs":  [
+                   {
+                       "path":  "internal/db/migrations/0006_events_commands_stats.sql",
+                       "sha256":  "ba5c729c431e628cdae7b8303d61f28633aa71ccc5a6f533a70ac1ee8e8a2fa1"
+                   },
+                   {
+                       "path":  "internal/db/db07_test.go",
+                       "sha256":  "8afbfddf28e016d79168ca3c1cad2655854d3a09689a381e9d5f925ee99e3f9a"
+                   },
+                   {
+                       "path":  "internal/db/migration_test.go",
+                       "sha256":  "be8a75ab841e8b661118ebb640f0889923a7c7fb590341466de9c57b76301b44"
+                   }
+               ],
+    "blocker":  "Event/command repository transactions, retention workers, aggregate-state atomic publication and C1 runtime checks remain future DB-08/DB-09/DB-10 stages.",
+    "no_external_service_calls":  true
+}

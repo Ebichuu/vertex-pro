@@ -1,0 +1,47 @@
+{
+    "item":  "DB-09",
+    "status":  "IN_PROGRESS",
+    "branch":  "local-only",
+    "implementation":  [
+                           "dedicated SQLite connection for BEGIN IMMEDIATE",
+                           "context-aware commit and rollback with callback error propagation",
+                           "explicit mutable PlacementAttempt repository allowlist",
+                           "repository row-count validation and missing-entity errors"
+                       ],
+    "test_commands":  {
+                          "package":  "go test ./internal/db -count=1",
+                          "all":  "go test ./... -count=1",
+                          "vet":  "go vet ./...",
+                          "race":  "CGO_ENABLED=1 go test -race ./internal/db -count=1"
+                      },
+    "results":  {
+                    "package":  "PASS",
+                    "all":  "PASS",
+                    "vet":  "PASS",
+                    "race":  "BLOCKED: CGO_ENABLED=1 requires gcc, unavailable in current environment"
+                },
+    "inputs":  [
+                   {
+                       "path":  "internal/db/transaction.go",
+                       "sha256":  "24133f6fae5160ec55e22aaed857c5534c7d182d89df4b21c711fabb949fca18"
+                   },
+                   {
+                       "path":  "internal/db/repository.go",
+                       "sha256":  "990ee8b9d2c2f7c5174e289566ec8eb551aa7e0face6998c2144455a82d224e7"
+                   },
+                   {
+                       "path":  "internal/db/transaction_test.go",
+                       "sha256":  "80412ce9c5be12ad57d92b0ee99a97e04a14bebc8dfb9d46aa079b07dfda0ccb"
+                   },
+                   {
+                       "path":  "internal/db/repository_test.go",
+                       "sha256":  "bf0d799c6c70df6f4d7f99e361c428d662a40965bf33a26e125e6fbe705962db"
+                   },
+                   {
+                       "path":  "internal/db/migration_test.go",
+                       "sha256":  "be8a75ab841e8b661118ebb640f0889923a7c7fb590341466de9c57b76301b44"
+                   }
+               ],
+    "blocker":  "Domain transaction orchestration for READY to RESERVED, event publication, startup reconciliation and complete repository surface remain future work; race test is environment-blocked because gcc is unavailable.",
+    "no_external_service_calls":  true
+}

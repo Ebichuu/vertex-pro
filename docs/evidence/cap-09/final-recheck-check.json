@@ -1,0 +1,36 @@
+{
+    "item":  "CAP-09",
+    "title":  "Final recheck",
+    "status":  "IN_PROGRESS",
+    "local_status":  "COMPLETE",
+    "branch":  "local-only",
+    "implementation":  [
+                           "复核 RACE-03 MATCHED/READY/PREPARED 与 final AVAILABLE 门",
+                           "比较 preparation、required bytes、instance、StorageTarget、Profile、Sync、snapshot、capacity、allocation epoch 全部 revision/fact",
+                           "最新 Candidate 不可用、Storage 未验证或 inflight 达上限时 fail-closed",
+                           "旧 Candidate 不能绕过最新容量和状态事实"
+                       ],
+    "outputs":  [
+                    {
+                        "path":  "internal/finalrecheck/finalrecheck.go",
+                        "sha256":  "4dc8741a49fc9c1cc4413896c1aa90d1f00108f4639d7db76b0a445c5aa86295"
+                    },
+                    {
+                        "path":  "internal/finalrecheck/finalrecheck_test.go",
+                        "sha256":  "429ed073db52e6af6731c03d03ede623ca8f7b060f9313b72daefa4084fad518"
+                    }
+                ],
+    "checks":  {
+                   "unit":  "PASS: go test ./internal/finalrecheck -count=1",
+                   "all_tests":  "PASS: go test ./... -count=1",
+                   "vet":  "PASS: go vet ./...",
+                   "race_gate":  "PASS",
+                   "revision_mismatch_guards":  "PASS",
+                   "latest_capacity_guard":  "PASS",
+                   "storage_guard":  "PASS",
+                   "inflight_guard":  "PASS",
+                   "fail_closed":  "PASS"
+               },
+    "blocker":  "CAP-10 Placement 评分及后续状态机接线尚未实现；本项不开放真实 Add 路径。",
+    "no_external_service_calls":  true
+}

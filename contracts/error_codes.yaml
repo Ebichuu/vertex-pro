@@ -1,0 +1,28 @@
+schema_version: 1
+source_of_truth: docs/产品方案设计/VERTEX_PRO_COMPLETE_REDESIGN_V1_RC8_FINAL.md
+error_envelope:
+  media_type: application/json
+  shape: { error: { code: string, message: string, request_id: string, retryable: boolean, details: object } }
+  client_rule: message is localizable; clients must branch on code only
+  internal_error_rule: details must not contain stack, SQL, Secret, Proxy URL or announce URL
+error_codes:
+  INVALID_REQUEST: { http_status: 400, retryable: false }
+  VALIDATION_FAILED: { http_status: 422, retryable: false }
+  UNAUTHENTICATED: { http_status: 401, retryable: false }
+  FORBIDDEN: { http_status: 403, retryable: false }
+  NOT_FOUND: { http_status: 404, retryable: false }
+  REVISION_CONFLICT: { http_status: 409, retryable: true }
+  IDEMPOTENCY_KEY_REUSED: { http_status: 409, retryable: false }
+  CURSOR_EXPIRED: { http_status: 409, retryable: true }
+  JOB_STATE_CONFLICT: { http_status: 409, retryable: false }
+  IDENTITY_ACTIVE_CHAIN_EXISTS: { http_status: 409, retryable: false }
+  PROFILE_UNVERIFIED: { http_status: 409, retryable: true }
+  INSTANCE_UNAVAILABLE: { http_status: 409, retryable: true }
+  SNAPSHOT_STALE: { http_status: 409, retryable: true }
+  STORAGE_UNVERIFIED: { http_status: 409, retryable: true }
+  CAPACITY_UNCERTAIN: { http_status: 409, retryable: true }
+  INSUFFICIENT_EFFECTIVE_FREE: { http_status: 409, retryable: true }
+  QUI_UNREACHABLE: { http_status: 502, retryable: true }
+  QB_PROXY_UNREACHABLE: { http_status: 502, retryable: true }
+  RATE_LIMITED: { http_status: 429, retryable: true }
+  INTERNAL_ERROR: { http_status: 500, retryable: false }

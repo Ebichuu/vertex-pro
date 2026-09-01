@@ -1,0 +1,41 @@
+{
+  "item": "QUI-07",
+  "status": "IN_PROGRESS",
+  "branch": "local-only",
+  "implementation": [
+    "rid=0 or full_update establishes a complete baseline",
+    "incremental deltas fail closed without a baseline",
+    "duplicate and out-of-order RID deltas are idempotently ignored",
+    "incremental fields inherit the prior snapshot and explicit removals delete torrents",
+    "invalid amount_left values remain UNKNOWN and are never coerced to zero",
+    "snapshot cloning prevents caller mutation of the prior baseline"
+  ],
+  "test_commands": {
+    "package": "go test ./internal/syncmerge -count=1",
+    "all": "go test ./... -count=1",
+    "vet": "go vet ./...",
+    "race": "CGO_ENABLED=1 go test -race ./internal/syncmerge -count=1"
+  },
+  "results": {
+    "package": "PASS",
+    "all": "PASS",
+    "vet": "PASS",
+    "race": "BLOCKED: CGO_ENABLED=1 requires gcc, unavailable in current environment"
+  },
+  "inputs": [
+    {
+      "path": "internal/syncmerge/merge.go",
+      "sha256": "783739a2e7389de7ded7b831e6c138404233f65277cb6aad071a8613074181fc"
+    },
+    {
+      "path": "internal/syncmerge/merge_test.go",
+      "sha256": "6b0f82958657fc5bad2221e6d06c7b9fea6a3e31bc4ca1b92333ec33f54f964e"
+    },
+    {
+      "path": "internal/qui/proxy/client.go",
+      "sha256": "3155982d8272c4974a626b5d5edb3a351f1ef1c1955c60a2c06b091fd0845de6"
+    }
+  ],
+  "blocker": "SnapshotStore and SyncWatcher remain later QUI-08/QUI-09 work; race test is environment-blocked because gcc is unavailable.",
+  "no_external_service_calls": true
+}

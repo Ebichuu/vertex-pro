@@ -1,0 +1,46 @@
+﻿{
+  "item": "QUI-11",
+  "status": "IN_PROGRESS",
+  "branch": "local-only",
+  "implementation": [
+    "protocol fixture report builder for profile runs",
+    "deterministic canonical fixture SHA-256 digest",
+    "recursive redaction of keys, tokens, cookies, passkeys, passwords, secrets, authorization, and query values",
+    "incomplete fixture and missing profile facts fail closed"
+  ],
+  "test_commands": {
+    "package": "go test ./internal/quprobe -count=1",
+    "all": "go test ./... -count=1",
+    "vet": "go vet ./...",
+    "race_host": "CGO_ENABLED=1 go test -race ./internal/quprobe -count=1",
+    "race_docker": "docker run --rm -v \"${PWD}:/src\" -w /src golang:1.26.3-bookworm sh -c 'export PATH=/usr/local/go/bin:$PATH; CGO_ENABLED=1 go test -race ./internal/quprobe -count=1'"
+  },
+  "results": {
+    "package": "PASS",
+    "all": "PASS",
+    "vet": "PASS",
+    "race_host": "BLOCKED: gcc unavailable on host",
+    "race_docker": "PASS"
+  },
+  "inputs": [
+    {
+      "path": "internal/quprobe/probe.go",
+      "sha256": "2961c43775d3d9da70128505b46d121760f731cba7620e6d4ec34a8de1184c94"
+    },
+    {
+      "path": "internal/quprobe/probe_test.go",
+      "sha256": "1e5cb7e1b0d5ee121c4b53a31925ffc1477417fb3b8b780547a992d1a84473a9"
+    },
+    {
+      "path": "internal/qbprofile/probe.go",
+      "sha256": "6d00d6025eaabf1c2e81426a1c11c2ad5b4ab9ec8723296c2ad9837fb4722e60"
+    },
+    {
+      "path": "internal/qui/proxy/client.go",
+      "sha256": "3155982d8272c4974a626b5d5edb3a351f1ef1c1955c60a2c06b091fd0845de6"
+    }
+  ],
+  "blocker": "Real qui/qB protocol lab execution remains QUI-12; fixture reports do not produce VERIFIED or AVAILABLE state.",
+  "no_external_service_calls": true
+}
+

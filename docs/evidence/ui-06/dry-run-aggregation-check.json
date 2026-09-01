@@ -1,0 +1,67 @@
+{
+    "item": "UI-06",
+    "title": "Dry-run / Aggregation Preview",
+    "status": "IN_PROGRESS",
+    "local_status": "COMPLETE",
+    "branch": "local-only",
+    "implementation": [
+        "Rules 页面提供可达的 Dry-run 预览入口，/aggregation 展示近期 RSS 选择、显式运行和结果状态",
+        "dry-run 执行器可注入；默认路由使用三个确定性 local-only fixture，不请求真实 RSS、API、数据库、qui 或 qB",
+        "结果展示全部规则、TRUE/FALSE/UNKNOWN 判定、每个条件原因、缺失字段和唯一 Winner",
+        "聚合区按优先级展示所有命中规则，并显示最终 qB、分类、Tags、保存路径策略、顺序下载、参与窗口和安全约束",
+        "UNKNOWN 高优先级条件采用 fail-closed 阻断结果；执行器错误清除旧结果并显示可访问错误提示",
+        "390x844 浏览器完成匹配、缺失字段阻断、亮暗主题和无横向溢出验收；页面明确声明无下载、Reservation 或 Add 副作用"
+    ],
+    "outputs": [
+        {
+            "path": "web/src/features/rules/aggregation-preview.ts",
+            "sha256": "e04100f4a813cb5da026c5aceaa988942401accbadffb1e950b168f649873771"
+        },
+        {
+            "path": "web/src/features/rules/dry-run.ts",
+            "sha256": "aeab3f82c3eef525f62ccbacd064fe6f96e068a356f0873212b7c1fc5483cb05"
+        },
+        {
+            "path": "web/src/components/rules/RuleAggregationPreview.tsx",
+            "sha256": "4611eafd2214f56660a554c3aea0fad5dadea2f0467324ac6fde7f44d6673ff2"
+        },
+        {
+            "path": "web/src/components/rules/RuleAggregationPreview.test.tsx",
+            "sha256": "5ce652b0637a6383f3c5053cddaf5921dac9a5a49c39787797ec9d3cb8b56a71"
+        },
+        {
+            "path": "web/src/components/rules/RuleDryRunPage.tsx",
+            "sha256": "00d0300383cac71edd872e83b805b3d07fec8d502e8d165bd7935a44bf47e40d"
+        },
+        {
+            "path": "web/src/components/rules/RuleDryRunPage.test.tsx",
+            "sha256": "440253fde6424a7092e18c6a500f37beda807d5b82f5bba5be3469a1b5adf4e3"
+        },
+        {
+            "path": "web/src/app/router.tsx",
+            "sha256": "21dd567e79d049e38bbf67145e2b45ca510ab59b156f9433fdd274ce68999ff6"
+        },
+        {
+            "path": "web/src/test/smoke.test.tsx",
+            "sha256": "8f285c7d1a7c8707bebb67258be6f54ef408c4d2a93453e3dd152d75f35c533f"
+        },
+        {
+            "path": "web/src/styles.css",
+            "sha256": "9c233c175bad00ac9dc4d6d5cf76e6898417e40b4a80d304d5912ac3becccc4f"
+        }
+    ],
+    "checks": {
+        "unit": "PASS: pnpm --dir web test（13 个测试文件，57/57；RuleDryRunPage 4/4、RuleAggregationPreview 2/2、route smoke 1/1）",
+        "typecheck": "PASS: pnpm --dir web typecheck",
+        "build": "PASS: pnpm --dir web build（主 JS chunk 564.16 kB，体积提示非阻塞）",
+        "go": "PASS: go test ./... -count=1 + go vet ./...",
+        "codegen": "PASS: go run ./tools/codegen -check",
+        "route_entry": "PASS: 从 /rules 的 Dry-run 预览入口进入 /aggregation",
+        "rule_reasons": "PASS: 三条规则和每个条件的 TRUE/FALSE/UNKNOWN、原因与缺失字段均可见",
+        "aggregation": "PASS: 命中规则、Winner、最终 qB、受控参数和安全约束均可见",
+        "fail_closed": "PASS: size_bytes 缺失时高优先级规则为 UNKNOWN，聚合状态 BLOCKED",
+        "browser_mobile": "PASS: 390x844 亮/暗主题、匹配与阻断流程无根文档横向溢出",
+        "no_external_service_calls": "PASS"
+    },
+    "blocker": "本项仅完成 local-only Dry-run/聚合预览；真实近期 RSS 历史加载、POST /rules/dry-run 与 /rules/{id}/dry-run 前端接线、鉴权/错误合同、持久化历史和主流程 E2E 尚未接通，故保持 IN_PROGRESS。"
+}

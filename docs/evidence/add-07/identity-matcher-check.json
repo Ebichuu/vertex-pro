@@ -1,0 +1,38 @@
+﻿{
+    "item":  "ADD-07",
+    "title":  "IdentityMatcher",
+    "status":  "IN_PROGRESS",
+    "local_status":  "COMPLETE",
+    "branch":  "local-only",
+    "implementation":  [
+                           "支持 v1、v2、hybrid identity 的强类型 digest 匹配",
+                           "hybrid 请求要求 v1 与 v2 由同一候选一致匹配，拒绝双 Hash 拆分拼接",
+                           "支持显式 legacy map key 回退匹配",
+                           "同一 identity 对应多个候选时返回 AMBIGUOUS，fail-closed 不任选",
+                           "qB Torrent ID 仅记录 hint 是否相符，不作为身份匹配条件或权威确认",
+                           "缺失、非法 digest 和重复候选 ID 直接拒绝"
+                       ],
+    "outputs":  [
+                    {
+                        "path":  "internal/identitymatcher/matcher.go",
+                        "sha256":  "1cefbeb013cc664366ac430538904270a1e8bcd925ab199f03006a1be505c6f9"
+                    },
+                    {
+                        "path":  "internal/identitymatcher/matcher_test.go",
+                        "sha256":  "e3f4db7c796aefe12a4d8cce502c40f7136f3a4132c319571c327771ff0119ad"
+                    }
+                ],
+    "checks":  {
+                   "unit":  "PASS: go test ./internal/identitymatcher -count=1",
+                   "all_tests":  "PASS: go test ./... -count=1",
+                   "vet":  "PASS: go vet ./...",
+                   "v1_v2_hybrid":  "PASS",
+                   "dual_hash_same_candidate":  "PASS",
+                   "legacy_map_key":  "PASS",
+                   "one_to_many_ambiguity":  "PASS",
+                   "hint_non_authoritative":  "PASS",
+                   "invalid_input_rejection":  "PASS"
+               },
+    "blocker":  "本项仅提供 local-only IdentityMatcher；真实 qB/qui Sync 数据源、Identity 原子确认和 ADD-08 后续状态接线仍待后续，未连接外部服务。",
+    "no_external_service_calls":  true
+}

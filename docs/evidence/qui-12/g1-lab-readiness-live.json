@@ -1,0 +1,50 @@
+{
+  "item": "QUI-12",
+  "status": "IN_PROGRESS",
+  "executed_at": "2026-09-01T12:44:00Z",
+  "safety": {
+    "real_qui_instance_touched": false,
+    "real_qb_instance_touched": false,
+    "lab_containers_created": 2,
+    "external_tasks_created_or_deleted": 0
+  },
+  "docker": {
+    "engine_available": true,
+    "engine_version": "29.7.2",
+    "compose_version": "v5.3.1",
+    "platform": "linux/amd64",
+    "backend": "Docker Desktop WSL2"
+  },
+  "available_local_images": {
+    "qb_504": {
+      "reference": "lscr.io/linuxserver/qbittorrent:5.0.4",
+      "manifest_digest": "sha256:46f4e80af074fa2ffc0214fe0b7d59384748cfb34685892a53b7a3c87407a333",
+      "exact_build_label": "5.0.4-r0-ls390",
+      "present": true
+    },
+    "qb_438": {
+      "present": false
+    },
+    "qb_522": {
+      "present": false
+    },
+    "qui": {
+      "present": true,
+      "reference": "vertex-pro-g1/qui:1.0.0-source-d5526ca",
+      "local_image_digest": "sha256:bbc4f629a5ffa2d5751bc2d547428f53b1de5b865958b2e3fc75de8603e1dc8d",
+      "matches_required_lock_commit": false
+    }
+  },
+  "remote_manifests": {
+    "qui_v1_0_0_linux_amd64": "sha256:3dbde1ab20addcaa460a222ff6541ec291704cf64cec9a92e801a3f3abdc4cde",
+    "qb_522_linux_amd64": "sha256:f6bc57461a97a9c55962e373fb275283a846065fe14d088818179af2f28a0782",
+    "qb_438_exact_tag_found": false
+  },
+  "blockers": [
+    "Registry pulls timed out, so a local qui v1.0.0 image was built from upstream commit d5526ca59e7d04cc1e31377f0bcde844ad914212; it does not match the required lock commit.",
+    "Pulling the pinned qB 5.2.2 image timed out before completion.",
+    "An exact reproducible qB 4.3.8 runnable image is not yet available locally.",
+    "The current lab compose file contains only the Vertex Pro service; the successful QB_504 lifecycle was assembled as an ephemeral two-container lab and is not yet codified as the three-profile compose baseline."
+  ],
+  "result": "An isolated QB_504 partial G1 lifecycle now passes, including production Go Add and incremental delete observation. Full G1 remains incomplete, QB_504 stays EXPECTED, and real Placement/Add remains fail closed."
+}

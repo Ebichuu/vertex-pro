@@ -1,0 +1,39 @@
+{
+  "item": "DB-05",
+  "status": "IN_PROGRESS",
+  "branch": "local-only",
+  "implementation": [
+    "storage target verification state",
+    "capacity epochs with per-target allocation epoch uniqueness",
+    "reservation lifecycle and reflected-byte invariants",
+    "reservation reflection evidence table",
+    "torrent owner binding with unique storage-target ownership",
+    "reservation owner triggers and amount-left uncertainty constraints"
+  ],
+  "test_commands": {
+    "package": "go test ./internal/db -count=1",
+    "all": "go test ./... -count=1",
+    "vet": "go vet ./..."
+  },
+  "results": {
+    "package": "PASS",
+    "all": "PASS",
+    "vet": "PASS"
+  },
+  "inputs": [
+    {
+      "path": "internal/db/migrations/0004_storage_capacity.sql",
+      "sha256": "f33db2155c147fdb077910caee67e89dac1927a43f1e508695c9716b893cb676"
+    },
+    {
+      "path": "internal/db/db05_test.go",
+      "sha256": "959101d535d1eeb4f168e5f6a77e0b07afac977140128a0e6a3fb1054f4c8240"
+    },
+    {
+      "path": "internal/db/migration_test.go",
+      "sha256": "be8a75ab841e8b661118ebb640f0889923a7c7fb590341466de9c57b76301b44"
+    }
+  ],
+  "blocker": "Attempt/SubmitIntent foreign-key integration, full capacity services, repository transactions and startup reconciliation remain future stages.",
+  "no_external_service_calls": true
+}

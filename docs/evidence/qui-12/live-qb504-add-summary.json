@@ -1,0 +1,69 @@
+{
+  "item": "QUI-12 / ADD-05..07",
+  "status": "IN_PROGRESS",
+  "executed_at": "2026-09-01T10:43:00Z",
+  "external_calls": true,
+  "authorization": "User explicitly allowed one stopped test task and required all existing tasks to remain untouched and undeleted.",
+  "profile": {
+    "profile_id": "QB_504",
+    "qb_version": "v5.0.4",
+    "webapi_version": "2.11.2",
+    "add_start_field": "stopped",
+    "add_response_format": "legacy_text",
+    "product_verification_state": "EXPECTED",
+    "reason": "A real inactive Add and Sync identity observation passed, but the remote qui image/version digest is not frozen and the full G1/Placement/Capacity/fault matrix is incomplete."
+  },
+  "safety": {
+    "generated_test_torrent_size_bytes": 1,
+    "trackerless": true,
+    "requested_inactive": true,
+    "observed_state": "stoppedDL",
+    "existing_tasks_preserved": true,
+    "existing_task_mutation_endpoints_called": false,
+    "delete_endpoint_called": false,
+    "test_task_retained_as_authorized": true,
+    "torrent_name_or_hash_persisted": false,
+    "credentials_persisted_in_repository": false
+  },
+  "execution_harness": "The live Add was issued by an isolated external protocol harness after the local host began intermittently timing out newly compiled Go outbound sockets. The production Go dispatchworker did not issue this live Add; Go request/response/matcher packages remain covered by local tests and the observed wire semantics match those contracts.",
+  "checks": {
+    "wire_multipart_single_torrent": "PASS",
+    "wire_qb504_stopped_true": "PASS",
+    "qui_client_proxy_add_protocol": "PASS: HTTP 200",
+    "observed_response_semantics": "PASS: legacy Ok.; expected classifier result is success_count=1/POSSIBLE_EFFECT",
+    "sync_identity_observation_protocol": "PASS: MATCHED",
+    "inactive_state_observation": "PASS: stoppedDL",
+    "existing_task_preservation": "PASS",
+    "task_count_delta": "PASS: exactly +1 authorized test task"
+  },
+  "evidence": [
+    {
+      "path": "docs/evidence/qui-12/live-qb504-inactive-add-probe.json",
+      "sha256": "85abb275361104409e9d997f0423ed4d4ca1ece59fd17109c6190aa8668f731e"
+    }
+  ],
+  "inputs": [
+    {
+      "path": "internal/qbadd/request.go",
+      "sha256": "e6e3fff9cfbef8da3834fbd68a37375d001a2896888f25304ec0faab2e06204a"
+    },
+    {
+      "path": "internal/qbadd/request_test.go",
+      "sha256": "a2d7540e112a027ef4da22316013e7af67a30fe96b1de3af6637dfe1425e5668"
+    },
+    {
+      "path": "tools/quaddprobe/main.go",
+      "sha256": "7ced91186831bbb4facb551efc8d5f9ef9be928b296c22ed132997d7489530f2",
+      "note": "Compiled and locally tested; its live run stopped before Add because of the host outbound socket timeout described above."
+    }
+  ],
+  "remaining_blockers": [
+    "The production Go dispatchworker was not the process that issued the live Add; a repeatable Go live run remains required when the host outbound socket issue is resolved.",
+    "The production Placement/Reservation/SubmitIntent transaction was not used for this controlled transport probe.",
+    "The persistent first-confirm database transaction was not executed against production-shaped RaceJob/Attempt/Reservation rows.",
+    "The remote qui image/version digest is not frozen.",
+    "QB_438 and QB_522 still require equivalent real Proxy runs.",
+    "Capacity and Storage evidence remain insufficient to enable unattended real Placement/Add.",
+    "Fault injection, response loss, restart recovery and idempotent replay remain unverified."
+  ]
+}

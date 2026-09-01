@@ -1,0 +1,40 @@
+{
+  "item": "CAP-10",
+  "title": "Placement 评分",
+  "status": "IN_PROGRESS",
+  "local_status": "COMPLETE",
+  "branch": "local-only",
+  "implementation": [
+    "Decision() is a pure function over an immutable candidate snapshot and performs no network, database, or state mutation",
+    "Hard filters require placeable/AVAILABLE health, VERIFIED profile, VERIFIED storage, TRUSTED capacity, sufficient effective free bytes, and available inflight capacity",
+    "INSTANCE_GROUP candidates use instance weight, normalized free ratio, inflight penalty, current download load penalty, and recent Add latency penalty",
+    "FIXED_INSTANCE filters all other candidates and never silently falls back to another qB",
+    "Decision output contains AlgorithmVersion, ranked candidates, selected target, full score breakdown, rejection reasons, and stable SHA-256 tie-break",
+    "Prioritize() places official items ahead of non-official work while keeping discovery order and identity tie-break deterministic",
+    "Decision inputs are caller-supplied snapshots; no long-term upload prediction or fake qB performance evidence is inferred"
+  ],
+  "outputs": [
+    { "path": "internal/placement/score.go", "sha256": "8c465ae6feb86f158409f95756c22d0226b0a73eef85ef7acdd99799f439424c" },
+    { "path": "internal/placement/score_test.go", "sha256": "775ddf8106706b4f6b3b4a3792edf7f26fdbe6ca4c3ed29c20593d7c1fc028ce" },
+    { "path": "internal/placement/decision.go", "sha256": "78a4303b29d0ce805abac8aa28fda12b272979ec97fb36f4db150d5a3be5b6c0" },
+    { "path": "internal/placement/decision_test.go", "sha256": "e0d4bc744f5ee95c31b0fce5e37a756b1cf519f6f5d25fcf241b2dfd2d1785ac" },
+    { "path": "internal/placementaudit/recorder.go", "sha256": "f8f54d596e7885b9ffa58a6a815ef0c0740fabdba78f1ea68c7f848fc6fb2fd7" },
+    { "path": "internal/placementaudit/recorder_test.go", "sha256": "482358fcfb65a3a36cbf7d1222fb8692981151e30f158c942f01c03f4cf79c6d" },
+    { "path": "internal/db/migrations/0010_placement_decision_audit.sql", "sha256": "240c15dc802801501ed7fa4e8017c46ee42c3c67a99f6712d4ca376002b7885c" }
+  ],
+  "checks": {
+    "unit": "PASS: go test -p 1 ./internal/placement -count=1",
+    "all_tests": "PASS: go test -p 1 ./... -count=1 (this run); Windows linker failures remain an intermittent environment risk",
+    "vet": "PASS: go vet ./...",
+    "weighted_score": "PASS",
+    "score_breakdown": "PASS: all five components are returned",
+    "stable_hash_tie_break": "PASS",
+    "input_order_independence": "PASS",
+    "fixed_target_no_fallback": "PASS",
+    "unknown_capacity_guard": "PASS",
+    "official_priority": "PASS: pure queue ordering only",
+    "overflow_guard": "PASS"
+  },
+  "blocker": "This is a local-only decision boundary. Candidate snapshots are not yet populated by real qui/qB telemetry; historical upload outcomes, per-instance executor metrics, and shadow-mode comparison remain future work.",
+  "no_external_service_calls": true
+}

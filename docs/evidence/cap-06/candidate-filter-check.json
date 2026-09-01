@@ -1,0 +1,40 @@
+{
+    "item":  "CAP-06",
+    "title":  "CandidateFilter",
+    "status":  "IN_PROGRESS",
+    "local_status":  "COMPLETE",
+    "branch":  "local-only",
+    "implementation":  [
+                           "fixed instance 不得静默改投其他实例",
+                           "INSTANCE_GROUP 需要候选与目标组交集",
+                           "Profile 约束不匹配拒绝",
+                           "健康状态必须 AVAILABLE、Profile VERIFIED 且 CanPlace=true",
+                           "StorageTarget 必须存在且验证状态为 VERIFIED",
+                           "Storage label 约束不匹配拒绝",
+                           "每个拒绝候选返回稳定 reason code，结果按 instance_id 确定性排序"
+                       ],
+    "outputs":  [
+                    {
+                        "path":  "internal/candidatefilter/filter.go",
+                        "sha256":  "0b52937344a13a19eda5abab52da5403e27159d4699699adc5d40afdd4f7490e"
+                    },
+                    {
+                        "path":  "internal/candidatefilter/filter_test.go",
+                        "sha256":  "c2c6ba8dac2d4f5897f7693fa51f2153cd35eddf1ac9a8896d1adcc87261123f"
+                    }
+                ],
+    "checks":  {
+                   "unit":  "PASS: go test ./internal/candidatefilter -count=1",
+                   "all_tests":  "PASS: go test ./... -count=1",
+                   "vet":  "PASS: go vet ./...",
+                   "fixed_instance_guard":  "PASS",
+                   "target_group_guard":  "PASS",
+                   "profile_guard":  "PASS",
+                   "health_guard":  "PASS",
+                   "storage_verification_guard":  "PASS",
+                   "storage_label_guard":  "PASS",
+                   "structured_reason_codes":  "PASS"
+               },
+    "blocker":  "CAP-07 及后续容量判定、SQLite 事务和 Reservation 持久化接线尚未实现；本项不开放真实 Add 路径。",
+    "no_external_service_calls":  true
+}

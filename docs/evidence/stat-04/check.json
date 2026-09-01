@@ -1,0 +1,32 @@
+{
+    "item": "stat-04",
+    "title": "汇总查询",
+    "status": "IN_PROGRESS",
+    "local_status": "COMPLETE",
+    "branch": "local-only",
+    "implementation": [
+        "新增 internal/statssummary：基于 instance_traffic_hourly 的 day/week/month 窗口汇总（UTC 窗口边界：日窗、ISO 周窗、自然月窗），支持单实例与跨实例 total",
+        "窗口内缺失小时保持 missing（bytes=0 且 Missing=true），绝不插值成有流量；series 按 opaque cursor（最后返回桶起点）稳定分页，Limit 截断返回 NextCursor"
+    ],
+    "outputs": [
+        {
+            "path": "internal/statssummary/summary.go",
+            "sha256": "4a17a443fe285b58227ac5100b1f9bcbf3bd1e1f99083190389bf9d22b06bd55"
+        },
+        {
+            "path": "internal/statssummary/summary_test.go",
+            "sha256": "3acf1544447e796e421ba950f3866e19003256adddd3cc00c6e78ed082276594"
+        }
+    ],
+    "checks": {
+        "unit": "PASS",
+        "all_tests": "PASS",
+        "vet": "PASS",
+        "missing_hours_marked": "PASS",
+        "day_week_month_windows": "PASS",
+        "cursor_pagination": "PASS",
+        "no_external_service_calls": "PASS"
+    },
+    "no_external_service_calls": true,
+    "blocker": "本项仅完成 local-only 汇总查询；实时瞬时卡片（STAT-05）与 API 层接线待后续，未连接外部服务。"
+}

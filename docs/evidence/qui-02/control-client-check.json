@@ -1,0 +1,40 @@
+{
+    "item":  "QUI-02",
+    "status":  "IN_PROGRESS",
+    "branch":  "local-only",
+    "implementation":  [
+                           "fixed-origin qui control client",
+                           "instances and transfer-info reads",
+                           "optional capabilities 404 fallback",
+                           "authentication, timeout and HTTP error classification",
+                           "missing-field and negative-counter validation"
+                       ],
+    "test_commands":  {
+                          "package":  "go test ./internal/qui/control -count=1",
+                          "all":  "go test ./... -count=1",
+                          "vet":  "go vet ./...",
+                          "race":  "CGO_ENABLED=1 go test -race ./internal/qui/control -count=1"
+                      },
+    "results":  {
+                    "package":  "PASS",
+                    "all":  "PASS",
+                    "vet":  "PASS",
+                    "race":  "BLOCKED: CGO_ENABLED=1 requires gcc, unavailable in current environment"
+                },
+    "inputs":  [
+                   {
+                       "path":  "internal/qui/control/client.go",
+                       "sha256":  "05b2fc6f9e6917f3ab8b371f8b60738c2003b81f7e7898480b347ca713e4dd6e"
+                   },
+                   {
+                       "path":  "internal/qui/control/client_test.go",
+                       "sha256":  "5db4e30174b4ea187d1041c1b1fa9979c3aaf1bef835a5a162bb7a17076c0c1e"
+                   },
+                   {
+                       "path":  "internal/secrets/store.go",
+                       "sha256":  "840d6fc9d5582ba735b3c4725a336cdfc86970d6bf393d7d76e38ca067fa4a00"
+                   }
+               ],
+    "blocker":  "Profile probing, proxy client and startup wiring remain QUI-03/QUI-04 and future integration work; race test is environment-blocked because gcc is unavailable.",
+    "no_external_service_calls":  true
+}

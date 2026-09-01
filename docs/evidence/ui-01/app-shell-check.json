@@ -1,0 +1,53 @@
+{
+  "item": "UI-01",
+  "title": "App Shell",
+  "status": "IN_PROGRESS",
+  "local_status": "COMPLETE",
+  "branch": "local-only",
+  "implementation": [
+    "新增 components/shell/AppShell：左侧主导航（总览/站点与 RSS/规则/历史/异常/设置，共 6 入口，当前页 aria-current）、顶栏连接状态（role=status）、主题与语言切换、main 内容挂载全局 ErrorBoundary",
+    "主题与语言偏好持久化 localStorage（vertex.theme/vertex.language）并同步 documentElement（data-theme/lang 语义由 CSS 变量消费），存储不可用时退化为会话内生效",
+    "useConnectionStatus 连接状态机（online/offline/reconnecting）：浏览器 online/offline 事件驱动，SSE 流状态订阅器可注入（API-09 streamEvents 接线后传入真实订阅器）",
+    "路由重构：根路径改为 Dashboard，聚合预览移至 /aggregation，新增 /sites /rules /history /exceptions 占位页；smoke 测试随导航更新；/sites 与 /rules 列表读取真实资源 API",
+    "移动端 ≤768px 断点：导航折叠开关（aria-controls=primary-nav）、导航横排；WCAG 语义（nav/status/aria-pressed/visually-hidden）",
+    "测试 8 项：六入口与 href、主题持久化、连接状态离线/重连切换、Sites & RSS API 渲染、Rules API 读取与更新、折叠开关、错误边界捕获渲染异常"
+  ],
+  "outputs": [
+    {
+      "path": "web/src/components/shell/AppShell.tsx",
+      "sha256": "53A1B2BD4F549D89DE23AB70FC5C9D2A3634130B1A801FD629114FFB84007AB8"
+    },
+    {
+      "path": "web/src/app/preferences.ts",
+      "sha256": "818F15F8638FA36F624D14FA8C315528D7B3C9D8190B53ED3DC2F1D362EDF2B1"
+    },
+    {
+      "path": "web/src/app/router.tsx",
+      "sha256": "21dd567e79d049e38bbf67145e2b45ca510ab59b156f9433fdd274ce68999ff6"
+    },
+    {
+      "path": "web/src/styles.css",
+      "sha256": "9C233C175BAD00AC9DC4D6D5CF76E6898417E40B4A80D304D5912AC3BECCCC4F"
+    },
+    {
+      "path": "web/src/test/app-shell.test.tsx",
+      "sha256": "41f2aa2c2310015452e865cd0584cde403f41954dff42d2fa43f7d1a7c67e492"
+    },
+    {
+      "path": "web/src/test/smoke.test.tsx",
+      "sha256": "8f285c7d1a7c8707bebb67258be6f54ef408c4d2a93453e3dd152d75f35c533f"
+    }
+  ],
+  "checks": {
+    "unit": "PASS: pnpm --dir web test -- --run (16 test files, 78/78)",
+    "typecheck": "PASS: pnpm --dir web typecheck",
+    "build": "PASS: pnpm --dir web build（主 JS chunk 约 590 KB，体积提示非阻塞）",
+    "keyboard_navigation": "PASS: 导航为原生链接可聚焦，当前页 aria-current",
+    "mobile_layout": "PASS: 768px 断点折叠开关与横排导航",
+    "theme_and_language": "PASS: 双向切换并持久化",
+    "global_error_boundary": "PASS: 渲染异常显示兜底页",
+    "sites_api_route": "PASS: /sites 通过 MSW resource API fixture 渲染站点与 RSS",
+    "no_external_service_calls": "PASS"
+  },
+  "blocker": "本项仅完成 local-only App Shell 与 Sites API 读取接线；Dashboard/History 等页面数据接线为 UI-02..11，SSE 连接状态的真实流订阅在数据层接续后启用，未连接外部服务。"
+}

@@ -1,0 +1,37 @@
+{
+    "item": "HIS-01",
+    "title": "History projection",
+    "status": "IN_PROGRESS",
+    "local_status": "COMPLETE",
+    "branch": "local-only",
+    "implementation": [
+        "新增 internal/historyproject：把内部状态投影为 CTR-05 冻结的十个用户状态（等待规则/准备种子/等待下载器/正在添加/下载中/做种中/已完成/已删除/失败/需确认），判定严格按合同 precedence 顺序与 when_any",
+        "读模型 Projection：race_jobs LEFT JOIN identities/identity_sources/sites（来源站点名）与最新 attempt（时间线 summary：发现/添加/确认/完成时间与 attempt 数），按发现时间倒序 + job_id 稳定排序",
+        "有记录的局部修正：delivery 链状态（RESERVED..RECONCILED_*）期间 placement_state 仍为 PREPARED，但 PREPARING_SEED 的 when_any 仅应表示投递未开始，否则 HASH_SEEN 会显示'准备种子'；修正后由 ADDING/观测状态接管",
+        "未命中内部状态的确定性兜底：HASH_SEEN/RECONCILED_CONFIRMED -> ADDING（副作用已确认但观测未报告，不伪造下载中/做种中）、ALREADY_PRESENT/RECONCILED_NO_EFFECT/EXPIRED -> FAILED（本次未交付）、READY -> PREPARING_SEED",
+        "安全红线：UNKNOWN/EXPIRED_UNKNOWN 永远 NEEDS_CONFIRMATION，绝不变为成功状态；输出禁止泄漏 Reservation/SubmitIntent/Candidate 等内部术语（ValidateEntry + 测试断言）",
+        "合同守护：TestUserStatusLabelsMatchContract 解析 user_status_mapping.yaml visible_labels 逐项比对"
+    ],
+    "outputs": [
+        {
+            "path": "internal/historyproject/history.go",
+            "sha256": "177f176383d560b44fa29b7ef129bbe1581db50511ea29f45d9d5d2653e1a601"
+        },
+        {
+            "path": "internal/historyproject/history_test.go",
+            "sha256": "1f5cdf4d880dc9bc3baf21607ff754e19f5d92ac7d04738b3ab71f1e31f32cc2"
+        }
+    ],
+    "checks": {
+        "unit": "PASS: go test ./internal/historyproject -count=1",
+        "all_tests": "PASS: go test ./... -count=1",
+        "vet": "PASS: go vet ./...",
+        "all_internal_states_covered": "PASS: generated.JobStateValues 全部 16 个状态映射到十个可见状态且确定性",
+        "precedence": "PASS: NEEDS_CONFIRMATION > FAILED > DELETED > COMPLETED > SEEDING > DOWNLOADING > ADDING > ... 全部断言",
+        "forbidden_success_mapping": "PASS: UNKNOWN/EXPIRED_UNKNOWN/CAPACITY_UNCERTAIN/SNAPSHOT_STALE/STORAGE_UNVERIFIED 不映射成功",
+        "hidden_internal_terms": "PASS: 投影输出无内部术语泄漏",
+        "no_external_service_calls": "PASS"
+    },
+    "blocker": "本项仅完成 local-only History 投影；删除事实持久化（HIS-02）与详情时间线（HIS-03）待后续，API-04 的 History 端点待全部依赖就绪后接线，未连接外部服务。",
+    "no_external_service_calls": true
+}

@@ -1,0 +1,34 @@
+{
+  "item": "ADD-04",
+  "title": "Sync waiter",
+  "status": "IN_PROGRESS",
+  "local_status": "COMPLETE",
+  "branch": "local-only",
+  "implementation": [
+    "先注册持久化 sync_waiter，再允许后续 dispatch 使用",
+    "注册时校验 Attempt instance/identity、可等待状态和完整 source snapshot 外键",
+    "校验 confirmation/reconciliation deadline 顺序和 generation/revision 非负",
+    "通知只接受严格更新的 generation/revision，旧通知与重复通知幂等忽略",
+    "新快照通知关闭 ACTIVE waiter，并返回 identity 是否匹配结果",
+    "支持取消关闭、重复关闭幂等和进程重启后的 ACTIVE waiter 恢复",
+    "数据库 UNIQUE(attempt_id) 保证同一 Attempt 不存在多个活动 waiter"
+  ],
+  "outputs": [
+    {"path": "internal/syncwaiter/waiter.go", "sha256": "082782ca39b70128823cb60ffd53175ac49d480e0daac54c1be2e70a7cd0bb5c"},
+    {"path": "internal/syncwaiter/waiter_test.go", "sha256": "1871cbcfd6f84b4ceb3283712e7f71fdba55e138a71919ceb95c7309971e01e7"}
+  ],
+  "checks": {
+    "unit": "PASS: go test ./internal/syncwaiter -count=1",
+    "all_tests": "PASS: go test ./... -count=1",
+    "vet": "PASS: go vet ./...",
+    "register_before_dispatch": "PASS",
+    "generation_revision_guard": "PASS",
+    "deadline_guard": "PASS",
+    "cancel_idempotency": "PASS",
+    "restart_restore": "PASS",
+    "duplicate_notification": "PASS"
+  },
+  "blocker": "ADD-05 dispatch worker、QUI-09 真实 SyncWatcher 接线和 ADD-08 Identity 原子确认尚未实现；本项仅提供 local-only waiter 持久化与通知边界，不开放真实 qB Add。",
+  "no_external_service_calls": true
+}
+

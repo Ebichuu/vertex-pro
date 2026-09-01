@@ -1,0 +1,46 @@
+{
+    "item": "HIS-02",
+    "title": "删除事实持久化",
+    "status": "IN_PROGRESS",
+    "local_status": "COMPLETE",
+    "branch": "local-only",
+    "implementation": [
+        "新增 0008_history_deletion.sql：history_deletion_facts 表持久化权威删除事实（deletion_source 枚举 QB_USER_REMOVED/QUI_LIFECYCLE/UNKNOWN_ORIGIN、deleted_at 删除发现时间、last_known_observation、last_uploaded/last_downloaded_bytes、last_ratio、证据快照 digest/revision），UNIQUE(job_id, qb_torrent_id) 幂等；属设计 DDL 之外的加法扩展，已记录",
+        "新增 internal/historydeletion.Record：幂等落库删除事实——同 (job, qb_torrent_id) 且证据 digest 一致重放返回 Idempotent，冲突证据拒绝；identity 与 race_jobs 一致性校验；本函数不删除 binding，binding 移除仍由 CAP-12 权威删除事务负责",
+        "ForJob 读取接口按删除时间倒序返回删除事实，供 History Detail 使用",
+        "History 投影（HIS-01）左连接删除事实：binding 删除后历史条目仍存在，用户状态按合同映射为已删除，并携带删除发现时间与来源",
+        "迁移计数断言（migration/upgrade 测试）同步更新为 8"
+    ],
+    "outputs": [
+        {
+            "path": "internal/db/migrations/0008_history_deletion.sql",
+            "sha256": "b8fb1919c13270f05a5c088085e5016faa05f937899f687b52ad02caf3f32bdb"
+        },
+        {
+            "path": "internal/historydeletion/deletion.go",
+            "sha256": "ff2cf1de8285a40ec5b1a5cded3037dc83b6bfb32dcbbf6a91ba298b86523693"
+        },
+        {
+            "path": "internal/historydeletion/deletion_test.go",
+            "sha256": "08dc54745ce9ab247efdf56559cddb2ccf88fd48a74150433920980e4eee600b"
+        },
+        {
+            "path": "internal/historyproject/history.go",
+            "sha256": "177f176383d560b44fa29b7ef129bbe1581db50511ea29f45d9d5d2653e1a601"
+        },
+        {
+            "path": "internal/historyproject/history_test.go",
+            "sha256": "1f5cdf4d880dc9bc3baf21607ff754e19f5d92ac7d04738b3ab71f1e31f32cc2"
+        }
+    ],
+    "checks": {
+        "unit": "PASS: go test ./internal/historydeletion ./internal/historyproject -count=1",
+        "all_tests": "PASS: go test ./... -count=1",
+        "vet": "PASS: go vet ./...",
+        "binding_deletion_keeps_history": "PASS: binding 与 reservation 删除后投影仍返回条目且状态为已删除、携带删除时间与来源",
+        "idempotent_record": "PASS: 同证据重放幂等，冲突证据拒绝",
+        "no_external_service_calls": "PASS"
+    },
+    "blocker": "本项仅完成 local-only 删除事实持久化与投影集成；真实 qB 删除事实来源（Sync 对比）与最后 counters 的观测接线依赖 STAT-01，未连接外部服务。",
+    "no_external_service_calls": true
+}

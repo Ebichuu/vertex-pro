@@ -1,0 +1,44 @@
+{
+    "item": "ADD-11",
+    "title": "EXPIRED_UNKNOWN 命令",
+    "status": "IN_PROGRESS",
+    "local_status": "COMPLETE",
+    "branch": "local-only",
+    "implementation": [
+        "新增 internal/expiredunknown 实现两条受审计人工闭环命令：CONFIRM_NO_EFFECT_AND_EXPIRE 与 CONFIRM_EFFECT（对应 RC8 第 16.8 节状态矩阵）",
+        "CONFIRM_NO_EFFECT_AND_EXPIRE 在单个 BEGIN IMMEDIATE 中：Attempt EXPIRED_UNKNOWN -> RECONCILED_NO_EFFECT，RaceJob 连续推进 RECONCILED_NO_EFFECT -> EXPIRED（清空 current_attempt_id），关闭 waiter，以 NO_EFFECT 释放 Reservation，连续写入三条审计事件并记录 SUCCEEDED api_commands",
+        "CONFIRM_EFFECT 复用 firstconfirm 8.7.3 原子事务绑定唯一 qb_torrent_id，Reservation 进入 REFLECTING，race_jobs observation_state 推进 ACTIVE（开始观测），完成后关闭 waiter 并写入 SUCCEEDED 命令审计；不直接释放容量",
+        "证据纪律：两条命令仅接受严格晚于 Add 前基线（generation/revision 递进且 digest 不同）的完整合并快照；人工意见、截图或陈旧快照一律拒绝且保持 EXPIRED_UNKNOWN、Reservation 与 Identity 活动链不变",
+        "owner 歧义拒绝：无副作用闭环要求该 Identity 无任何 binding；确认闭环要求该 Identity 无指向其他 (storage_target, qb_torrent_id) 的 binding；pre_add_identity_fact=PRESENT 的链拒绝进入人工闭环（归 ADD-09）",
+        "firstconfirm 再次扩展：接受 EXPIRED_UNKNOWN 尝试推进 RECONCILED_CONFIRMED（Job 同步），确认 Job 更新统一推进 observation_state=ACTIVE（补齐 8.7.3 第 8 步）",
+        "api_commands 审计含 command_type、request_fingerprint（SHA-256）、result_json/error_code；被拒绝命令以 FAILED + EXPIRED_UNKNOWN_COMMAND_REJECTED 记录，同一 command_id 重复写入幂等跳过"
+    ],
+    "outputs": [
+        {
+            "path": "internal/expiredunknown/commands.go",
+            "sha256": "805388353b43e564af2bebe2dc5e93018d95235a726f6e9c6693be7b886b567a"
+        },
+        {
+            "path": "internal/expiredunknown/commands_test.go",
+            "sha256": "c94e55f7ef50a08271e926b1e2e1335c40cefc9ab2c97c64ae907a87673332af"
+        },
+        {
+            "path": "internal/firstconfirm/confirm.go",
+            "sha256": "62cbe10b66a647498ac8e43a0ed028bf97e465314323d985df72e02900254113"
+        }
+    ],
+    "checks": {
+        "unit": "PASS: go test ./internal/expiredunknown ./internal/firstconfirm -count=1",
+        "all_tests": "PASS: go test ./... -count=1",
+        "vet": "PASS: go vet ./...",
+        "manual_closure_no_effect": "PASS: 单事务完成 Attempt/Job/waiter/Reservation 与三条审计事件，Job 终态 EXPIRED，不创建新 Attempt",
+        "manual_closure_confirm": "PASS: 复用 8.7.3 原子事务，binding 唯一、Reservation REFLECTING、观测激活，不释放容量",
+        "stale_evidence_rejected": "PASS: 陈旧快照拒绝且链状态零变化，命令审计为 FAILED",
+        "owner_ambiguity_rejected": "PASS: Identity 已被其他 owner 归属时两条命令均拒绝",
+        "audit_trail": "PASS: api_commands 记录 SUCCEEDED/FAILED 状态与指纹，重放幂等",
+        "idempotent_replay": "PASS: 两条命令重复执行返回 Idempotent 且无重复事件/命令行",
+        "no_external_service_calls": "PASS"
+    },
+    "blocker": "本项仅完成 local-only EXPIRED_UNKNOWN 人工闭环命令；HTTP API 层（阶段 I）与真实 qB/qui 快照证据接线仍待后续，未连接外部服务。",
+    "no_external_service_calls": true
+}

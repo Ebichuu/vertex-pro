@@ -1,0 +1,46 @@
+{
+    "mode":  "local-only",
+    "source":  "docs/产品方案设计/VERTEX_PRO_V1_USER_RULES_CONTRACT.md",
+    "visible_label_count":  10,
+    "updated_at":  "2026-08-24T00:00:00Z",
+    "contract":  "contracts/user_status_mapping.yaml",
+    "safety":  [
+                   "UNKNOWN and EXPIRED_UNKNOWN map to NEEDS_CONFIRMATION",
+                   "Capacity uncertainty and stale/unverified conditions cannot map to success",
+                   "Deletion requires authoritative confirmation",
+                   "Internal implementation terms are diagnostic-only"
+               ],
+    "visible_label_ids":  [
+                              "WAITING_RULE",
+                              "PREPARING_SEED",
+                              "WAITING_DOWNLOADER",
+                              "ADDING",
+                              "DOWNLOADING",
+                              "SEEDING",
+                              "COMPLETED",
+                              "DELETED",
+                              "FAILED",
+                              "NEEDS_CONFIRMATION"
+                          ],
+    "owner":  "Codex",
+    "status":  "IN_PROGRESS",
+    "item":  "CTR-05",
+    "boundaries":  [
+                       "CTR-06 generated Go/TS types and UI implementation remain pending",
+                       "No real qui/qB or Add connection"
+                   ],
+    "checks":  [
+                   {
+                       "result":  "PASS",
+                       "command":  "user status mapping encoding and required labels test"
+                   },
+                   {
+                       "result":  "PASS",
+                       "command":  "go test ./... -count=1"
+                   },
+                   {
+                       "result":  "PASS",
+                       "command":  "go vet ./..."
+                   }
+               ]
+}

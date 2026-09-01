@@ -1,0 +1,35 @@
+{
+  "item": "RULE-03",
+  "status": "IN_PROGRESS",
+  "branch": "local-only",
+  "implementation": [
+    "three-valued TRUE/FALSE/UNKNOWN evaluation",
+    "deterministic AND/OR short-circuit evaluation",
+    "missing field handling as UNKNOWN except exists/not_exists",
+    "typed string, set, number, boolean, and RFC3339 time comparisons",
+    "regex evaluation with invalid patterns returning UNKNOWN",
+    "auditable reason tree with stable reason codes",
+    "catalog validation before evaluation",
+    "no RuleVersion persistence, RaceJob mutation, Reservation, Add, or external service side effects"
+  ],
+  "test_commands": {
+    "package": "go test ./internal/rules -count=1",
+    "all": "go test ./... -count=1",
+    "vet": "go vet ./...",
+    "race_docker": "docker run --rm -v \"${PWD}:/src\" -w /src golang:1.26.3-bookworm sh -c 'export PATH=/usr/local/go/bin:$PATH; CGO_ENABLED=1 go test -race ./internal/rules -count=1'"
+  },
+  "results": {
+    "package": "PASS",
+    "all": "PASS",
+    "vet": "PASS",
+    "race_docker": "PASS"
+  },
+  "inputs": [
+    {"path": "internal/rules/evaluator.go", "sha256": "1694ab7031546b9433486c4505a2a8bafbe91e9ca01078ff009aac8ed051ba57"},
+    {"path": "internal/rules/evaluator_test.go", "sha256": "e7ed5c9cb61d9bc5a75164f4e97d80a88459c04b30b7fe96e7deacb7fb84f9fa"},
+    {"path": "internal/rules/catalog.go", "sha256": "c48f4e9e1d794d12c833b5ffa5d3dc22068bcf274093f78f298ecc98d4c774e2"},
+    {"path": "internal/rules/ast.go", "sha256": "7a8453d3373b0f827da6c51ce0d018e41060002ade8f2717c33580d8fdce05ab"}
+  ],
+  "blocker": "RULE-04 RuleVersion persistence and RULE-05 multi-rule aggregation remain pending; no external services were called.",
+  "no_external_service_calls": true
+}

@@ -1,0 +1,91 @@
+{
+  "check": "BOOT-05 preflight shell",
+  "status": "PASS",
+  "toolchain": [
+    {
+      "name": "go",
+      "expected": "1.26.3",
+      "actual": "go version go1.26.3 windows/amd64"
+    },
+    {
+      "name": "node",
+      "expected": "24.14.0",
+      "actual": "v24.14.0"
+    },
+    {
+      "name": "pnpm",
+      "expected": "10.33.0",
+      "actual": "10.33.0"
+    }
+  ],
+  "layout_exit": 0,
+  "targets": [
+    {
+      "name": "generate-check",
+      "status": "PASS",
+      "exit_code": 0,
+      "output_tail": "checked D:\\Projects\\Vertex-pro\\internal\\generated\\contracts.go\r\nchecked D:\\Projects\\Vertex-pro\\web\\src\\generated\\contracts.ts\r\nchecked D:\\Projects\\Vertex-pro\\web\\src\\generated\\api-client.ts"
+    },
+    {
+      "name": "fmt-check",
+      "status": "PASS",
+      "exit_code": 0,
+      "output_tail": ""
+    },
+    {
+      "name": "lint",
+      "status": "PASS",
+      "exit_code": 0,
+      "output_tail": ""
+    },
+    {
+      "name": "test-unit",
+      "status": "PASS",
+      "exit_code": 0,
+      "output_tail": "2m鉁?[39m src/components/sites/SitesRssPage.test.tsx \u001b[2m(\u001b[22m\u001b[2m4 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[90m 231\u001b[2mms\u001b[22m\u001b[39m\r\n \u001b[32m鉁?[39m src/components/rules/VertexRuleEditor.test.tsx \u001b[2m(\u001b[22m\u001b[2m8 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[90m 243\u001b[2mms\u001b[22m\u001b[39m\r\n \u001b[32m鉁?[39m src/components/downloaders/DownloaderDetailPage.test.tsx \u001b[2m(\u001b[22m\u001b[2m4 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[90m 248\u001b[2mms\u001b[22m\u001b[39m\r\n \u001b[32m鉁?[39m src/components/history/HistoryDetailPage.test.tsx \u001b[2m(\u001b[22m\u001b[2m6 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[90m 290\u001b[2mms\u001b[22m\u001b[39m\r\n \u001b[32m鉁?[39m src/test/smoke.test.tsx \u001b[2m(\u001b[22m\u001b[2m3 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[90m 215\u001b[2mms\u001b[22m\u001b[39m\r\n \u001b[32m鉁?[39m src/test/app-shell.test.tsx \u001b[2m(\u001b[22m\u001b[2m12 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[33m 475\u001b[2mms\u001b[22m\u001b[39m\r\n\r\n\u001b[2m Test Files \u001b[22m \u001b[1m\u001b[32m16 passed\u001b[39m\u001b[22m\u001b[90m (16)\u001b[39m\r\n\u001b[2m      Tests \u001b[22m \u001b[1m\u001b[32m81 passed\u001b[39m\u001b[22m\u001b[90m (81)\u001b[39m\r\n\u001b[2m   Start at \u001b[22m 21:57:03\r\n\u001b[2m   Duration \u001b[22m 3.21s\u001b[2m (transform 1.64s, setup 7.99s, collect 4.70s, tests 3.06s, environment 10.13s, prepare 1.94s)\u001b[22m"
+    },
+    {
+      "name": "test-contracts",
+      "status": "PASS",
+      "exit_code": 0,
+      "output_tail": "report=D:\\Projects\\Vertex-pro\\artifacts\\contract-consistency\\dev\\20260901T135707Z\\report.json\r\nstatus=PASS"
+    },
+    {
+      "name": "test-integration",
+      "status": "PASS",
+      "exit_code": 0,
+      "output_tail": "ok  \tgithub.com/vertex-pro/vertex-pro/internal/app\t0.287s\r\nok  \tgithub.com/vertex-pro/vertex-pro/internal/resourcesapi\t2.422s\r\nok  \tgithub.com/vertex-pro/vertex-pro/internal/rssservice\t0.117s\r\nok  \tgithub.com/vertex-pro/vertex-pro/internal/syncwatcher\t0.187s"
+    },
+    {
+      "name": "test-e2e",
+      "status": "PASS",
+      "exit_code": 0,
+      "output_tail": "ok  \tgithub.com/vertex-pro/vertex-pro/cmd/vertex-pro\t0.050s\r\nok  \tgithub.com/vertex-pro/vertex-pro/internal/httpapi\t0.076s\r\nok  \tgithub.com/vertex-pro/vertex-pro/internal/resourcesapi\t2.421s\r\nok  \tgithub.com/vertex-pro/vertex-pro/internal/sseserver\t0.367s"
+    },
+    {
+      "name": "test-protocol",
+      "status": "PASS",
+      "exit_code": 0,
+      "output_tail": "ok  \tgithub.com/vertex-pro/vertex-pro/internal/qui/control\t0.163s\r\nok  \tgithub.com/vertex-pro/vertex-pro/internal/qui/proxy\t0.072s\r\nok  \tgithub.com/vertex-pro/vertex-pro/internal/qbadd\t0.036s\r\nok  \tgithub.com/vertex-pro/vertex-pro/internal/qbprofile\t0.042s\r\nok  \tgithub.com/vertex-pro/vertex-pro/internal/qbresponse\t0.030s\r\nok  \tgithub.com/vertex-pro/vertex-pro/internal/syncmerge\t0.026s"
+    },
+    {
+      "name": "test-fault",
+      "status": "PASS",
+      "exit_code": 0,
+      "output_tail": "ok  \tgithub.com/vertex-pro/vertex-pro/internal/addfaultmatrix\t1.247s\r\nok  \tgithub.com/vertex-pro/vertex-pro/internal/qbexecutor\t0.070s\r\nok  \tgithub.com/vertex-pro/vertex-pro/internal/saferetry\t0.276s\r\nok  \tgithub.com/vertex-pro/vertex-pro/internal/startuprecover\t0.212s\r\nok  \tgithub.com/vertex-pro/vertex-pro/internal/unknownreconciler\t0.291s"
+    },
+    {
+      "name": "verify-license",
+      "status": "PASS",
+      "exit_code": 0,
+      "output_tail": "{\r\n  \"check\": \"BOOT-03 license files\",\r\n  \"status\": \"PASS\",\r\n  \"license\": \"GPL-2.0 text markers present\",\r\n  \"missing_files\": [],\r\n  \"missing_markers\": []\r\n}"
+    },
+    {
+      "name": "verify-implementation-plan",
+      "status": "PASS",
+      "exit_code": 0,
+      "output_tail": "{\r\n  \"check\": \"implementation-plan\",\r\n  \"status\": \"PASS\",\r\n  \"item_count\": 149,\r\n  \"expected_item_count\": 149,\r\n  \"error_count\": 0,\r\n  \"errors\": []\r\n}"
+    }
+  ],
+  "blocked_targets": []
+}

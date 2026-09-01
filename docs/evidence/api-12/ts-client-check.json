@@ -1,0 +1,38 @@
+{
+  "item": "API-12",
+  "title": "生成 TS Client",
+  "status": "IN_PROGRESS",
+  "local_status": "PASS",
+  "branch": "local-only",
+  "implementation": [
+    "tools/codegen parses the OpenAPI contract and generates api-client.ts; HTTP verbs, /api/v1 paths, and path parameter encoding come from the generated client",
+    "Generated operations include Feed GET/PUT and read-only test command paths",
+    "Request methods support generic response types for Dashboard, Rules, Sites, Feeds, Commands, and History callers",
+    "RequestOptions supports controlled headers so If-Match, Idempotency-Key, and CSRF headers are transported without exposing secrets",
+    "decodeError follows error_codes.yaml mapping; unknown codes normalize to INTERNAL_ERROR; cursor and stream helpers remain transport-only",
+    "codegen drift and client regression tests cover Feed update path, headers, verbs, encoded parameters, errors, and cursor handling"
+  ],
+  "inputs": [
+    { "path": "contracts/openapi/openapi.json", "sha256": "d5a459684ffc0470ea5c654b9598f49ee38ea6c6d052581599e7f68bd14f1749" },
+    { "path": "tools/codegen/main.go", "sha256": "8c7148f2630917e60217d959064511123d3f2c7a2f86d31c9ce63856b2dfcd2d" }
+  ],
+  "outputs": [
+    { "path": "web/src/generated/api-client.ts", "sha256": "ed8aebdb940e5849a7a62eccd718237cd137f93d8c731ccd5f6af0ea2759fa0c" },
+    { "path": "web/src/generated/contracts.ts", "sha256": "23e93105edda1f9b471a76f5d2527df8822d1f989bc23d6fc5cb1427003a95ed" },
+    { "path": "internal/generated/contracts.go", "sha256": "dfc71bcd46009bfb9c925348677d2f755e0daef3f1ec946c14925fd48223b0d2" },
+    { "path": "web/src/test/api-client.test.ts", "sha256": "23efe5cfc5c4fad2a3e6c274f672871b0fc805aa8e4e0b812c90b85344666e67" }
+  ],
+  "checks": {
+    "unit": "PASS: pnpm --dir web test -- --run (7 generated-client tests)",
+    "typecheck": "PASS: pnpm --dir web typecheck",
+    "build": "PASS: pnpm --dir web build",
+    "all_tests": "PASS: go test -p 1 ./... -count=1 (this run); Windows linker failures remain an intermittent environment risk",
+    "vet": "PASS: go vet ./...",
+    "codegen_drift_guard": "PASS: go run ./tools/codegen -check",
+    "feed_headers": "PASS: updateFeed sends Content-Type and If-Match; testFeed transports Idempotency-Key and CSRF headers",
+    "no_handwritten_endpoints": "PASS: generated client owns the OpenAPI operations",
+    "no_external_service_calls": "PASS"
+  },
+  "blocker": "Local-only generated client coverage is complete for the current contract. Deep schema response types, full SSE client behavior, and real external service workflows remain future work.",
+  "no_external_service_calls": true
+}

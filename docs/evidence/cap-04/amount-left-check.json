@@ -1,0 +1,37 @@
+{
+    "item":  "CAP-04",
+    "title":  "amount_left 证据",
+    "status":  "IN_PROGRESS",
+    "local_status":  "COMPLETE",
+    "branch":  "local-only",
+    "implementation":  [
+                           "KNOWN/UNKNOWN 值对象和规范错误码",
+                           "完整快照缺失返回 MISSING_IN_FULL_SNAPSHOT，不继承旧值",
+                           "增量快照缺失仅继承可信 KNOWN 旧值",
+                           "负数、溢出、浮点/字符串等类型异常进入 UNKNOWN",
+                           "合法 0 保持 KNOWN，不把 UNKNOWN 转成 0"
+                       ],
+    "outputs":  [
+                    {
+                        "path":  "internal/amountleft/amountleft.go",
+                        "sha256":  "6ca836cac0ac3c31cdffa4135d70e2ea02ee1e005a18314986f1786000b106db"
+                    },
+                    {
+                        "path":  "internal/amountleft/amountleft_test.go",
+                        "sha256":  "a84853da1911086fd3925b917a148d65a4e618ee2ad8dd437ab786c2156a3941"
+                    }
+                ],
+    "checks":  {
+                   "unit":  "PASS: go test ./internal/amountleft -count=1",
+                   "all_tests":  "PASS: go test ./... -count=1",
+                   "vet":  "PASS: go vet ./...",
+                   "full_snapshot_missing":  "PASS",
+                   "incremental_trusted_inheritance":  "PASS",
+                   "negative_value":  "PASS",
+                   "integer_overflow":  "PASS",
+                   "type_mismatch":  "PASS",
+                   "zero_value_known":  "PASS"
+               },
+    "blocker":  "CAP-05 及后续 binding 持久化、Sync 合并接线和容量事务尚未实现；本项不开放真实 Add 路径。",
+    "no_external_service_calls":  true
+}

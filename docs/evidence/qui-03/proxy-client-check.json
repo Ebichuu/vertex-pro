@@ -1,0 +1,42 @@
+{
+  "item": "QUI-03",
+  "status": "IN_PROGRESS",
+  "branch": "local-only",
+  "implementation": [
+    "per-instance qui proxy base path",
+    "secret-backed proxy key resolution",
+    "strict endpoint allowlist for probe/sync/tracker reads",
+    "direct qB origin rejection",
+    "proxy error classification without response-body retention",
+    "Send forwards only relative POST /api/v2/torrents/add through /proxy/{instance-key}/api/v2/torrents/add",
+    "Add response body is bounded and returned as an abstract qbresponse.RawResponse"
+  ],
+  "test_commands": {
+    "package": "go test -p 1 ./internal/qui/proxy -count=1",
+    "related": "go test -p 1 ./internal/qui/proxy ./internal/qbexecutor ./internal/dispatchworker -count=1",
+    "all": "go test -p 1 ./... -count=1",
+    "vet": "go vet ./...",
+    "race": "CGO_ENABLED=1 go test -race ./internal/qui/proxy -count=1"
+  },
+  "results": {
+    "package": "PASS",
+    "related": "PASS",
+    "all": "PASS: go test -p 1 ./... -count=1; Windows linker failures remain an intermittent environment risk",
+    "vet": "PASS",
+    "race": "BLOCKED: Docker retry could not download modernc.org/sqlite because the isolated container has no network access; native race has not been claimed"
+  },
+  "inputs": [
+    { "path": "internal/qui/proxy/client.go", "sha256": "3155982d8272c4974a626b5d5edb3a351f1ef1c1955c60a2c06b091fd0845de6" },
+    { "path": "internal/qui/proxy/client_test.go", "sha256": "d6042eb2e4079dbf562b746bb03760111668df0879e051eeba208a0836e75233" },
+    { "path": "internal/secrets/store.go", "sha256": "840d6fc9d5582ba735b3c4725a336cdfc86970d6bf393d7d76e38ca067fa4a00" }
+  ],
+  "checks": {
+    "proxy_path": "PASS: Add request reaches only the per-instance qui Client Proxy path",
+    "send_allowlist": "PASS: absolute origins, GET, and non-Add actions are rejected",
+    "response_bound": "PASS",
+    "direct_qb_rejected": "PASS",
+    "no_external_service_calls": "PASS: httptest only"
+  },
+  "blocker": "Real qui Proxy and qB builds are not configured or called. Profile verification, Sync confirmation, and production worker lifecycle remain future work; this package only provides the controlled transport boundary.",
+  "no_external_service_calls": true
+}

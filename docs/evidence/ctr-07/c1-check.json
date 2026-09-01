@@ -1,0 +1,40 @@
+{
+  "item": "CTR-07",
+  "tool": "vertex-pro-contractcheck",
+  "command": "go run ./tools/contractcheck -run-id 20260831T182500Z",
+  "report_path": "artifacts/contract-consistency/dev/20260831T182500Z/report.json",
+  "report_sha256": "2c37f837833c82e7c8f93d19a46eb4ce2d814e3bc6c1269f1e19393547b5f6f4",
+  "report_status": "PASS",
+  "eligible_for_g3": false,
+  "checks_count": 11,
+  "required_checks": [
+    "C1-SCHEMA-FRESH",
+    "C1-SCHEMA-UPGRADE",
+    "C1-FOREIGN-KEYS",
+    "C1-ATTEMPT-IMMUTABLE",
+    "C1-SUBMIT-INTENT-ONE-TO-ONE",
+    "C1-RESERVATION-OWNER",
+    "C1-STATE-ENUMS",
+    "C1-ERROR-CODES",
+    "C1-OPENAPI",
+    "C1-EVENT-CONTRACT",
+    "C1-GENERATED-CODE-CLEAN"
+  ],
+  "error_checks": [],
+  "pass_checks": [
+    "C1-SCHEMA-FRESH",
+    "C1-SCHEMA-UPGRADE",
+    "C1-FOREIGN-KEYS",
+    "C1-ATTEMPT-IMMUTABLE",
+    "C1-SUBMIT-INTENT-ONE-TO-ONE",
+    "C1-RESERVATION-OWNER",
+    "C1-STATE-ENUMS",
+    "C1-ERROR-CODES",
+    "C1-OPENAPI",
+    "C1-EVENT-CONTRACT",
+    "C1-GENERATED-CODE-CLEAN"
+  ],
+  "exit_code": 0,
+  "sha256sums_match": true,
+  "note": "C1 is locally reproducible and all 11 checks pass. eligible_for_g3 remains false because this local-only report is not a merged baseline and does not prove real qui/qB integration. The report records the contract-input snapshot used at generation time; the status table includes this evidence file, so its self-referential digest is maintained separately in the status table."
+}

@@ -1,0 +1,28 @@
+﻿repository: https://github.com/autobrr/qui
+tag: null
+commit: 8fcfc4d2beaf5e68ccebe837d7c0d9be965c8896
+license: GPL-2.0-or-later
+captured_at: 2026-08-24T00:00:00Z
+imported_files:
+  - third_party/qui/imported/web/src/components/query-builder/QueryBuilder.tsx
+  - third_party/qui/imported/web/src/components/query-builder/ConditionGroup.tsx
+  - third_party/qui/imported/web/src/components/query-builder/LeafCondition.tsx
+  - third_party/qui/imported/web/src/components/query-builder/FieldCombobox.tsx
+  - third_party/qui/imported/web/src/components/query-builder/constants.ts
+candidate_files:
+  - path: web/src/components/query-builder/QueryBuilder.tsx
+    sha256: 5f8ed0d085d0c18d631ca924a204d70b93ae7eeec9e5126f5ff2316654c14c7d
+  - path: web/src/components/query-builder/ConditionGroup.tsx
+    sha256: 66cd28fe616988688bfa9e78ec8b8756cb6e824f424f7f99e123e25610a3ad74
+  - path: web/src/components/query-builder/LeafCondition.tsx
+    sha256: 8f3ff2f82e43741ec2c12881c381a52d457f6054f16242c3051f147dd91b7cfd
+  - path: web/src/components/query-builder/FieldCombobox.tsx
+    sha256: 992ba002677c4334c1d86942d4423ccd922bfd9789c9cd2f1ad1826c77eba090
+  - path: web/src/components/query-builder/constants.ts
+    sha256: c0b4d755f2fc4c9de6d8f005e2c0b43fb9bb3b438883316005878661fd80c259
+file_digests:
+  third_party/qui/imported/web/src/components/query-builder/QueryBuilder.tsx: 5f8ed0d085d0c18d631ca924a204d70b93ae7eeec9e5126f5ff2316654c14c7d
+  third_party/qui/imported/web/src/components/query-builder/ConditionGroup.tsx: 66cd28fe616988688bfa9e78ec8b8756cb6e824f424f7f99e123e25610a3ad74
+  third_party/qui/imported/web/src/components/query-builder/LeafCondition.tsx: 8f3ff2f82e43741ec2c12881c381a52d457f6054f16242c3051f147dd91b7cfd
+  third_party/qui/imported/web/src/components/query-builder/FieldCombobox.tsx: 992ba002677c4334c1d86942d4423ccd922bfd9789c9cd2f1ad1826c77eba090
+  third_party/qui/imported/web/src/components/query-builder/constants.ts: c0b4d755f2fc4c9de6d8f005e2c0b43fb9bb3b438883316005878661fd80c259

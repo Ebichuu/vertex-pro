@@ -1,0 +1,35 @@
+{
+  "item": "ADD-05",
+  "title": "Dispatch worker",
+  "status": "IN_PROGRESS",
+  "local_status": "COMPLETE",
+  "branch": "local-only",
+  "implementation": [
+    "dispatchworker executes one validated Torrent multipart Add and never confirms HASH_SEEN from Add response",
+    "dispatchworker distinguishes FAILED_NO_EFFECT/NOT_STARTED from STARTED/POSSIBLE_EFFECT and never replays a possible-effect attempt",
+    "qbexecutor owns an independent executor per qB instance with its own sender, bounded in-flight slots, timeout, failure counters, cooldown, and last latency",
+    "a blocked or timed-out instance does not consume another instance's slot or open another instance's circuit",
+    "invalid request and duplicate-attempt errors do not trip the circuit breaker",
+    "executor returns no automatic retry after timeout/POSSIBLE_EFFECT; later reconciliation remains the state-machine responsibility"
+  ],
+  "outputs": [
+    { "path": "internal/dispatchworker/worker.go", "sha256": "6be8c93c635c9c0df803e36c38c6e024ff91427ec4972e4ce58f18cb6a16f001" },
+    { "path": "internal/dispatchworker/worker_test.go", "sha256": "b2d232b02d54ac6681a940ed5281d9ee3d4871679a7a987733f0ceed679d1057" },
+    { "path": "internal/qbexecutor/executor.go", "sha256": "da857c99d7a20ab05e0927ef5e8d709a6026721ebedc962ef92913c351b8e7ab" },
+    { "path": "internal/qbexecutor/executor_test.go", "sha256": "aa1294a3966481f399de02986bfd41dd617f4fa92cfcc88936886dc3a5c1c4ef" }
+  ],
+  "checks": {
+    "dispatch_unit": "PASS: go test -p 1 ./internal/dispatchworker -count=1",
+    "executor_unit": "PASS: go test -p 1 ./internal/qbexecutor -count=1",
+    "related": "PASS: go test -p 1 ./internal/qui/proxy ./internal/qbexecutor ./internal/dispatchworker -count=1",
+    "all_tests": "PASS: go test -p 1 ./... -count=1; Windows linker failures remain an intermittent environment risk",
+    "vet": "PASS: go vet ./...",
+    "instance_isolation": "PASS: blocked qb-a does not block qb-b",
+    "circuit_isolation": "PASS: only the failing instance opens",
+    "timeout_boundary": "PASS: timeout preserves STARTED/POSSIBLE_EFFECT and does not replay",
+    "single_torrent": "PASS",
+    "no_external_service_calls": "PASS: httptest/fake Sender only"
+  },
+  "blocker": "Runtime registration from persisted qui/qB instance configuration is not yet present, and no real qui/qB request was made. Sync identity confirmation, reservation transaction, and production worker lifecycle remain separate work.",
+  "no_external_service_calls": true
+}

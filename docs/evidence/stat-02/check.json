@@ -1,0 +1,31 @@
+{
+    "item": "stat-02",
+    "title": "Counter delta",
+    "status": "IN_PROGRESS",
+    "local_status": "COMPLETE",
+    "branch": "local-only",
+    "implementation": [
+        "新增 internal/statsdelta：Advance 规范化相邻计数——首见 all-time 计数只建基线不产生增量（§19.1 红线）、正常递增产生 (cur-prev) 增量、任一字段回退判定 RESET 且 delta 为 0 并以当前计数重建基线，绝不输出负流量"
+    ],
+    "outputs": [
+        {
+            "path": "internal/statsdelta/delta.go",
+            "sha256": "1f9b2f1643c6503135eb390473c9face6fe2e4c584379c2be6a84e5b63130f9f"
+        },
+        {
+            "path": "internal/statsdelta/delta_test.go",
+            "sha256": "a211596bd978373772a785423a728340b04d0be8fa64ebe8df184da29ea42da2"
+        }
+    ],
+    "checks": {
+        "unit": "PASS",
+        "all_tests": "PASS",
+        "vet": "PASS",
+        "baseline_no_delta": "PASS",
+        "reset_zero_delta": "PASS",
+        "negative_guard": "PASS",
+        "no_external_service_calls": "PASS"
+    },
+    "no_external_service_calls": true,
+    "blocker": "本项仅完成 local-only 增量引擎；持久化基线存储与 qB 重启场景接线待后续，未连接外部服务。"
+}

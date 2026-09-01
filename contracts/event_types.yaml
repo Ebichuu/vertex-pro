@@ -1,0 +1,68 @@
+schema_version: 1
+source_of_truth: docs/产品方案设计/VERTEX_PRO_COMPLETE_REDESIGN_V1_RC8_FINAL.md
+event_envelope:
+  fields: [schema_version, event_id, occurred_at, aggregate_type, aggregate_id, revision, payload]
+  data_encoding: single-line-utf8-json
+  event_id: monotonically-increasing-persisted-integer
+  compatibility: additive-optional-fields-only; breaking changes require new schema version or /api/v2
+events:
+  stream.ready:
+    persisted: false
+    replayable: false
+    aggregate_type: stream
+    payload: [current_event_id]
+  stream.reset_required:
+    persisted: false
+    replayable: false
+    aggregate_type: stream
+    payload: [oldest_event_id, current_event_id, reason]
+  job.preparation.changed:
+    persisted: true
+    replayable: true
+    aggregate_type: race_job
+    payload: [rule_state, torrent_state, placement_state]
+  job.state.changed:
+    persisted: true
+    replayable: true
+    aggregate_type: race_job
+    payload: [job_state, reason_code]
+  attempt.state.changed:
+    persisted: true
+    replayable: true
+    aggregate_type: placement_attempt
+    payload: [attempt_state, dispatch_state, side_effect_fact]
+  command.state.changed:
+    persisted: true
+    replayable: true
+    aggregate_type: api_command
+    payload: [command_id, status, revision]
+  capacity.state.changed:
+    persisted: true
+    replayable: true
+    aggregate_type: storage_target
+    payload: [capacity_state, capacity_epoch]
+  instance.health.changed:
+    persisted: true
+    replayable: true
+    aggregate_type: instance
+    payload: [health_state, capability_revision]
+  stats.realtime:
+    persisted: false
+    replayable: false
+    aggregate_type: stats
+    payload: [instance_id, download_rate, upload_rate]
+  system.alert:
+    persisted: true
+    replayable: true
+    aggregate_type: system
+    payload: [severity, code, message]
+retention:
+  persisted_days_minimum: 7
+  replay_limit_per_connection: 5000
+  last_event_id: replay_ascending_then_live
+  expired_or_over_limit: emit_stream.reset_required_then_close
+  no_last_event_id: emit_stream.ready_then_live_only
+heartbeat:
+  interval_seconds: 15
+  format: sse-comment
+  consumes_event_id: false

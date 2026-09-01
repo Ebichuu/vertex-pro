@@ -1,0 +1,33 @@
+﻿{
+  "item": "CAP-12",
+  "title": "权威删除终态",
+  "status": "IN_PROGRESS",
+  "local_status": "COMPLETE",
+  "branch": "local-only",
+  "implementation": [
+    "仅接受 UNKNOWN/EXPIRED_UNKNOWN Attempt 与 Job",
+    "要求完整且明确的权威 qB 删除事实",
+    "要求同 StorageTarget 下新鲜 TRUSTED physical_free，并校验 generation/revision/digest",
+    "校验 binding owner、StorageTarget、qB torrent ID 与 identity key 全链路一致",
+    "单个 BEGIN IMMEDIATE 事务删除 binding、释放 Reservation 并收敛 Attempt/Job",
+    "TERMINAL_QB_REMOVED 保留 reflected_physical_bytes=0，单独记录未消费字节",
+    "删除事实不确定、证据陈旧或身份歧义均 fail-closed，保持 Reservation"
+  ],
+  "outputs": [
+    {"path": "internal/authoritativeremoval/removal.go", "sha256": "51cf8ee79cde3b3be42629b6b6e23251dbe28bd183b892e0f739f58739823d77"},
+    {"path": "internal/authoritativeremoval/removal_test.go", "sha256": "7e3297e4fdda989a188e84346508f459785e9381d9cfa931bad0170410b01c71"}
+  ],
+  "checks": {
+    "unit": "PASS: go test ./internal/authoritativeremoval -count=1",
+    "all_tests": "PASS: go test ./... -count=1",
+    "vet": "PASS: go vet ./...",
+    "authoritative_removal": "PASS",
+    "fresh_physical_free": "PASS",
+    "identity_owner_chain": "PASS",
+    "no_reflection_fabrication": "PASS",
+    "rollback_and_duplicate_guard": "PASS"
+  },
+  "blocker": "CAP-13 capacity reconciler、后续状态机和真实 Add 接线尚未实现；本项不开放真实 qB/qui 路径。",
+  "no_external_service_calls": true
+}
+

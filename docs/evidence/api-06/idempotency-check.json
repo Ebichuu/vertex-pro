@@ -1,0 +1,35 @@
+{
+    "item": "API-06",
+    "title": "POST 幂等",
+    "status": "IN_PROGRESS",
+    "local_status": "COMPLETE",
+    "branch": "local-only",
+    "implementation": [
+        "新增 internal/apiidempotency：Begin 在单个 BEGIN IMMEDIATE 中注册 Idempotency-Key 并创建 ACCEPTED 命令，指纹为请求体 SHA-256",
+        "同 key 同 body 且未过期 -> Replayed=true 返回原 command_id（响应丢失后重试不重复执行）；同 key 异 body -> ErrKeyReused（映射 IDEMPOTENCY_KEY_REUSED 409）；键过期（24h）清除后按新命令注册，command_id 含注册时刻纳秒保证唯一",
+        "Complete 按状态机约束推进 ACCEPTED -> RUNNING -> SUCCEEDED/FAILED，每跳 revision 单调递增（满足 API_COMMAND_REVISION_NOT_MONOTONIC 触发器），终态后不可再改",
+        "保留期分离：幂等记录 24h（API-06），命令行 7 天（API-07）——记录过期后命令仍可按 command_id 查询"
+    ],
+    "outputs": [
+        {
+            "path": "internal/apiidempotency/idempotency.go",
+            "sha256": "24045c877d5c2db805a8c2814d8237d5807ed204fb8ffe9141e8f952e5864991"
+        },
+        {
+            "path": "internal/apiidempotency/idempotency_test.go",
+            "sha256": "cf3c191d6826bb9493a4d9a603b11b2b64c3fd8b9bd02fced2b2e4b106af55e6"
+        }
+    ],
+    "checks": {
+        "unit": "PASS: go test ./internal/apiidempotency -count=1",
+        "all_tests": "PASS: go test ./... -count=1",
+        "vet": "PASS: go vet ./...",
+        "same_key_same_body_replays": "PASS: 响应丢失后重试返回原命令且命令行不重复",
+        "same_key_different_body_rejected": "PASS: ErrKeyReused 映射 409",
+        "expired_record_reRegistered": "PASS: 超 24h 键清除并注册新命令",
+        "command_state_machine": "PASS: ACCEPTED->RUNNING->终态且 revision 单调，终态不可改",
+        "no_external_service_calls": "PASS"
+    },
+    "blocker": "本项仅完成 local-only 幂等与命令状态机服务；HTTP header 解析与端点级接线属 API-07/08 的 handler 层，未连接外部服务。",
+    "no_external_service_calls": true
+}

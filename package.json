@@ -1,0 +1,10 @@
+{
+  "name": "vertex-pro",
+  "private": true,
+  "version": "0.0.0-dev",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=24.14.0 <25",
+    "pnpm": ">=10.33.0 <11"
+  }
+}

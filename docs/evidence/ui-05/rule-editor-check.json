@@ -1,0 +1,69 @@
+{
+    "item": "UI-05",
+    "title": "Rule Editor",
+    "status": "IN_PROGRESS",
+    "local_status": "COMPLETE",
+    "branch": "local-only",
+    "implementation": [
+        "规则编辑页支持名称、启用状态、优先级、共享条件 AST、固定 qB/qB 组目标和受控 Add 参数编辑",
+        "简单模式与高级模式操作同一个 VertexConditionTree；高级模式支持嵌套条件组、条件和条件组的复制、删除与键盘可达上下排序",
+        "规则动作强制 FIXED_INSTANCE 与 INSTANCE_GROUP 目标互斥，并校验目标、优先级和 1 到 1440 分钟参与窗口",
+        "保存把条件 AST 与受控动作序列化为带 schema version 的 RuleVersionPayload，Tags 自动去重，并生成下一不可变 revision",
+        "路由 /rules/$ruleId/edit 使用确定性 local-only fixture；Rules 列表提供编辑入口，保存不下载、不创建 Reservation、不发送 Add",
+        "1280px 桌面与 390x844 移动浏览器验收均无根文档横向溢出；亮/暗主题和中英文 App Shell 切换正常"
+    ],
+    "outputs": [
+        {
+            "path": "web/src/features/rules/model.ts",
+            "sha256": "223e033eb5c505b80a4a0f60e7ee51c76c7d91f954d317d097ae9833050f06f6"
+        },
+        {
+            "path": "web/src/features/rules/rule-editor.ts",
+            "sha256": "6cb4d7ef881466f17926d0b33ec6bd69f52332294df7d8960df5e7a90ee74743"
+        },
+        {
+            "path": "web/src/components/rules/VertexRuleEditor.tsx",
+            "sha256": "e307e31f5a906c73db5d59b20183cbc9f994426ae765d48b73db1ceb7de3dbc6"
+        },
+        {
+            "path": "web/src/components/rules/VertexRuleEditor.test.tsx",
+            "sha256": "7c5f0a0e641d27d4d246e20cc0ff5643c2727f0f60ccdf468c99be452d9ee7e9"
+        },
+        {
+            "path": "web/src/components/rules/RuleEditorPage.tsx",
+            "sha256": "bc5e3b83c06a473b45cf6491242bd544f2b0bbb014b7dd80e2ea61746fe9b1a9"
+        },
+        {
+            "path": "web/src/components/rules/RuleEditorPage.test.tsx",
+            "sha256": "99f250a766089a2f90087c3ead4affa075f5481d25abcaaf937c4df1773a2de2"
+        },
+        {
+            "path": "web/src/components/rules/RuleList.tsx",
+            "sha256": "79309c0aa12a09d18347a098a217b07c0d11d4863e2077be1740f4e5183bccc3"
+        },
+        {
+            "path": "web/src/app/router.tsx",
+            "sha256": "21dd567e79d049e38bbf67145e2b45ca510ab59b156f9433fdd274ce68999ff6"
+        },
+        {
+            "path": "web/src/styles.css",
+            "sha256": "9c233c175bad00ac9dc4d6d5cf76e6898417e40b4a80d304d5912ac3becccc4f"
+        }
+    ],
+    "checks": {
+        "unit": "PASS: pnpm --dir web test（12 个测试文件，53/53；RuleEditorPage 4/4、VertexRuleEditor 8/8、RuleList 6/6）",
+        "typecheck": "PASS: pnpm --dir web typecheck",
+        "build": "PASS: pnpm --dir web build（主 JS chunk 556.65 kB，体积提示非阻塞）",
+        "go": "PASS: go test ./... -count=1 + go vet ./...",
+        "codegen": "PASS: go run ./tools/codegen -check",
+        "shared_ast": "PASS: 简单/高级模式共享同一条件 AST；嵌套组和条件/条件组复制、删除、上下排序均通过浏览器交互验收",
+        "target_xor": "PASS: 固定 qB 与 qB 组切换后只保留当前模式目标；缺失目标时阻止保存",
+        "immutable_revision": "PASS: 修改 Tags 并选择高速组后保存为本地 v4，负载 Tags 去重且 condition/action schema version 均为 1",
+        "controlled_actions": "PASS: qB 分类、Tags、保存路径策略、参与窗口和顺序下载白名单参数可编辑",
+        "browser_desktop": "PASS: 1280px 桌面双栏编辑布局，根文档无横向溢出",
+        "browser_mobile": "PASS: 390x844 单栏布局，控件无横向溢出，暗色主题显示正常",
+        "theme_language": "PASS: 亮/暗主题与中文/英文 App Shell 切换正常",
+        "no_external_service_calls": "PASS"
+    },
+    "blocker": "本项仅完成 local-only Rule Editor；真实规则 GET/PUT API、If-Match 并发控制、数据库持久化、qui/qB 目标数据和主流程 E2E 尚未接通，故保持 IN_PROGRESS。"
+}

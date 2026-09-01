@@ -1,0 +1,45 @@
+﻿{
+  "item": "QUI-09",
+  "status": "IN_PROGRESS",
+  "branch": "local-only",
+  "implementation": [
+    "one SyncWatcher instance enforces one in-flight sync request",
+    "initial rid=0 full baseline, incremental merge, duplicate RID ignore, and full-update generation reset",
+    "snapshot revision advances only after successful SnapshotStore persistence",
+    "persisted generation and revision are restored after watcher restart",
+    "waiters receive the next newer snapshot event and close on cancellation or watcher shutdown"
+  ],
+  "test_commands": {
+    "package": "go test ./internal/syncwatcher -count=1",
+    "all": "go test ./... -count=1",
+    "vet": "go vet ./...",
+    "race": "CGO_ENABLED=1 go test -race ./internal/syncwatcher -count=1"
+  },
+  "results": {
+    "package": "PASS",
+    "all": "PASS",
+    "vet": "PASS",
+    "race": "BLOCKED: CGO_ENABLED=1 requires gcc, unavailable in current environment"
+  },
+  "inputs": [
+    {
+      "path": "internal/syncwatcher/watcher.go",
+      "sha256": "0ef0481b713e17049c5cd8dea795cbdb84c76c19b3277be5924894390d135173"
+    },
+    {
+      "path": "internal/syncwatcher/watcher_test.go",
+      "sha256": "8da56de3a7a590dafa877061df34b3d0eb9840f992c8b6cb7323b7e6d1f8aa2a"
+    },
+    {
+      "path": "internal/syncmerge/merge.go",
+      "sha256": "783739a2e7389de7ded7b831e6c138404233f65277cb6aad071a8613074181fc"
+    },
+    {
+      "path": "internal/snapshot/store.go",
+      "sha256": "4c4810f17b6d6c203f785a6494b8229121c0215e3c9071449d97af6741ed69a7"
+    }
+  ],
+  "blocker": "Persistent SyncWatcher integration and real qui/qB lab verification remain later integration work; race test is environment-blocked because gcc is unavailable.",
+  "no_external_service_calls": true
+}
+

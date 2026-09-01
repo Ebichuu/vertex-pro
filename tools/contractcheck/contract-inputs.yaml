@@ -1,0 +1,29 @@
+schema_version: 1
+inputs:
+  - docs/产品方案设计/VERTEX_PRO_COMPLETE_REDESIGN_V1_RC8_FINAL.md
+  - docs/产品方案设计/VERTEX_PRO_V1_USER_RULES_CONTRACT.md
+  - docs/产品方案设计/CONTRACT_CONSISTENCY_V1.md
+  - docs/实施流程/VERTEX_PRO_V1_CODE_IMPLEMENTATION_PLAYBOOK.md
+  - docs/实施流程/IMPLEMENTATION_STATUS_V1.md
+  - docs/产品方案设计/ADR-0001_VERTEX_PRO_V1_SPEC_SUPERSEDE.md
+  - contracts/openapi/openapi.json
+  - contracts/state_enums.yaml
+  - contracts/error_codes.yaml
+  - contracts/event_types.yaml
+  - contracts/user_status_mapping.yaml
+  - internal/generated/contracts.go
+  - web/src/generated/contracts.ts
+  - third_party/qui/UPSTREAM_LOCK.yaml
+  - THIRD_PARTY_NOTICES.md
+checks:
+  - C1-SCHEMA-FRESH
+  - C1-SCHEMA-UPGRADE
+  - C1-FOREIGN-KEYS
+  - C1-ATTEMPT-IMMUTABLE
+  - C1-SUBMIT-INTENT-ONE-TO-ONE
+  - C1-RESERVATION-OWNER
+  - C1-STATE-ENUMS
+  - C1-ERROR-CODES
+  - C1-OPENAPI
+  - C1-EVENT-CONTRACT
+  - C1-GENERATED-CODE-CLEAN

@@ -1,0 +1,39 @@
+{
+  "item": "DB-03",
+  "status": "IN_PROGRESS",
+  "branch": "local-only",
+  "implementation": [
+    "sites table with base_url uniqueness",
+    "feeds table with per-site source uniqueness and foreign key",
+    "identities table with canonical_hash uniqueness",
+    "identity_sources cross-site mapping",
+    "rules table with state, revision and priority constraints",
+    "indexes for site/feed/source/rule lookup"
+  ],
+  "test_commands": {
+    "package": "go test ./internal/db -count=1",
+    "all": "go test ./... -count=1",
+    "vet": "go vet ./..."
+  },
+  "results": {
+    "package": "PASS",
+    "all": "PASS",
+    "vet": "PASS"
+  },
+  "inputs": [
+    {
+      "path": "internal/db/migrations/0002_site_feed_rule_identity.sql",
+      "sha256": "35b1b8ec3e514023fa8a63a6e9017629abbd0115666d725496a269daecdc2c5a"
+    },
+    {
+      "path": "internal/db/db03_test.go",
+      "sha256": "6d28830662cbac518228ee0d7bf769d37974ca1bf1d6ca75e56a3dbc9daa96cd"
+    },
+    {
+      "path": "internal/db/migration_test.go",
+      "sha256": "be8a75ab841e8b661118ebb640f0889923a7c7fb590341466de9c57b76301b44"
+    }
+  ],
+  "blocker": "Only the first business schema group is implemented; CRUD repositories, API handlers, sync/snapshot/capacity/race tables and transaction services remain future stages.",
+  "no_external_service_calls": true
+}

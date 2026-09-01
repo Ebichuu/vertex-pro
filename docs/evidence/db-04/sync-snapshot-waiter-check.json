@@ -1,0 +1,38 @@
+{
+  "item": "DB-04",
+  "status": "IN_PROGRESS",
+  "branch": "local-only",
+  "implementation": [
+    "instance sync state with generation/rid/revision/digest",
+    "complete snapshot metadata with composite identity",
+    "persisted sync waiter lifecycle",
+    "composite snapshot foreign key prevents dangling waiter references",
+    "recovery state update and waiter close constraints"
+  ],
+  "test_commands": {
+    "package": "go test ./internal/db -count=1",
+    "all": "go test ./... -count=1",
+    "vet": "go vet ./..."
+  },
+  "results": {
+    "package": "PASS",
+    "all": "PASS",
+    "vet": "PASS"
+  },
+  "inputs": [
+    {
+      "path": "internal/db/migrations/0003_sync_snapshot_waiter.sql",
+      "sha256": "f9bc8ede5f2abc5edd9304a5893e4b2388649b6128355cef4ab3752880e9e6ed"
+    },
+    {
+      "path": "internal/db/db04_test.go",
+      "sha256": "a043efb78631702d80243edd29f0070ee8f80bcbd2e1586c5b9a91f2624ce11b"
+    },
+    {
+      "path": "internal/db/migration_test.go",
+      "sha256": "be8a75ab841e8b661118ebb640f0889923a7c7fb590341466de9c57b76301b44"
+    }
+  ],
+  "blocker": "Only database schema and recovery constraints are implemented; SyncWatcher, SnapshotStore file IO/digest verification and qui/qB network integration remain future stages.",
+  "no_external_service_calls": true
+}

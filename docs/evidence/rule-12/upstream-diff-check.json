@@ -1,0 +1,82 @@
+{
+    "item":  "RULE-12",
+    "title":  "上游差异记录",
+    "status":  "IN_PROGRESS",
+    "local_status":  "COMPLETE",
+    "branch":  "local-only",
+    "upstream":  {
+                     "repository":  "https://github.com/autobrr/qui",
+                     "commit":  "8fcfc4d2beaf5e68ccebe837d7c0d9be965c8896",
+                     "license":  "GPL-2.0-or-later"
+                 },
+    "imported_files":  [
+                           {
+                               "path":  "third_party/qui/imported/web/src/components/query-builder/QueryBuilder.tsx",
+                               "sha256":  "5f8ed0d085d0c18d631ca924a204d70b93ae7eeec9e5126f5ff2316654c14c7d",
+                               "spdx":  true,
+                               "copyright":  true
+                           },
+                           {
+                               "path":  "third_party/qui/imported/web/src/components/query-builder/ConditionGroup.tsx",
+                               "sha256":  "66cd28fe616988688bfa9e78ec8b8756cb6e824f424f7f99e123e25610a3ad74",
+                               "spdx":  true,
+                               "copyright":  true
+                           },
+                           {
+                               "path":  "third_party/qui/imported/web/src/components/query-builder/LeafCondition.tsx",
+                               "sha256":  "8f3ff2f82e43741ec2c12881c381a52d457f6054f16242c3051f147dd91b7cfd",
+                               "spdx":  true,
+                               "copyright":  true
+                           },
+                           {
+                               "path":  "third_party/qui/imported/web/src/components/query-builder/FieldCombobox.tsx",
+                               "sha256":  "992ba002677c4334c1d86942d4423ccd922bfd9789c9cd2f1ad1826c77eba090",
+                               "spdx":  true,
+                               "copyright":  true
+                           },
+                           {
+                               "path":  "third_party/qui/imported/web/src/components/query-builder/constants.ts",
+                               "sha256":  "c0b4d755f2fc4c9de6d8f005e2c0b43fb9bb3b438883316005878661fd80c259",
+                               "spdx":  true,
+                               "copyright":  true
+                           }
+                       ],
+    "change_record":  {
+                          "path":  "third_party/qui/UPSTREAM_CHANGELOG.md",
+                          "sha256":  "31a6e344894828704ada111873c59e7c9be2cfd496694c1c2ca60b4175b27301",
+                          "imported_copy_modified":  false,
+                          "dependency_changes":  false,
+                          "production_route_changed":  false
+                      },
+    "synchronized_records":  [
+                                 {
+                                     "path":  "third_party/qui/UPSTREAM_LOCK.yaml",
+                                     "sha256":  "6e23493f777993f7f1b68d14a37b0a9fc51643e37614b2bca81b42a6ca5361f0"
+                                 },
+                                 {
+                                     "path":  "third_party/qui/IMPORTED_QUERY_BUILDER.md",
+                                     "sha256":  "bd1d5789d316944557caca8c411a2d608f62f4450e5dc45c17d74f36ab33a406"
+                                 },
+                                 {
+                                     "path":  "docs/产品方案设计/THIRD_PARTY_NOTICES.md",
+                                     "sha256":  "680f7b12fe62f473e86888d35ef4b85f382f9004ea18604ded983e1efad434af"
+                                 },
+                                 {
+                                     "path":  "THIRD_PARTY_NOTICES.md",
+                                     "sha256":  "ba82714748fdc415c8c00cfc01d548b786b8e15ce555219bfc9e3e8d3cf3af39"
+                                 }
+                             ],
+    "checks":  {
+                   "imported_file_count":  "PASS",
+                   "spdx_headers":  "PASS",
+                   "copyright_headers":  "PASS",
+                   "verify_license":  "PASS",
+                   "verify_qui_lock":  "PASS"
+               },
+    "command_output":  {
+                           "verify_license":  "{\r\n    \"check\":  \"BOOT-03 license files\",\r\n    \"status\":  \"PASS\",\r\n    \"license\":  \"GPL-2.0 text markers present\",\r\n    \"missing_files\":  [\r\n\r\n                      ],\r\n    \"missing_markers\":  [\r\n\r\n                        ]\r\n}",
+                           "verify_qui_lock":  "{\r\n    \"check\":  \"BOOT-04 qui upstream lock\",\r\n    \"status\":  \"PASS\",\r\n    \"commit\":  \"8fcfc4d2beaf5e68ccebe837d7c0d9be965c8896\",\r\n    \"candidate_count\":  5,\r\n    \"digest_count\":  5,\r\n    \"missing_candidates\":  [\r\n\r\n                           ],\r\n    \"invalid_digest_entries\":  [\r\n\r\n                               ],\r\n    \"missing_markers\":  [\r\n\r\n                        ]\r\n}"
+                       },
+    "blocker":  "RULE-11 仍保持 IN_PROGRESS；RULE-12 本地文档、通知和校验已完成，待依赖收口后统一更新正式 DONE/merge 记录。",
+    "no_external_service_calls":  true
+}

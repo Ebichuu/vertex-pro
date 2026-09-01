@@ -1,0 +1,40 @@
+﻿# Build outputs
+/bin/
+/dist/
+/build/
+/coverage/
+codegen.exe
+
+# Go
+*.test
+*.out
+
+# Node / pnpm
+node_modules/
+.pnpm-store/
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+
+# Runtime data and local databases
+*.db
+*.db-shm
+*.db-wal
+/data/
+/vertex-pro-snapshots/
+
+# Generated evidence and local artifacts
+/artifacts/*
+!/artifacts/.gitkeep
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Temp sketch files and skill cache
+*.sketch.json
+.od-skills/

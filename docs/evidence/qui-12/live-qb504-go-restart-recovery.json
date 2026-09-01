@@ -1,0 +1,39 @@
+{
+  "status": "PASS",
+  "safety": {
+    "qui_methods_observed": [
+      "GET"
+    ],
+    "task_mutation_methods_observed": false,
+    "existing_task_set_unchanged": true,
+    "task_count_before": 9,
+    "task_count_after": 9,
+    "secrets_persisted_in_repository": false
+  },
+  "first_start": {
+    "ready": true,
+    "graceful_exit": true,
+    "sync_state": "READY",
+    "generation": 3,
+    "rid_present": true,
+    "revision": 3
+  },
+  "restart": {
+    "ready": true,
+    "graceful_exit": true,
+    "sync_state": "READY",
+    "generation_before": 3,
+    "generation_after": 6,
+    "generation_preserved_or_safely_advanced": true,
+    "full_update_reset_observed": true,
+    "rid_advanced_or_equal": true,
+    "revision_advanced": true,
+    "snapshot_rows": 6,
+    "snapshot_files": 6
+  },
+  "transport": {
+    "loopback_bridge_used": true,
+    "reason": "coding harness sandbox blocks newly compiled Go child processes from direct non-loopback outbound sockets",
+    "unique_read_paths": 8
+  }
+}

@@ -1,0 +1,53 @@
+{
+    "item":  "RULE-08",
+    "status":  "IN_PROGRESS",
+    "branch":  "local-only",
+    "implementation":  [
+                           "Vertex field catalog mapped from internal/rules with site/rss/title/size/category/time/promotion/profile/storage fields",
+                           "operator catalog mapped to equals/contains/regex/range/set/existence semantics",
+                           "condition tree editor preserves versioned group/leaf AST shape",
+                           "operator changes reset value payload to backend-compatible typed value",
+                           "native accessible controls support field, operator, scalar, boolean, set, and range-oriented input paths",
+                           "no qui runtime dependency or unrelated automation action was copied into production web/src"
+                       ],
+    "test_commands":  {
+                          "frontend_test":  "pnpm --dir web test -- --run",
+                          "frontend_build":  "pnpm --dir web build",
+                          "go_all":  "go test ./... -count=1",
+                          "go_vet":  "go vet ./..."
+                      },
+    "results":  {
+                    "frontend_test":  "PASS",
+                    "frontend_build":  "PASS",
+                    "go_all":  "PASS",
+                    "go_vet":  "PASS"
+                },
+    "inputs":  [
+                   {
+                       "path":  "web/src/features/rules/model.ts",
+                       "sha256":  "223e033eb5c505b80a4a0f60e7ee51c76c7d91f954d317d097ae9833050f06f6"
+                   },
+                   {
+                       "path":  "web/src/components/rules/VertexRuleEditor.tsx",
+                       "sha256":  "e307e31f5a906c73db5d59b20183cbc9f994426ae765d48b73db1ceb7de3dbc6"
+                   },
+                   {
+                       "path":  "web/src/components/rules/VertexRuleEditor.test.tsx",
+                       "sha256":  "7c5f0a0e641d27d4d246e20cc0ff5643c2727f0f60ccdf468c99be452d9ee7e9"
+                   },
+                   {
+                       "path":  "web/src/styles.css",
+                       "sha256":  "9c233c175bad00ac9dc4d6d5cf76e6898417e40b4a80d304d5912ac3becccc4f"
+                   },
+                   {
+                       "path":  "internal/rules/catalog.go",
+                       "sha256":  "c48f4e9e1d794d12c833b5ffa5d3dc22068bcf274093f78f298ecc98d4c774e2"
+                   },
+                   {
+                       "path":  "third_party/qui/imported/web/src/components/query-builder/constants.ts",
+                       "sha256":  "c0b4d755f2fc4c9de6d8f005e2c0b43fb9bb3b438883316005878661fd80c259"
+                   }
+               ],
+    "blocker":  "RULE-09 simple/advanced mode mapping, full range/set widgets, dry-run wiring, and production Rules route integration remain pending; no external services were called.",
+    "no_external_service_calls":  true
+}

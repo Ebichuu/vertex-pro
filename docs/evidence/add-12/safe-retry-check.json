@@ -1,0 +1,48 @@
+{
+    "item": "ADD-12",
+    "title": "两阶段安全重试",
+    "status": "IN_PROGRESS",
+    "local_status": "COMPLETE",
+    "branch": "local-only",
+    "implementation": [
+        "新增 internal/saferetry 实现第 16.3 节两阶段重试的阶段 A 关闭命令，阶段 B 的重新 Placement 不在本命令事务内",
+        "CLOSE_CHAIN_AND_REQUEUE：对已产生 ADD_FAILED 或 RECONCILED_NO_EFFECT 事实的旧链，单事务释放 Reservation（NO_EFFECT）、关闭 waiter，并把 RaceJob 放回 READY 或 EXPIRED；历史 Attempt 保留原终局不复活",
+        "CONFIRM_NO_EFFECT_AND_RETRY：对应第 16.8 节矩阵 UNKNOWN 入口，要求新鲜完整快照证明 Identity 不存在且 owner 无归属，同事务完成 Attempt RECONCILED_NO_EFFECT、清空 current_attempt_id、释放旧链后按判定重排；EXPIRED_UNKNOWN 入口被明确拒绝（ADD-11 人工闭环必须走向 EXPIRED）",
+        "重排判定固定为：参与窗口未过期且历史 Attempt 数低于 retry budget（max_attempts）时 READY，否则 EXPIRED",
+        "命令绝不创建新 Attempt/SubmitIntent/Reservation，不返回预分配 new_attempt_id；测试断言 READY 后 attempt/intent 数量不变（无半创建 Attempt）",
+        "racejob 状态机补齐设计 §10.1 的 RECONCILED_NO_EFFECT -> READY 关闭重排边（ADD_FAILED -> READY 已存在）",
+        "api_commands 审计与 ADD-11 同构：SUCCEEDED/FAILED + 指纹，拒绝写入 RETRY_COMMAND_REJECTED，重放幂等"
+    ],
+    "outputs": [
+        {
+            "path": "internal/saferetry/retry.go",
+            "sha256": "4c5013f1591f6a1d851da1253fab3ceedcf21b76917591246bd1d9b1ba367bda"
+        },
+        {
+            "path": "internal/saferetry/retry_test.go",
+            "sha256": "a0fb0bbb3ddffe670d94f745792dc76841834c958facddc6f5efdbc6d44ac166"
+        },
+        {
+            "path": "internal/racejob/state_machine.go",
+            "sha256": "7cd2298cbb598c009a8a069ce85ef36dc435f4d4d23a365cb16361c6f189ea53"
+        },
+        {
+            "path": "internal/racejob/state_machine_test.go",
+            "sha256": "8e1e6fc3e98302e94235cc6475501465c83feaff14ac6a560b6063ecf2b8853e"
+        }
+    ],
+    "checks": {
+        "unit": "PASS: go test ./internal/saferetry ./internal/racejob -count=1",
+        "all_tests": "PASS: go test ./... -count=1",
+        "vet": "PASS: go vet ./...",
+        "phase_a_only": "PASS: 命令只关闭旧链并重排 Job，不执行阶段 B 的 Placement",
+        "no_half_created_attempt": "PASS: READY 后 placement_attempts/submit_intents 数量不变",
+        "window_and_budget_decision": "PASS: 窗口过期或 attempt 数达 max_attempts 时进入 EXPIRED",
+        "unknown_entry_requires_fresh_evidence": "PASS: 陈旧证据拒绝且链不变；owner 歧义拒绝",
+        "expired_unknown_not_retryable": "PASS: EXPIRED_UNKNOWN 只能经 ADD-11 闭环到 EXPIRED，不恢复自动重试",
+        "audit_trail": "PASS: SUCCEEDED/FAILED api_commands 记录完整",
+        "no_external_service_calls": "PASS"
+    },
+    "blocker": "本项仅完成 local-only 两阶段重试的阶段 A 命令；阶段 B 重新 Placement 依赖 Placement/Candidate 管线接线（CAP/RACE 后续任务），未连接外部服务。",
+    "no_external_service_calls": true
+}

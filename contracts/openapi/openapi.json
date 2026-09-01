@@ -1,0 +1,105 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Vertex Pro API",
+    "version": "0.1.0",
+    "description": "Vertex Pro V1 REST and SSE contract foundation."
+  },
+  "servers": [
+    { "url": "/api/v1" }
+  ],
+  "tags": [
+    { "name": "auth" },
+    { "name": "dashboard" },
+    { "name": "sites" },
+    { "name": "feeds" },
+    { "name": "rules" },
+    { "name": "jobs" },
+    { "name": "commands" },
+    { "name": "instances" },
+    { "name": "stats" },
+    { "name": "events" }
+  ],
+  "paths": {
+    "/auth/status": { "get": { "tags": ["auth"], "operationId": "getAuthStatus", "responses": { "200": { "$ref": "#/components/responses/JsonObject" }, "default": { "$ref": "#/components/responses/ErrorResponse" } } } },
+    "/auth/initialize": { "post": { "tags": ["auth"], "operationId": "initializeAuth", "requestBody": { "$ref": "#/components/requestBodies/JsonObject" }, "responses": { "200": { "$ref": "#/components/responses/JsonObject" }, "400": { "$ref": "#/components/responses/ErrorResponse" }, "409": { "$ref": "#/components/responses/ErrorResponse" }, "422": { "$ref": "#/components/responses/ErrorResponse" }, "default": { "$ref": "#/components/responses/ErrorResponse" } } } },
+    "/auth/login": { "post": { "tags": ["auth"], "operationId": "loginAuth", "requestBody": { "$ref": "#/components/requestBodies/JsonObject" }, "responses": { "200": { "$ref": "#/components/responses/JsonObject" }, "400": { "$ref": "#/components/responses/ErrorResponse" }, "409": { "$ref": "#/components/responses/ErrorResponse" }, "429": { "$ref": "#/components/responses/ErrorResponse" }, "default": { "$ref": "#/components/responses/ErrorResponse" } } } },
+    "/auth/logout": { "post": { "tags": ["auth"], "operationId": "logoutAuth", "responses": { "200": { "$ref": "#/components/responses/JsonObject" }, "401": { "$ref": "#/components/responses/ErrorResponse" }, "default": { "$ref": "#/components/responses/ErrorResponse" } } } },
+    "/dashboard": { "get": { "tags": ["dashboard"], "operationId": "getDashboard", "responses": { "200": { "$ref": "#/components/responses/DashboardResponse" }, "default": { "$ref": "#/components/responses/ErrorResponse" } } } },
+    "/sites": {
+      "get": { "tags": ["sites"], "operationId": "listSites", "parameters": [{ "$ref": "#/components/parameters/Limit" }, { "$ref": "#/components/parameters/Cursor" }], "responses": { "200": { "$ref": "#/components/responses/SiteListResponse" }, "default": { "$ref": "#/components/responses/ErrorResponse" } } },
+      "post": { "tags": ["sites"], "operationId": "createSite", "requestBody": { "$ref": "#/components/requestBodies/JsonObject" }, "responses": { "201": { "$ref": "#/components/responses/ResourceCreated" }, "400": { "$ref": "#/components/responses/ErrorResponse" }, "default": { "$ref": "#/components/responses/ErrorResponse" } } }
+    },
+    "/feeds": {
+      "get": { "tags": ["feeds"], "operationId": "listFeeds", "parameters": [{ "name": "site_id", "in": "query", "required": false, "schema": { "type": "string", "minLength": 1, "maxLength": 128 } }, { "$ref": "#/components/parameters/Limit" }, { "$ref": "#/components/parameters/Cursor" }], "responses": { "200": { "$ref": "#/components/responses/FeedListResponse" }, "default": { "$ref": "#/components/responses/ErrorResponse" } } },
+      "post": { "tags": ["feeds"], "operationId": "createFeed", "requestBody": { "$ref": "#/components/requestBodies/CreateFeed" }, "responses": { "201": { "$ref": "#/components/responses/ResourceCreated" }, "400": { "$ref": "#/components/responses/ErrorResponse" }, "409": { "$ref": "#/components/responses/ErrorResponse" }, "422": { "$ref": "#/components/responses/ErrorResponse" }, "default": { "$ref": "#/components/responses/ErrorResponse" } } }
+    },
+    "/feeds/{id}": {
+      "get": { "tags": ["feeds"], "operationId": "getFeed", "parameters": [{ "$ref": "#/components/parameters/ResourceId" }], "responses": { "200": { "$ref": "#/components/responses/JsonObject" }, "404": { "$ref": "#/components/responses/ErrorResponse" }, "default": { "$ref": "#/components/responses/ErrorResponse" } } },
+      "put": { "tags": ["feeds"], "operationId": "updateFeed", "parameters": [{ "$ref": "#/components/parameters/ResourceId" }, { "$ref": "#/components/parameters/IfMatch" }], "requestBody": { "$ref": "#/components/requestBodies/UpdateFeed" }, "responses": { "200": { "$ref": "#/components/responses/JsonObject" }, "400": { "$ref": "#/components/responses/ErrorResponse" }, "409": { "$ref": "#/components/responses/ErrorResponse" }, "422": { "$ref": "#/components/responses/ErrorResponse" }, "default": { "$ref": "#/components/responses/ErrorResponse" } } }
+    },
+    "/feeds/{id}/test": {
+      "post": { "tags": ["feeds"], "operationId": "testFeed", "parameters": [{ "$ref": "#/components/parameters/ResourceId" }, { "$ref": "#/components/parameters/IdempotencyKey" }], "responses": { "202": { "$ref": "#/components/responses/AsyncCommandAccepted" }, "400": { "$ref": "#/components/responses/ErrorResponse" }, "409": { "$ref": "#/components/responses/ErrorResponse" }, "default": { "$ref": "#/components/responses/ErrorResponse" } } }
+    },
+    "/rules": {
+      "get": { "tags": ["rules"], "operationId": "listRules", "parameters": [{ "$ref": "#/components/parameters/Limit" }, { "$ref": "#/components/parameters/Cursor" }], "responses": { "200": { "$ref": "#/components/responses/RuleListResponse" }, "default": { "$ref": "#/components/responses/ErrorResponse" } } },
+      "post": { "tags": ["rules"], "operationId": "createRule", "requestBody": { "$ref": "#/components/requestBodies/JsonObject" }, "responses": { "201": { "$ref": "#/components/responses/ResourceCreated" }, "400": { "$ref": "#/components/responses/ErrorResponse" }, "409": { "$ref": "#/components/responses/ErrorResponse" }, "default": { "$ref": "#/components/responses/ErrorResponse" } } }
+    },
+    "/rules/dry-run": { "post": { "tags": ["rules"], "operationId": "dryRunRules", "requestBody": { "$ref": "#/components/requestBodies/JsonObject" }, "responses": { "200": { "$ref": "#/components/responses/JsonObject" }, "400": { "$ref": "#/components/responses/ErrorResponse" }, "default": { "$ref": "#/components/responses/ErrorResponse" } } } },
+    "/rules/{id}": {
+      "get": { "tags": ["rules"], "operationId": "getRule", "parameters": [{ "$ref": "#/components/parameters/ResourceId" }], "responses": { "200": { "$ref": "#/components/responses/JsonObject" }, "404": { "$ref": "#/components/responses/ErrorResponse" }, "default": { "$ref": "#/components/responses/ErrorResponse" } } },
+      "put": { "tags": ["rules"], "operationId": "updateRule", "parameters": [{ "$ref": "#/components/parameters/ResourceId" }, { "$ref": "#/components/parameters/IfMatch" }], "requestBody": { "$ref": "#/components/requestBodies/JsonObject" }, "responses": { "200": { "$ref": "#/components/responses/JsonObject" }, "400": { "$ref": "#/components/responses/ErrorResponse" }, "409": { "$ref": "#/components/responses/ErrorResponse" }, "default": { "$ref": "#/components/responses/ErrorResponse" } } }
+    },
+    "/rules/{id}/duplicate": { "post": { "tags": ["rules"], "operationId": "duplicateRule", "parameters": [{ "$ref": "#/components/parameters/ResourceId" }, { "$ref": "#/components/parameters/IdempotencyKey" }], "responses": { "201": { "$ref": "#/components/responses/ResourceCreated" }, "400": { "$ref": "#/components/responses/ErrorResponse" }, "409": { "$ref": "#/components/responses/ErrorResponse" }, "default": { "$ref": "#/components/responses/ErrorResponse" } } } },
+    "/rules/{id}/dry-run": { "post": { "tags": ["rules"], "operationId": "dryRunRule", "parameters": [{ "$ref": "#/components/parameters/ResourceId" }], "requestBody": { "$ref": "#/components/requestBodies/JsonObject" }, "responses": { "200": { "$ref": "#/components/responses/JsonObject" }, "400": { "$ref": "#/components/responses/ErrorResponse" }, "default": { "$ref": "#/components/responses/ErrorResponse" } } } },
+    "/jobs": { "get": { "tags": ["jobs"], "operationId": "listJobs", "parameters": [{ "$ref": "#/components/parameters/Limit" }, { "$ref": "#/components/parameters/Cursor" }], "responses": { "200": { "$ref": "#/components/responses/JobListResponse" }, "default": { "$ref": "#/components/responses/ErrorResponse" } } } },
+    "/jobs/{id}": { "get": { "tags": ["jobs"], "operationId": "getJob", "parameters": [{ "$ref": "#/components/parameters/ResourceId" }], "responses": { "200": { "$ref": "#/components/responses/JsonObject" }, "404": { "$ref": "#/components/responses/ErrorResponse" }, "default": { "$ref": "#/components/responses/ErrorResponse" } } } },
+    "/jobs/{id}/acknowledge-unknown": { "post": { "tags": ["jobs"], "operationId": "acknowledgeUnknownJob", "parameters": [{ "$ref": "#/components/parameters/ResourceId" }, { "$ref": "#/components/parameters/IdempotencyKey" }], "requestBody": { "$ref": "#/components/requestBodies/JsonObject" }, "responses": { "202": { "$ref": "#/components/responses/AsyncCommandAccepted" }, "400": { "$ref": "#/components/responses/ErrorResponse" }, "409": { "$ref": "#/components/responses/ErrorResponse" }, "default": { "$ref": "#/components/responses/ErrorResponse" } } } },
+    "/commands/{command_id}": { "get": { "tags": ["commands"], "operationId": "getCommand", "parameters": [{ "$ref": "#/components/parameters/CommandId" }], "responses": { "200": { "$ref": "#/components/responses/CommandResponse" }, "403": { "$ref": "#/components/responses/ErrorResponse" }, "404": { "$ref": "#/components/responses/ErrorResponse" }, "default": { "$ref": "#/components/responses/ErrorResponse" } } } },
+    "/instances": { "get": { "tags": ["instances"], "operationId": "listInstances", "parameters": [{ "$ref": "#/components/parameters/Limit" }, { "$ref": "#/components/parameters/Cursor" }], "responses": { "200": { "$ref": "#/components/responses/InstanceListResponse" }, "default": { "$ref": "#/components/responses/ErrorResponse" } } } },
+    "/instances/{id}/probe": { "post": { "tags": ["instances"], "operationId": "probeInstance", "parameters": [{ "$ref": "#/components/parameters/ResourceId" }, { "$ref": "#/components/parameters/IdempotencyKey" }], "responses": { "202": { "$ref": "#/components/responses/AsyncCommandAccepted" }, "400": { "$ref": "#/components/responses/ErrorResponse" }, "409": { "$ref": "#/components/responses/ErrorResponse" }, "default": { "$ref": "#/components/responses/ErrorResponse" } } } },
+    "/stats/downloaders/summary": { "get": { "tags": ["stats"], "operationId": "getDownloaderSummary", "responses": { "200": { "$ref": "#/components/responses/JsonObject" }, "default": { "$ref": "#/components/responses/ErrorResponse" } } } },
+    "/stats/downloaders/timeseries": { "get": { "tags": ["stats"], "operationId": "getDownloaderTimeseries", "parameters": [{ "$ref": "#/components/parameters/From" }, { "$ref": "#/components/parameters/To" }], "responses": { "200": { "$ref": "#/components/responses/JsonObject" }, "400": { "$ref": "#/components/responses/ErrorResponse" }, "default": { "$ref": "#/components/responses/ErrorResponse" } } } },
+    "/stats/downloaders/realtime": { "get": { "tags": ["stats"], "operationId": "getDownloaderRealtime", "responses": { "200": { "$ref": "#/components/responses/JsonObject" }, "default": { "$ref": "#/components/responses/ErrorResponse" } } } },
+    "/events/stream": { "get": { "tags": ["events"], "operationId": "streamEvents", "parameters": [{ "$ref": "#/components/parameters/LastEventId" }], "responses": { "200": { "description": "Server-sent event stream.", "content": { "text/event-stream": { "schema": { "type": "string" } } } }, "409": { "$ref": "#/components/responses/ErrorResponse" }, "default": { "$ref": "#/components/responses/ErrorResponse" } } } }
+  },
+  "components": {
+    "parameters": {
+      "ResourceId": { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "minLength": 1 } },
+      "CommandId": { "name": "command_id", "in": "path", "required": true, "schema": { "type": "string", "minLength": 1 } },
+      "Limit": { "name": "limit", "in": "query", "required": false, "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 50 } },
+      "Cursor": { "name": "cursor", "in": "query", "required": false, "schema": { "type": "string" } },
+      "From": { "name": "from", "in": "query", "required": false, "schema": { "type": "string", "format": "date-time" } },
+      "To": { "name": "to", "in": "query", "required": false, "schema": { "type": "string", "format": "date-time" } },
+      "LastEventId": { "name": "Last-Event-ID", "in": "header", "required": false, "schema": { "type": "integer", "minimum": 0 } },
+      "IdempotencyKey": { "name": "Idempotency-Key", "in": "header", "required": true, "schema": { "type": "string", "minLength": 1, "maxLength": 255 } },
+      "IfMatch": { "name": "If-Match", "in": "header", "required": true, "schema": { "type": "string", "minLength": 1 } }
+    },
+    "requestBodies": {
+      "CreateFeed": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateFeedRequest" } } } },
+      "UpdateFeed": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UpdateFeedRequest" } } } },
+      "JsonObject": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/JsonObject" } } } }
+    },
+    "responses": {
+      "JsonObject": { "description": "JSON object response.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/JsonObject" } } } },
+      "DashboardResponse": { "description": "Dashboard snapshot.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/JsonObject" } } } },
+      "ResourceCreated": { "description": "Resource created.", "headers": { "Location": { "schema": { "type": "string" } }, "ETag": { "schema": { "type": "string" } } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/JsonObject" } } } },
+      "AsyncCommandAccepted": { "description": "Asynchronous command accepted.", "headers": { "Location": { "schema": { "type": "string" } }, "ETag": { "schema": { "type": "string" } } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Command" } } } },
+      "CommandResponse": { "description": "Persisted command state.", "headers": { "ETag": { "schema": { "type": "string" } } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Command" } } } },
+      "SiteListResponse": { "description": "Paginated site list.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Page" } } } },
+      "FeedListResponse": { "description": "Paginated feed list.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Page" } } } },
+      "RuleListResponse": { "description": "Paginated rule list.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Page" } } } },
+      "JobListResponse": { "description": "Paginated job list.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Page" } } } },
+      "InstanceListResponse": { "description": "Paginated instance list.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Page" } } } },
+      "ErrorResponse": { "description": "Stable error envelope.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } } }
+    },
+    "schemas": {
+      "JsonObject": { "type": "object", "additionalProperties": true },
+      "CreateFeedRequest": { "type": "object", "required": ["id", "site_id", "name", "feed_url"], "properties": { "id": { "type": "string", "minLength": 1, "maxLength": 128 }, "site_id": { "type": "string", "minLength": 1, "maxLength": 128 }, "name": { "type": "string", "minLength": 1, "maxLength": 200 }, "feed_url": { "type": "string", "format": "uri" }, "enabled": { "type": "boolean", "default": true }, "poll_minutes": { "type": "integer", "minimum": 1, "maximum": 1440, "default": 15 } }, "additionalProperties": false },
+      "UpdateFeedRequest": { "type": "object", "minProperties": 1, "properties": { "name": { "type": "string", "minLength": 1, "maxLength": 200 }, "feed_url": { "type": "string", "format": "uri" }, "enabled": { "type": "boolean" }, "poll_minutes": { "type": "integer", "minimum": 1, "maximum": 1440 } }, "additionalProperties": false },
+      "Page": { "type": "object", "required": ["items", "next_cursor"], "properties": { "items": { "type": "array", "items": { "$ref": "#/components/schemas/JsonObject" } }, "next_cursor": { "type": ["string", "null"] } }, "additionalProperties": false },
+      "ErrorEnvelope": { "type": "object", "required": ["error"], "properties": { "error": { "$ref": "#/components/schemas/Error" } }, "additionalProperties": false }, "Error": { "type": "object", "required": ["code", "message", "request_id", "retryable"], "properties": { "code": { "type": "string", "minLength": 1 }, "message": { "type": "string" }, "request_id": { "type": "string" }, "retryable": { "type": "boolean" }, "details": { "type": "object", "additionalProperties": true } }, "additionalProperties": false },
+      "Command": { "type": "object", "required": ["command_id", "state", "revision"], "properties": { "command_id": { "type": "string" }, "state": { "type": "string", "enum": ["ACCEPTED", "RUNNING", "SUCCEEDED", "FAILED", "UNKNOWN"] }, "revision": { "type": "integer", "minimum": 0 }, "result": { "type": ["object", "null"], "additionalProperties": true }, "error": { "type": ["object", "null"], "additionalProperties": true }, "created_at": { "type": "string", "format": "date-time" }, "updated_at": { "type": "string", "format": "date-time" } }, "additionalProperties": false }
+    }
+  }
+}

@@ -1,0 +1,31 @@
+{
+    "item": "API-10",
+    "title": "实时瞬时数据",
+    "status": "IN_PROGRESS",
+    "local_status": "COMPLETE",
+    "branch": "local-only",
+    "implementation": [
+        "新增 internal/realtimecards：单实例实时卡片（速度、下载/做种任务数、sync 状态、来源标记）的内存 Registry，Update 原子更新并向 SSE Hub 广播 stats.realtime 瞬时事件（不占持久 event ID、不可重放）",
+        "Freshness 语义：超过 staleAfter 未更新或从未上报的实例标记 NOT_FRESH，数值不补造、绝不美化；Snapshot/CardForInstance 提供断线后 REST 重建的权威视图",
+        "GET /api/v1/stats/downloaders/realtime 接线 Registry（合同 getDownloaderRealtime），响应携带 freshness 与 source 标记"
+    ],
+    "outputs": [
+        {
+            "path": "internal/realtimecards/cards.go",
+            "sha256": "e81621dfe582116c004e8a439b994ca5b034ca6375918c97c5e00aeb7f9432a8"
+        },
+        {
+            "path": "internal/realtimecards/cards_test.go",
+            "sha256": "b5d984508af7ddfe4412df3c052334e64e760e76ddd2f64781d0283e40ca1f5c"
+        }
+    ],
+    "checks": {
+        "unit": "PASS: go test ./internal/realtimecards -count=1",
+        "all_tests": "PASS: go test ./... -count=1（75 包全绿）",
+        "vet": "PASS: go vet ./...",
+        "transient_no_event_id": "PASS: stats.realtime 瞬时事件 EventID=0",
+        "rest_recovery": "PASS: 断线后 REST realtime 快照可重建，过期卡片 NOT_FRESH 不补造",
+        "no_external_service_calls": "PASS"
+    },
+    "blocker": "本项仅完成 local-only 实时卡片；采样源接续（STAT-01 生产接线）与前端消费属后续任务，未连接外部服务。"
+}

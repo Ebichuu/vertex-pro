@@ -1,0 +1,43 @@
+{
+  "item": "UI-03",
+  "title": "Sites & RSS",
+  "status": "IN_PROGRESS",
+  "local_status": "COMPLETE",
+  "branch": "local-only",
+  "implementation": [
+    "Site and RSS local display model with HTTP(S) URL validation, 1 through 1440 minute polling validation, health status, and poll formatting",
+    "SitesRssPage supports site/RSS creation, selection, persisted Feed enabled toggle, read-only preview, and credentialRef-only display",
+    "Route /sites reads GET /api/v1/sites through the generated ApiClient and validates Page, Site, and Feed fields",
+    "Create flow uses generated ApiClient for POST /api/v1/sites followed by POST /api/v1/feeds; Feed failure preserves the created Site and shows partial-success warning",
+    "Feed toggle uses PUT /api/v1/feeds/{id} with resource If-Match and CSRF headers",
+    "Test RSS uses POST /api/v1/feeds/{id}/test with Idempotency-Key and renders the READ_ONLY_FETCH command result",
+    "Local preview fallback remains deterministic and never creates a torrent or invokes Add",
+    "Responsive desktop/mobile layouts remain covered by the existing browser-oriented component checks"
+  ],
+  "outputs": [
+    { "path": "web/src/features/sites/sites.ts", "sha256": "1a6cd9e563b88063d3097a8332d146c59046945936ac69925514a4ce733a24f1" },
+    { "path": "web/src/components/sites/SitesRssPage.tsx", "sha256": "c77ac38afd40512d8640794f45ceeda45f136aabd2868b120710f259ad3b42b1" },
+    { "path": "web/src/components/sites/SitesRssPage.test.tsx", "sha256": "fcd4fb5e364f47b93609de81a8f67e2fd63339a9d9d420f5de25d8c7daf74934" },
+    { "path": "web/src/app/router.tsx", "sha256": "21dd567e79d049e38bbf67145e2b45ca510ab59b156f9433fdd274ce68999ff6" },
+    { "path": "web/src/mocks/fixtures.ts", "sha256": "f514e07b005bab90f4fef65e8b8fd28aa6bbb4c56e55b9f527996785caae97c3" },
+    { "path": "web/src/mocks/handlers.ts", "sha256": "7af9db669b1e69321313bd7940d3efc09a85a028bedef3d2b6d6e169305c20b3" },
+    { "path": "web/src/test/app-shell.test.tsx", "sha256": "41f2aa2c2310015452e865cd0584cde403f41954dff42d2fa43f7d1a7c67e492" },
+    { "path": "contracts/openapi/openapi.json", "sha256": "d5a459684ffc0470ea5c654b9598f49ee38ea6c6d052581599e7f68bd14f1749" }
+  ],
+  "checks": {
+    "unit": "PASS: pnpm --dir web test -- --run (16 test files, 81/81)",
+    "typecheck": "PASS: pnpm --dir web typecheck",
+    "build": "PASS: pnpm --dir web build",
+    "route_api": "PASS: /sites reads GET /api/v1/sites and creation submits POST /api/v1/sites then POST /api/v1/feeds",
+    "feed_toggle": "PASS: Feed enabled toggle uses PUT + If-Match + CSRF and preserves state on REVISION_CONFLICT",
+    "feed_test": "PASS: Feed test uses Idempotency-Key and renders a READ_ONLY_FETCH command result",
+    "partial_success": "PASS: Feed step failure retains the created Site and displays an explicit warning",
+    "focused_go": "PASS: go test -p 1 ./internal/resourcesapi ./internal/rssservice ./internal/app ./internal/ruleservice -count=1",
+    "vet": "PASS: go vet ./...",
+    "codegen": "PASS: go run ./tools/codegen -check",
+    "no_seed_side_effect": "PASS: Preview/test paths do not create a torrent, RaceJob, Reservation, or Add",
+    "no_external_service_calls": "PASS in frontend tests"
+  },
+  "blocker": "Scheduler execution, conditional fetch/baseline behavior, real upstream calls, and complete main-flow E2E remain future work; the official item stays IN_PROGRESS.",
+  "no_external_service_calls": true
+}

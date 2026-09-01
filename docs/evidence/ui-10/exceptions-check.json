@@ -1,0 +1,58 @@
+{
+    "item": "UI-10",
+    "title": "Exceptions",
+    "status": "IN_PROGRESS",
+    "local_status": "COMPLETE",
+    "branch": "local-only",
+    "implementation": [
+        "后端补齐 §16.8 命令矩阵最后两条 action：EXPIRE_UNRESOLVED（unknownreconciler.ExpireUnresolved，UNKNOWN -> EXPIRED_UNKNOWN 保留 Reservation、关闭 waiter 停止自动对账、SUCCEEDED 命令审计）与 CONTINUE_RECONCILIATION（以请求快照证据即时执行一次对账 Sweep 并返回该尝试结果）",
+        "resourcesapi lookupChain 补充 ACTIVE waiter 读取；acknowledge-unknown 请求体统一为 acknowledgePayload（含注入时钟）",
+        "发现并修复时区相关测试缺陷：requireSession 用真实系统时间校验会话，系统时间越过测试固定过期时间后全部 401；改为优先使用注入时钟",
+        "前端 ExceptionsList：UNKNOWN 任务展示完整受控操作矩阵（继续对账/人工确认已存在/确认无副作用并允许重试/停止自动对账），EXPIRED_UNKNOWN 仅两条人工闭环无重试；每个操作先弹确认窗（role=dialog）再执行；容量不可信实例以 role=alert 横幅展示；全页无任何再 Add 入口"
+    ],
+    "outputs": [
+        {
+            "path": "internal/unknownreconciler/commands.go",
+            "sha256": "d2dff66115375375639237b4fb4949f3856ebd5a7ebf2b12334dc4a13d5fbbd3"
+        },
+        {
+            "path": "internal/resourcesapi/exceptions.go",
+            "sha256": "bb8501789bfad40bfc1a54c40bc0914e34acb93b28f5c508d4550f73276f334f"
+        },
+        {
+            "path": "internal/resourcesapi/acknowledge.go",
+            "sha256": "123de97fec33184a7539fefff5b3c6ff692ad32737cbbf84c012d616815ba69f"
+        },
+        {
+            "path": "internal/resourcesapi/api.go",
+            "sha256": "4230b727771b1ced166d91051dd360c5592b3646c8c04a1d576dcf298dba4e6e"
+        },
+        {
+            "path": "web/src/features/exceptions/exceptions.ts",
+            "sha256": "c13589794726bd1c4eda5d85769593841a642254afead059e576e375013d2f4f"
+        },
+        {
+            "path": "web/src/components/exceptions/ExceptionsList.tsx",
+            "sha256": "70da611b59c3058853b6d5bf2bebce5903d8e3d0dbda4c21c24a39335d5e5ec1"
+        },
+        {
+            "path": "web/src/test/exceptions.test.tsx",
+            "sha256": "d17b1c590ace22f7fb5d12cd5fc46ba4144ca53e166154220e7dc4a2125d5d81"
+        },
+        {
+            "path": "web/src/styles.css",
+            "sha256": "9c233c175bad00ac9dc4d6d5cf76e6898417e40b4a80d304d5912ac3becccc4f"
+        }
+    ],
+    "checks": {
+        "unit": "PASS: pnpm test（web 41/41）+ go test ./internal/resourcesapi ./internal/unknownreconciler",
+        "all_tests": "PASS: go test ./... -count=1（75 包全绿）+ pnpm typecheck 干净",
+        "vet": "PASS: go vet ./...",
+        "action_matrix": "PASS: UNKNOWN 四项、EXPIRED_UNKNOWN 两项且无重试",
+        "confirm_dialog": "PASS: 先弹窗后执行，取消零副作用",
+        "no_re_add": "PASS: 全页按钮无再 Add 入口",
+        "clock_injection_fix": "PASS: 会话校验使用注入时钟，消除时间依赖",
+        "no_external_service_calls": "PASS"
+    },
+    "blocker": "本项仅完成 local-only Exceptions；UNKNOWN 列表来自 historyproject 投影（user_status=NEEDS_CONFIRMATION 筛选），真实快照证据由 SyncWatcher 接线后传入，未连接外部服务。"
+}

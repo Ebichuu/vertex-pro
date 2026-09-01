@@ -1,0 +1,10 @@
+﻿.git
+.github
+artifacts
+node_modules
+web/node_modules
+web/dist
+internal/webembed/dist
+*.db
+*.db-shm
+*.db-wal

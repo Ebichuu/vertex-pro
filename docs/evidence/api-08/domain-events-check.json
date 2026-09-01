@@ -1,0 +1,33 @@
+{
+    "item": "API-08",
+    "title": "领域事件原子写入",
+    "status": "IN_PROGRESS",
+    "local_status": "COMPLETE",
+    "branch": "local-only",
+    "implementation": [
+        "新增 internal/domainevents：Emit 在调用方事务内同时写入 race_events 与 event_stream，两行随事务一起提交或一起回滚，禁止先改状态后补事件",
+        "聚合修订号按触发器单调约束在事务内计算（当前聚合最大 revision+1）；race_events 三类（job.preparation.changed/job.state.changed/attempt.state.changed）同步落 event_stream（aggregate race_job/placement_attempt），其余类型（command.state.changed/capacity.state.changed/instance.health.changed/system.alert）仅入 event_stream",
+        "Append 提供无状态迁移场景（告警/健康事件）的独立事务写入；SafeDataJSON 必须已脱敏，event_stream 聚合类型与时间约束由数据库触发器兜底",
+        "commit/rollback 一致性测试：事务内状态更新+双事件提交后两表各一行；强制回滚后两表均零行"
+    ],
+    "outputs": [
+        {
+            "path": "internal/domainevents/events.go",
+            "sha256": "49ae7e35e94978a771d3af0d092cc18b0636e09b68bae1e0ffbb1946d97ab761"
+        },
+        {
+            "path": "internal/domainevents/events_test.go",
+            "sha256": "67b382b3a9be118f61b89aa278a052985235b4e1513fbfe235706b4a5a6c439b"
+        }
+    ],
+    "checks": {
+        "unit": "PASS: go test ./internal/domainevents -count=1",
+        "all_tests": "PASS: go test ./... -count=1",
+        "vet": "PASS: go vet ./...",
+        "atomic_commit": "PASS: 状态+race event+event stream 同事务提交",
+        "atomic_rollback": "PASS: 回滚后两表零行",
+        "monotonic_revision": "PASS: 聚合修订号按触发器单调",
+        "no_external_service_calls": "PASS"
+    },
+    "blocker": "本项仅完成 local-only 事件写入原语；SSE 服务消费 event_stream（API-09）与保留清理（OBS-03）待后续，未连接外部服务。"
+}

@@ -1,0 +1,54 @@
+{
+    "item": "UI-07",
+    "title": "History",
+    "status": "IN_PROGRESS",
+    "local_status": "COMPLETE",
+    "branch": "local-only",
+    "implementation": [
+        "后端 GET /api/v1/jobs 升级：apipaging 键元组 cursor 分页（created_at DESC + job_id DESC，删除期间稳定不重复不跳漏）、user_status/downloader 筛选、每条目携带 confirmed_at/finished_at/deleted_at/deletion_source",
+        "发现并修复投影排序缺陷：historyproject ORDER BY 第二键 job_id 缺 DESC，同 created_at 时实际为正序，与删除期间稳定分页的方向合同不一致；修正后排序合同为发现时间倒序",
+        "前端 HistoryTable 组件：表格呈现种子/来源/目标下载器/用户状态徽章（statusTone 四类配色）、状态筛选下拉（十个用户状态语言）、已删除行显示删除日期与证据来源（手动删除/生命周期策略/来源待确认）、加载更多按钮",
+        "HistoryPage 以 react-query 挂载生成客户端 listJobs，cursor 状态本地累积翻页，mergePages 按 id 去重",
+        "测试：后端 cursor 分页两页无重复+筛选不泄漏+删除任务保留且状态已删除；前端 5 项（表格四列、删除保留、筛选回调、加载更多、mergePages 去重）"
+    ],
+    "outputs": [
+        {
+            "path": "internal/resourcesapi/api.go",
+            "sha256": "4230b727771b1ced166d91051dd360c5592b3646c8c04a1d576dcf298dba4e6e"
+        },
+        {
+            "path": "internal/resourcesapi/history_test.go",
+            "sha256": "785c2efafaa353b301bd1116eb193fac7bba32ceee98abc2a461aee69c96097f"
+        },
+        {
+            "path": "internal/historyproject/history.go",
+            "sha256": "177f176383d560b44fa29b7ef129bbe1581db50511ea29f45d9d5d2653e1a601"
+        },
+        {
+            "path": "web/src/features/history/history.ts",
+            "sha256": "b0faa8a26547b431ec99e28213260f235ca593f138135d484952216698a65b4e"
+        },
+        {
+            "path": "web/src/components/history/HistoryTable.tsx",
+            "sha256": "f20ddf7749d3c5ab0ae281a98284b18205aea367db0c4710ac44673f68c5c4ec"
+        },
+        {
+            "path": "web/src/test/history.test.tsx",
+            "sha256": "a911fe01e7c569393414e7757266add45bfc872ef7223d09eca7850db0a25591"
+        },
+        {
+            "path": "web/src/app/router.tsx",
+            "sha256": "21dd567e79d049e38bbf67145e2b45ca510ab59b156f9433fdd274ce68999ff6"
+        }
+    ],
+    "checks": {
+        "unit": "PASS: go test ./internal/resourcesapi ./internal/historyproject + pnpm test（web 36/36）",
+        "all_tests": "PASS: go test ./... -count=1（75 包全绿）+ pnpm typecheck 干净",
+        "vet": "PASS: go vet ./...",
+        "cursor_pagination": "PASS: 两页翻页无重复、删除期间键元组稳定",
+        "filters": "PASS: user_status 筛选不泄漏其他状态",
+        "deletion_retention": "PASS: 已删除任务保留且显示删除时间与来源",
+        "no_external_service_calls": "PASS"
+    },
+    "blocker": "本项仅完成 local-only History 列表；详情时间线（HIS-03）与 History Detail 页面（UI-08）待后续，未连接外部服务。"
+}

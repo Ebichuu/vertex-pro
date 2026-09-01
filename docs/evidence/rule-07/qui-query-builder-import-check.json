@@ -1,0 +1,62 @@
+{
+    "item":  "RULE-07",
+    "status":  "IN_PROGRESS",
+    "branch":  "local-only",
+    "implementation":  [
+                           "imported five qui Query Builder source files from locked commit 8fcfc4d2beaf5e68ccebe837d7c0d9be965c8896",
+                           "preserved original GPL-2.0-or-later copyright and SPDX headers",
+                           "recorded imported file paths and SHA-256 digests in UPSTREAM_LOCK.yaml",
+                           "added import record and updated third-party license notice",
+                           "kept imported files outside production web/src until RULE-08 adaptation"
+                       ],
+    "test_commands":  {
+                          "frontend_test":  "pnpm --dir web test -- --run",
+                          "frontend_build":  "pnpm --dir web build",
+                          "import_check":  "PowerShell fixed-commit, SHA-256, SPDX, and GPL license check"
+                      },
+    "results":  {
+                    "frontend_test":  "PASS",
+                    "frontend_build":  "PASS",
+                    "import_check":  "PASS"
+                },
+    "inputs":  [
+                   {
+                       "path":  "third_party/qui/UPSTREAM_LOCK.yaml",
+                       "sha256":  "6e23493f777993f7f1b68d14a37b0a9fc51643e37614b2bca81b42a6ca5361f0"
+                   },
+                   {
+                       "path":  "third_party/qui/IMPORTED_QUERY_BUILDER.md",
+                       "sha256":  "bd1d5789d316944557caca8c411a2d608f62f4450e5dc45c17d74f36ab33a406"
+                   },
+                   {
+                       "path":  "third_party/qui/imported/web/src/components/query-builder/QueryBuilder.tsx",
+                       "sha256":  "5f8ed0d085d0c18d631ca924a204d70b93ae7eeec9e5126f5ff2316654c14c7d"
+                   },
+                   {
+                       "path":  "third_party/qui/imported/web/src/components/query-builder/ConditionGroup.tsx",
+                       "sha256":  "66cd28fe616988688bfa9e78ec8b8756cb6e824f424f7f99e123e25610a3ad74"
+                   },
+                   {
+                       "path":  "third_party/qui/imported/web/src/components/query-builder/LeafCondition.tsx",
+                       "sha256":  "8f3ff2f82e43741ec2c12881c381a52d457f6054f16242c3051f147dd91b7cfd"
+                   },
+                   {
+                       "path":  "third_party/qui/imported/web/src/components/query-builder/FieldCombobox.tsx",
+                       "sha256":  "992ba002677c4334c1d86942d4423ccd922bfd9789c9cd2f1ad1826c77eba090"
+                   },
+                   {
+                       "path":  "third_party/qui/imported/web/src/components/query-builder/constants.ts",
+                       "sha256":  "c0b4d755f2fc4c9de6d8f005e2c0b43fb9bb3b438883316005878661fd80c259"
+                   },
+                   {
+                       "path":  "docs/产品方案设计/THIRD_PARTY_NOTICES.md",
+                       "sha256":  "680f7b12fe62f473e86888d35ef4b85f382f9004ea18604ded983e1efad434af"
+                   },
+                   {
+                       "path":  "LICENSE",
+                       "sha256":  "edaef632cbb643e4e7a221717a6c441a4c1a7c918e6e4d56debc3d8739b233f6"
+                   }
+               ],
+    "blocker":  "RULE-08 field adaptation, dependency isolation, component integration, and upstream behavior comparison remain pending; no production route was changed.",
+    "no_external_service_calls":  true
+}

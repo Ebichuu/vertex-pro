@@ -1,0 +1,43 @@
+{
+  "item": "DB-01",
+  "status": "IN_PROGRESS",
+  "branch": "local-only",
+  "implementation": [
+    "pure-Go modernc.org/sqlite driver",
+    "WAL journal mode",
+    "busy_timeout configuration",
+    "foreign_keys=ON per connection",
+    "synchronous level configuration",
+    "database/sql connection pool limits"
+  ],
+  "test_commands": {
+    "package": "go test ./internal/db -count=1",
+    "all": "go test ./... -count=1",
+    "vet": "go vet ./..."
+  },
+  "results": {
+    "package": "PASS",
+    "all": "PASS",
+    "vet": "PASS"
+  },
+  "inputs": [
+    {
+      "path": "internal/db/connection.go",
+      "sha256": "8450b2a696c59b42707e5e26986decd1db9706a76ff4bbffdaef7a2b7a75b212"
+    },
+    {
+      "path": "internal/db/connection_test.go",
+      "sha256": "d2ea530e02874350bc0f10c8b6c9bcc0ab8731ff58aad20c92d0a41c0a80be12"
+    },
+    {
+      "path": "go.mod",
+      "sha256": "ce30f9a9ff9a9115ba5758b46a31e993a518b3ea260d23448b19e0ac57f16fb2"
+    },
+    {
+      "path": "go.sum",
+      "sha256": "a2f621e9eca51293823026c94bc10f5095ff1ca8d57a6d6ff424844f700da1b3"
+    }
+  ],
+  "blocker": "Migration runner, schema versions, repositories, triggers, and startup consistency checks remain future DB stages.",
+  "no_external_service_calls": true
+}

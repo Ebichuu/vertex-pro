@@ -1,0 +1,41 @@
+{
+    "item": "ADD-13",
+    "title": "启动恢复",
+    "status": "IN_PROGRESS",
+    "local_status": "COMPLETE",
+    "branch": "local-only",
+    "implementation": [
+        "新增 internal/startuprecover.Recover：进程启动时对全部投递链按 attempt_id 确定性重排，相同数据库状态与输入必然得到相同结果（kill -9 后确定性恢复）",
+        "不变量校验 fail-closed：ACTIVE/REFLECTING Reservation 的 reflected_physical_bytes 必须为 0（数据库 CHECK 之外的纵深防御）、链上 Attempt 必须与 Job 状态/指针镜像一致、RESERVED 链必须携带未开始的 SubmitIntent、ADD_SENT 必须有 STARTED intent；任一违规即返回违规清单并拒绝写入",
+        "终局 Attempt（HASH_SEEN/ALREADY_PRESENT/ADD_FAILED/RECONCILED_CONFIRMED/RECONCILED_NO_EFFECT/EXPIRED_UNKNOWN）的遗留 ACTIVE waiter 统一关闭（崩溃遗留）",
+        "RESERVED 且 intent 未开始的链（崩溃于 dispatch 开始前，可证明请求未发出）恢复 waiter 并标记为可恢复 dispatch；ADD_SENT/AWAITING_CONFIRMATION/UNKNOWN 链恢复缺失的 waiter 后保持等待事实，绝不自动重放网络请求，绝不按进程退出时间释放 Reservation",
+        "waiter 重新注册复用 syncwaiter.Register，依据 SubmitIntent 冻结的 Add 前基线快照（FK 校验完整快照存在且完整），deadline 由恢复输入窗口推导；syncwaiter 同步允许 UNKNOWN 链重新注册（仍在等待对账快照）",
+        "不修改 Attempt/Job/Reservation 状态本身：恢复只重排 waiter 与分类，状态推进仍由 StateMachine/对账/人工命令执行"
+    ],
+    "outputs": [
+        {
+            "path": "internal/startuprecover/recover.go",
+            "sha256": "39a0d7642ade305f7b3346e7f2229cbf09da2e1274cc6f059e618257f7837f57"
+        },
+        {
+            "path": "internal/startuprecover/recover_test.go",
+            "sha256": "45e59deb57902f71572bcdaadf3e7abc6b147f838a0804fc77407a135654e2da"
+        },
+        {
+            "path": "internal/syncwaiter/waiter.go",
+            "sha256": "082782ca39b70128823cb60ffd53175ac49d480e0daac54c1be2e70a7cd0bb5c"
+        }
+    ],
+    "checks": {
+        "unit": "PASS: go test ./internal/startuprecover ./internal/syncwaiter -count=1",
+        "all_tests": "PASS: go test ./... -count=1",
+        "vet": "PASS: go vet ./...",
+        "deterministic_recovery": "PASS: 五种崩溃点（未注册/存活/丢失/遗留/已发送）恢复后二次重启收敛，不再产生新写入",
+        "fail_closed_on_violation": "PASS: 镜像破坏或歧义链时返回违规清单且零写入",
+        "no_auto_replay": "PASS: 恢复只重排 waiter 与分类，不发送网络请求",
+        "no_deadline_release": "PASS: 恢复路径不释放任何 Reservation",
+        "no_external_service_calls": "PASS"
+    },
+    "blocker": "本项仅完成 local-only 启动恢复；真实 SnapshotStore digest 校验与 rid=0 重建（8.7.7 第 2 步）依赖 qui 接线（QUI-08/09 后续），未连接外部服务。",
+    "no_external_service_calls": true
+}

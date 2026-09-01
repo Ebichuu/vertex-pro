@@ -1,0 +1,31 @@
+{
+  "status": "PASS",
+  "safety": {
+    "read_only_http": true,
+    "network_write_attempts": 0,
+    "external_task_set_unmodified": true,
+    "temporary_database_removed": true,
+    "secrets_redacted": true
+  },
+  "observation": {
+    "test_identity_present": true,
+    "inactive": true,
+    "state": "stoppedDL",
+    "amount_left_known": true
+  },
+  "transaction": {
+    "reservation_atomic_created": true,
+    "first_call_idempotent": false,
+    "replay_idempotent": true,
+    "attempt_state": "ALREADY_PRESENT",
+    "attempt_dispatch_state": "NOT_STARTED",
+    "side_effect_fact": "OBSERVED_EFFECT",
+    "job_state": "ALREADY_PRESENT",
+    "observation_state": "NOT_APPLICABLE",
+    "binding_owner_kind": "UNMANAGED",
+    "reservation_state": "RELEASED",
+    "release_reason": "ALREADY_PRESENT",
+    "intent_dispatch_state": "NOT_STARTED",
+    "transition_event_count": 2
+  }
+}

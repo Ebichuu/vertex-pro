@@ -1,0 +1,44 @@
+{
+    "item":  "CAP-01",
+    "title":  "StorageTarget 与证据",
+    "status":  "IN_PROGRESS",
+    "local_status":  "COMPLETE",
+    "branch":  "local-only",
+    "implementation":  [
+                           "StorageTarget managed root、qB 默认保存路径、filesystem key 和 configuration revision 模型",
+                           "OPERATOR_DEVICE_EVIDENCE 验证记录模型",
+                           "路径、目标、filesystem key、digest、验证人、状态和 revision 一致性校验",
+                           "证据过期、未来时间、非法路径、配置变更和非事实布尔方法统一 fail closed 为 UNVERIFIED"
+                       ],
+    "inputs":  [
+                   {
+                       "path":  "docs/实施流程/VERTEX_PRO_V1_CODE_IMPLEMENTATION_PLAYBOOK.md:656",
+                       "note":  "CAP-01 产物和检查合同"
+                   },
+                   {
+                       "path":  "docs/产品方案设计/VERTEX_PRO_COMPLETE_REDESIGN_V1_RC8_FINAL.md:1034",
+                       "note":  "StorageTarget 硬约束与证据字段"
+                   }
+               ],
+    "outputs":  [
+                    {
+                        "path":  "internal/storageverify/verify.go",
+                        "sha256":  "f62e2fd2d9db83dd5288129b050a85c7e4a67642e3999e07f952b8d622e35fb2"
+                    },
+                    {
+                        "path":  "internal/storageverify/verify_test.go",
+                        "sha256":  "1df904960238c39d5cf34975f274bd0df6d9934d8ba40fb779ff1510a407b6a3"
+                    }
+                ],
+    "checks":  {
+                   "unit":  "PASS: go test ./internal/storageverify -count=1",
+                   "all_tests":  "PASS: go test ./... -count=1",
+                   "vet":  "PASS: go vet ./...",
+                   "path_mismatch":  "PASS",
+                   "evidence_expiry":  "PASS",
+                   "configuration_revision_invalidation":  "PASS",
+                   "boolean_attestation_rejected":  "PASS"
+               },
+    "blocker":  "CAP-02 及后续容量快照、SQLite 持久化和 Placement 接线尚未实现；本项不开放真实 Add 路径。",
+    "no_external_service_calls":  true
+}

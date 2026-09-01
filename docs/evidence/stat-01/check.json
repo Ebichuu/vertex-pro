@@ -1,0 +1,32 @@
+{
+    "item": "stat-01",
+    "title": "StatsSampler",
+    "status": "IN_PROGRESS",
+    "local_status": "COMPLETE",
+    "branch": "local-only",
+    "implementation": [
+        "新增 internal/statssampler：按合同优先级解析 qB 统计——SYNC_MAINDATA 的 server_state 优先，TRANSFER_INFO 兜底，来源随样本标记（Source 字段）",
+        "字段缺失/类型错误/负数/超界一律记入 Missing 并归零对应值，HasCounters/HasRates 显式区分可用性；任一字段可解析即采用该来源，四个字段全缺才降级下一来源",
+        "计数缺失时不产生可用增量（配合 STAT-02 只建基线），速率缺失不得补造"
+    ],
+    "outputs": [
+        {
+            "path": "internal/statssampler/sampler.go",
+            "sha256": "8272a8fe90f32590d3f827cb5a5c9279c34b0fd481e5d2aebefd540805052f18"
+        },
+        {
+            "path": "internal/statssampler/sampler_test.go",
+            "sha256": "e362eb3e3e36d062854f2487b289f78b09551a2ea0f82f36c41977fa2fb258b6"
+        }
+    ],
+    "checks": {
+        "unit": "PASS",
+        "all_tests": "PASS",
+        "vet": "PASS",
+        "source_priority": "PASS",
+        "missing_field_flagging": "PASS",
+        "no_external_service_calls": "PASS"
+    },
+    "no_external_service_calls": true,
+    "blocker": "本项仅完成 local-only 采样解析；真实 qui/qB 响应接线与定时采样调度待后续，未连接外部服务。"
+}

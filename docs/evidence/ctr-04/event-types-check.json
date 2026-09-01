@@ -1,0 +1,46 @@
+{
+    "mode":  "local-only",
+    "source":  "docs/产品方案设计/VERTEX_PRO_COMPLETE_REDESIGN_V1_RC8_FINAL.md",
+    "implementation_boundary":  [
+                                    "SSE handler, event persistence and generated Go/TS types remain pending",
+                                    "No real qui/qB or Add connection"
+                                ],
+    "contract":  "contracts/event_types.yaml",
+    "updated_at":  "2026-08-24T00:00:00Z",
+    "owner":  "Codex",
+    "events":  [
+                   "stream.ready",
+                   "stream.reset_required",
+                   "job.preparation.changed",
+                   "job.state.changed",
+                   "attempt.state.changed",
+                   "command.state.changed",
+                   "capacity.state.changed",
+                   "instance.health.changed",
+                   "stats.realtime",
+                   "system.alert"
+               ],
+    "status":  "IN_PROGRESS",
+    "item":  "CTR-04",
+    "boundaries":  [
+                       "Persisted events retain event_id and replay for at least 7 days",
+                       "A connection replays at most 5000 events",
+                       "Expired or excessive replay emits reset_required and closes",
+                       "stats.realtime is transient and non-replayable",
+                       "Heartbeat is a 15 second SSE comment and consumes no event ID"
+                   ],
+    "checks":  [
+                   {
+                       "result":  "PASS",
+                       "command":  "event type contract encoding and required entries test"
+                   },
+                   {
+                       "result":  "PASS",
+                       "command":  "go test ./... -count=1"
+                   },
+                   {
+                       "result":  "PASS",
+                       "command":  "go vet ./..."
+                   }
+               ]
+}

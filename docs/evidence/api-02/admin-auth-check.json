@@ -1,0 +1,37 @@
+{
+    "item": "API-02",
+    "title": "单管理员认证",
+    "status": "IN_PROGRESS",
+    "local_status": "COMPLETE",
+    "branch": "local-only",
+    "implementation": [
+        "新增 internal/adminauth：单管理员凭据与会话状态保存于 vertex_pro_meta（key: admin.*），不引入新表与新依赖",
+        "首次初始化：Initialize 仅在未初始化时接受，口令最小长度 12（local-only 默认策略），使用 PBKDF2-HMAC-SHA256（600000 迭代、16 字节随机盐、32 字节密钥）存储格式化哈希，比较走 crypto/subtle 常量时间",
+        "Session：Login 签发 32 字节随机令牌（base64url），数据库仅保存 SHA-256；固定会话语义——新登录替换旧会话；ValidateSession 校验令牌哈希与过期时间（注入 now）；Logout 幂等注销",
+        "暴力尝试防线：连续失败 5 次锁定 15 分钟（成功登录清零）；锁定窗口内即使口令正确也拒绝；失败计数与拒绝决定在同一 BEGIN IMMEDIATE 提交（计数不能随拒绝回滚），锁定到期后自动恢复",
+        "handler 集成边界：本包仅提供应用服务，HTTP cookie 属性与路由注册属 API-03/04 的中间件与 handler 层"
+    ],
+    "outputs": [
+        {
+            "path": "internal/adminauth/auth.go",
+            "sha256": "6780ca02f69c7177955e7c8c1bb762c0d2945d012d89e5fd37e18abe22b5b389"
+        },
+        {
+            "path": "internal/adminauth/auth_test.go",
+            "sha256": "a9d294df21a8367d0cfce2f935bd58f8d17aef1138fb674374bbdb9f09502a20"
+        }
+    ],
+    "checks": {
+        "unit": "PASS: go test ./internal/adminauth -count=1",
+        "all_tests": "PASS: go test ./... -count=1",
+        "vet": "PASS: go vet ./...",
+        "first_run_initialization": "PASS: 未初始化可设置，重复初始化拒绝，弱口令拒绝",
+        "password_hash": "PASS: PBKDF2 格式校验、正确/错误口令与畸形哈希行为",
+        "fixed_session": "PASS: 新登录替换旧会话，旧令牌立即失效",
+        "brute_force": "PASS: 连续失败 5 次锁定，窗口内正确口令被拒，到期恢复",
+        "session_expiry_and_logout": "PASS: 过期校验、登出后失效、错误令牌登出幂等",
+        "no_external_service_calls": "PASS"
+    },
+    "blocker": "本项仅完成 local-only 认证应用服务；HTTP 登录端点、cookie 安全属性与 CSRF/Origin 校验属 API-03/04，未连接外部服务。",
+    "no_external_service_calls": true
+}

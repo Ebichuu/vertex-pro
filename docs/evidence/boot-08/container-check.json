@@ -1,0 +1,32 @@
+{
+  "check": "BOOT-08 single binary and container",
+  "status": "IN_PROGRESS",
+  "local_status": "PASS",
+  "branch": "local-only",
+  "image": "vertex-pro:local",
+  "image_digest": "sha256:23ddc544a950ce756aa45847ccf9766fa027785f817e45a76fc0cd6daa9373db",
+  "docker_build": "PASS",
+  "build_command": "docker build -f deploy/docker/Dockerfile -t vertex-pro:local .",
+  "runtime_command": "docker run --rm -d --name vertex-pro-evidence -p 18082:8080 --read-only --cap-drop ALL --security-opt no-new-privileges --tmpfs /tmp -e VERTEX_PRO_DATABASE=/tmp/vertex-pro.db vertex-pro:local",
+  "runtime": {
+    "healthz": { "status": 200, "body": "ok" },
+    "readyz": { "status": 200, "body": "ready" },
+    "auth_status": { "status": 200, "body": { "authenticated": false, "initialized": false } },
+    "resource_without_session": { "status": 401, "code": "UNAUTHENTICATED" },
+    "events_stream_without_session": { "status": 401, "code": "UNAUTHENTICATED" },
+    "user": "nonroot:nonroot",
+    "read_only_rootfs": true,
+    "cap_drop": ["ALL"],
+    "no_new_privileges": true,
+    "database_path": "/tmp/vertex-pro.db"
+  },
+  "compose": {
+    "file": "deploy/compose/lab/compose.yaml",
+    "build": "NOT_RECHECKED",
+    "http_boundary": "NOT_RECHECKED",
+    "cleanup": "NOT_RECHECKED"
+  },
+  "known_environment_blocker": "A separate explicit --tmpfs /tmp:rw,nosuid,size=64m run failed at SQLite open with out of memory (14); the default /tmp tmpfs used above passed.",
+  "artifacts": ["deploy/docker/Dockerfile", "deploy/docker/README.md", ".dockerignore", "deploy/compose/lab/compose.yaml", "deploy/compose/lab/docker-compose.yml", "internal/webembed/embed.go"],
+  "scope_note": "Current evidence covers image build and direct container/HTTP boundary acceptance only; real qui/qB integration is not covered."
+}
