@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -15,21 +16,29 @@ import (
 	"github.com/vertex-pro/vertex-pro/internal/db"
 	"github.com/vertex-pro/vertex-pro/internal/dispatchflow"
 	"github.com/vertex-pro/vertex-pro/internal/httpapi"
+	"github.com/vertex-pro/vertex-pro/internal/matchpipeline"
 	"github.com/vertex-pro/vertex-pro/internal/profileverify"
 	"github.com/vertex-pro/vertex-pro/internal/qbprofile"
 	"github.com/vertex-pro/vertex-pro/internal/qui/control"
 	"github.com/vertex-pro/vertex-pro/internal/qui/proxy"
+	"github.com/vertex-pro/vertex-pro/internal/racejob"
+	"github.com/vertex-pro/vertex-pro/internal/racejobstore"
 	"github.com/vertex-pro/vertex-pro/internal/realtimecards"
 	"github.com/vertex-pro/vertex-pro/internal/resourcesapi"
 	"github.com/vertex-pro/vertex-pro/internal/rssfetch"
 	"github.com/vertex-pro/vertex-pro/internal/rsspreview"
 	"github.com/vertex-pro/vertex-pro/internal/rssservice"
+	"github.com/vertex-pro/vertex-pro/internal/rsssource"
+	"github.com/vertex-pro/vertex-pro/internal/rsssourcedb"
+	"github.com/vertex-pro/vertex-pro/internal/ruleaggregate"
 	"github.com/vertex-pro/vertex-pro/internal/ruleservice"
+	"github.com/vertex-pro/vertex-pro/internal/schedulercycle"
 	"github.com/vertex-pro/vertex-pro/internal/secrets"
 	"github.com/vertex-pro/vertex-pro/internal/snapshot"
 	"github.com/vertex-pro/vertex-pro/internal/sseserver"
 	"github.com/vertex-pro/vertex-pro/internal/startuprecover"
 	"github.com/vertex-pro/vertex-pro/internal/syncwatcher"
+	"github.com/vertex-pro/vertex-pro/internal/torrentdownload"
 	"github.com/vertex-pro/vertex-pro/internal/webembed"
 )
 
@@ -44,6 +53,17 @@ type Config struct {
 	RecoveryConfirmationWindow   time.Duration
 	RecoveryReconciliationWindow time.Duration
 	Qui                          *QuiConfig
+	Scheduler                    *SchedulerConfig
+}
+
+// SchedulerConfig enables the RSS poll cycle. The cycle stops at race job
+// creation; dispatching those jobs requires the dispatch runtime, which stays
+// gated on EnableDispatch and a VERIFIED profile.
+type SchedulerConfig struct {
+	Enabled              bool
+	PollInterval         time.Duration
+	AllowedArtifactHosts []string
+	MatchFactory         matchpipeline.MatchFactory
 }
 
 // QuiConfig enables the qui control/profile/sync runtime. Dispatch remains
@@ -75,6 +95,7 @@ type Runtime struct {
 	hub           *sseserver.Hub
 	watcher       *syncwatcher.Watcher
 	confirmations *confirmcoordinator.Coordinator
+	scheduler     *schedulercycle.Cycle
 	cancel        context.CancelFunc
 	workers       sync.WaitGroup
 }
@@ -174,7 +195,7 @@ func New(ctx context.Context, config Config) (*Runtime, error) {
 	mux.Handle("/", webembed.Handler())
 	runtime := &Runtime{Database: database, Auth: auth, Handler: mux, Recovery: recovery, hub: hub}
 	if config.Qui != nil {
-		if err := runtime.startQui(ctx, *config.Qui, now); err != nil {
+		if err := runtime.startQui(ctx, *config.Qui, config.Scheduler, now); err != nil {
 			return nil, err
 		}
 	}
@@ -217,7 +238,7 @@ func (runtime *Runtime) SubscriberCount() int {
 	return runtime.hub.SubscriberCount()
 }
 
-func (runtime *Runtime) startQui(ctx context.Context, config QuiConfig, now func() time.Time) error {
+func (runtime *Runtime) startQui(ctx context.Context, config QuiConfig, schedulerConfig *SchedulerConfig, now func() time.Time) error {
 	if strings.TrimSpace(config.InstanceID) == "" {
 		return errors.New("qui instance ID is required")
 	}
@@ -307,11 +328,36 @@ func (runtime *Runtime) startQui(ctx context.Context, config QuiConfig, now func
 	if err != nil {
 		return fmt.Errorf("initialize confirmation coordinator: %w", err)
 	}
+	runtime.confirmations = confirmations
 	runtime.Profile = &profile
 	runtime.watcher = watcher
-	runtime.confirmations = confirmations
 	workerContext, cancel := context.WithCancel(context.Background())
 	runtime.cancel = cancel
+	if schedulerConfig != nil && schedulerConfig.Enabled {
+		scheduler, err := newSchedulerCycle(runtime.Database, schedulerConfig, config.InstanceID)
+		if err != nil {
+			return fmt.Errorf("initialize scheduler: %w", err)
+		}
+		runtime.scheduler = scheduler
+		pollInterval := schedulerConfig.PollInterval
+		if pollInterval <= 0 {
+			pollInterval = 5 * time.Minute
+		}
+		runtime.workers.Add(1)
+		go func() {
+			defer runtime.workers.Done()
+			ticker := time.NewTicker(pollInterval)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-workerContext.Done():
+					return
+				case <-ticker.C:
+					_ = runtime.RunSchedulerCycle(workerContext)
+				}
+			}
+		}()
+	}
 	interval := config.SyncInterval
 	if interval <= 0 {
 		interval = 10 * time.Second
@@ -331,6 +377,111 @@ func (runtime *Runtime) startQui(ctx context.Context, config QuiConfig, now func
 		}
 	}()
 	return nil
+}
+
+// RunSchedulerCycle polls every enabled feed once: fetch, dedupe, download,
+// identify, and match. Job creation is the end of the cycle; dispatching is
+// owned by the dispatch runtime and never happens here.
+func (runtime *Runtime) RunSchedulerCycle(ctx context.Context) error {
+	if runtime.scheduler == nil {
+		return fmt.Errorf("scheduler is not enabled")
+	}
+	feeds, err := runtime.databaseEnabledFeeds(ctx)
+	if err != nil {
+		return err
+	}
+	var firstErr error
+	for _, feed := range feeds {
+		if _, err := runtime.scheduler.Run(ctx, feed); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
+}
+
+func (runtime *Runtime) databaseEnabledFeeds(ctx context.Context) ([]schedulercycle.FeedRef, error) {
+	rows, err := runtime.Database.QueryContext(ctx, `SELECT site_id, feed_id, feed_url FROM feeds WHERE enabled = 1`)
+	if err != nil {
+		return nil, fmt.Errorf("list enabled feeds: %w", err)
+	}
+	defer rows.Close()
+	feeds := make([]schedulercycle.FeedRef, 0, 8)
+	for rows.Next() {
+		var feed schedulercycle.FeedRef
+		if err := rows.Scan(&feed.SiteID, &feed.FeedID, &feed.URL); err != nil {
+			return nil, err
+		}
+		feeds = append(feeds, feed)
+	}
+	return feeds, rows.Err()
+}
+
+func newSchedulerCycle(database *sql.DB, config *SchedulerConfig, instanceID string) (*schedulercycle.Cycle, error) {
+	fetcher, err := rssfetch.New(nil, 1<<20)
+	if err != nil {
+		return nil, err
+	}
+	downloader, err := torrentdownload.New(torrentdownload.Config{AllowedHosts: config.AllowedArtifactHosts})
+	if err != nil {
+		return nil, err
+	}
+	sourceStore, err := rsssourcedb.New(database)
+	if err != nil {
+		return nil, err
+	}
+	dedupe, err := rsssource.New(sourceStore)
+	if err != nil {
+		return nil, err
+	}
+	rulesService, err := ruleservice.New(database, nil)
+	if err != nil {
+		return nil, err
+	}
+	jobStore, err := racejobstore.New(database)
+	if err != nil {
+		return nil, err
+	}
+	creator, err := racejob.New(jobStore, nil)
+	if err != nil {
+		return nil, err
+	}
+	factory := config.MatchFactory
+	if factory == nil {
+		factory = defaultMatchFactory(instanceID)
+	}
+	return schedulercycle.New(fetcher, downloader, dedupe, matchpipeline.Deps{
+		Rules: &rulesService, JobCreator: creator, MatchFactory: factory,
+	}, 1<<20)
+}
+
+// defaultMatchFactory targets the configured qui instance unless the rule
+// definition carries its own action set.
+func defaultMatchFactory(instanceID string) matchpipeline.MatchFactory {
+	return func(rule ruleservice.Rule) (ruleaggregate.Match, error) {
+		definition := struct {
+			ActionSetJSON string `json:"action_set_json"`
+		}{}
+		if err := json.Unmarshal(rule.Definition, &definition); err != nil {
+			return ruleaggregate.Match{}, fmt.Errorf("decode rule %s definition: %w", rule.ID, err)
+		}
+		if definition.ActionSetJSON == "" {
+			return ruleaggregate.Match{TargetMode: "FIXED_INSTANCE", TargetInstanceID: instanceID, ParticipationWindow: time.Hour}, nil
+		}
+		actions := struct {
+			TargetMode       string `json:"target_mode"`
+			TargetInstanceID string `json:"target_instance_id"`
+			Window           int    `json:"participation_window_minutes"`
+		}{}
+		if err := json.Unmarshal([]byte(definition.ActionSetJSON), &actions); err != nil {
+			return ruleaggregate.Match{}, fmt.Errorf("decode rule %s action set: %w", rule.ID, err)
+		}
+		window := time.Hour
+		if actions.Window > 0 {
+			window = time.Duration(actions.Window) * time.Minute
+		}
+		match := ruleaggregate.Match{TargetMode: actions.TargetMode, TargetInstanceID: actions.TargetInstanceID, ParticipationWindow: window}
+		return match, nil
+	}
 }
 
 // TickSync performs one sync cycle synchronously: fetch the delta, drive the
