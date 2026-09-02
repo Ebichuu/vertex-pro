@@ -38,3 +38,4 @@ Thumbs.db
 # Temp sketch files and skill cache
 *.sketch.json
 .od-skills/
+*.exe
