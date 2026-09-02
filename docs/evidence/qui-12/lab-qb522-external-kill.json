@@ -1,0 +1,50 @@
+{
+  "status": "PASS",
+  "profile": "QB_522",
+  "safety": {
+    "explicit_isolated_lab_opt_in": true,
+    "baseline_empty": true,
+    "start_inactive": true,
+    "trackerless": true,
+    "production_services_called": false,
+    "delete_only_added_identity": true,
+    "lab_returned_empty": true,
+    "temporary_database_removed": true,
+    "secrets_redacted": true
+  },
+  "placement_gate": {
+    "profile_state": "EXPECTED",
+    "selected": false,
+    "rejection_code": "PROFILE_NOT_VERIFIED",
+    "lab_bypass": "TRANSACTION_FIXTURE_ONLY_NO_PROFILE_PROMOTION"
+  },
+  "fault": {
+    "mode": "external_kill",
+    "sender_calls": 1,
+    "automatic_redispatches": 0,
+    "child_terminated": true,
+    "child_exited_abruptly": true,
+    "durable_marker_before_send": true,
+    "startup_recovery_promoted_unknown": true,
+    "replay_blocked": true,
+    "reconciler_outcome": "RECONCILED_CONFIRMED"
+  },
+  "transaction": {
+    "intent_dispatch": "STARTED",
+    "attempt_final": "RECONCILED_CONFIRMED",
+    "job_final": "RECONCILED_CONFIRMED",
+    "reservation_final": "REFLECTING",
+    "waiter_closed": true,
+    "binding_created": true,
+    "sync_matched": true,
+    "observed_state": "stoppedDL",
+    "observed_inactive": true,
+    "dispatch_http_status": 0,
+    "dispatch_format": "",
+    "dispatch_commit_state": "",
+    "response_fact_recorded": false,
+    "event_count": 3,
+    "sync_evidence_source": "QBITTORRENT_SYNC",
+    "first_confirm_replay_idempotent": false
+  }
+}

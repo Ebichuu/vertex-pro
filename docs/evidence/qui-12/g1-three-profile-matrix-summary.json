@@ -1,9 +1,9 @@
 {
   "item": "QUI-12 / ADD-05..14",
   "status": "IN_PROGRESS",
-  "generated_at": "2026-09-02T14:42:49Z",
+  "generated_at": "2026-09-02T15:03:54Z",
   "source": {
-    "git_commit": "a314d42aa25a0f43fcdbc1bcc8d2aa6baa825828",
+    "git_commit": "5c642c0e2cf974f0d711427989bee47ed934dc09",
     "git_clean": false,
     "report_count": 18
   },
@@ -288,16 +288,40 @@
     "status": "PASS",
     "note": "All reports were produced after the pre-send durable marker was added."
   },
+  "external_kill_matrix": {
+    "status": "PASS",
+    "expected_reports": 3,
+    "passed_reports": 3,
+    "automatic_redispatches": 0,
+    "reports": [
+      {
+        "profile": "QB_438",
+        "status": "PASS",
+        "path": "docs/evidence/qui-12/lab-qb438-external-kill.json",
+        "sha256": "132c008ed982cabc658eea738db5713af46c342083e5e47d3e36a36de970eeb3"
+      },
+      {
+        "profile": "QB_504",
+        "status": "PASS",
+        "path": "docs/evidence/qui-12/lab-qb504-external-kill.json",
+        "sha256": "40f51b97ed71a71ff11ca34272a2a0c48b773df06d763027ab36fd9ecc9162ef"
+      },
+      {
+        "profile": "QB_522",
+        "status": "PASS",
+        "path": "docs/evidence/qui-12/lab-qb522-external-kill.json",
+        "sha256": "ef72d99828c80f5f45548c513ecc105502323aade3b6cf9bcae3baf82d3ec8a6"
+      }
+    ]
+  },
   "verification_decision": {
     "profile_state": "EXPECTED",
     "may_promote_to_verified": false,
     "g1_gate": "PENDING"
   },
   "remaining_before_profile_verified": [
-    "Rerun all 18 three-profile transaction/fault cases against the current pre-send durable-marker implementation.",
-    "Execute an external process kill -9 scenario after body send and before response commit; prove startup recovery reaches UNKNOWN without another Add.",
-    "Persist profile_verification_runs and bind promotion to immutable run/report digests.",
+    "Archive redacted Add/Sync/tracker/transfer-info golden fixtures per profile and persist their digests in verification runs.",
     "Pin the transaction harness image and emit a complete immutable image/source digest manifest.",
-    "Run the P0 matrix three consecutive times from a clean commit and archive all reports plus SHA-256 digests."
+    "Run the P0 matrix (including external kill -9) three consecutive times from a clean commit and record profile_verification_runs for all repetitions."
   ]
 }

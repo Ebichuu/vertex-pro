@@ -98,6 +98,9 @@ func main() {
 }
 
 func run(ctx context.Context) error {
+	if os.Getenv(kill9ChildEnv) == "1" {
+		return runKill9Child(ctx)
+	}
 	if os.Getenv("VERTEX_PRO_G1_ISOLATED_LAB") != isolatedLabConfirmation {
 		return errors.New("isolated lab confirmation is missing")
 	}
@@ -123,7 +126,7 @@ func run(ctx context.Context) error {
 	if faultMode == "" {
 		faultMode = "none"
 	}
-	if faultMode != "none" && faultMode != "response_loss" && faultMode != "timeout" && !isSyntheticTransportMode(faultMode) {
+	if faultMode != "none" && faultMode != "response_loss" && faultMode != "timeout" && faultMode != "external_kill" && !isSyntheticTransportMode(faultMode) {
 		return fmt.Errorf("unsupported VERTEX_PRO_G1_FAULT_MODE %q", faultMode)
 	}
 	baselineDelta, err := client.Fetch(ctx, 0)
@@ -187,6 +190,9 @@ func run(ctx context.Context) error {
 
 	now := time.Now().UTC().Truncate(time.Second)
 	baselineDigest := snapshotDigest(baseline.Snapshot)
+	if faultMode == "external_kill" {
+		return runExternalKill(ctx, client, profile, identity, identityKey, name, rejection, baselineDigest)
+	}
 	if err := seedTransaction(ctx, database, identityKey, baselineDigest, now); err != nil {
 		return err
 	}

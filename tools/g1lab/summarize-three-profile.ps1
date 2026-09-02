@@ -43,8 +43,7 @@ $reports = @()
 $allHaveDurableMarkerEvidence = $true
 foreach ($profile in $profiles) {
     $profileName = $profile.ToLowerInvariant().Replace('_', '')
-    foreach ($mode in $modes.Keys) {
-        $fileName = "lab-$profileName-$($modes[$mode]).json"
+    foreach ($mode in $modes.Keys) {        $fileName = "lab-$profileName-$($modes[$mode]).json"
         $path = Join-Path $EvidenceRoot $fileName
         if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
             throw "missing G1 matrix evidence: $fileName"
@@ -93,6 +92,43 @@ foreach ($profile in $profiles) {
     }
 }
 
+$killReports = @()
+foreach ($profile in $profiles) {
+    $profileName = $profile.ToLowerInvariant().Replace('_', '')
+    $fileName = "lab-$profileName-external-kill.json"
+    $path = Join-Path $EvidenceRoot $fileName
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+        throw "missing external kill -9 evidence: $fileName"
+    }
+    $record = Get-Content -LiteralPath $path -Raw -Encoding utf8 | ConvertFrom-Json
+    Assert-Equal $record.status 'PASS' "$fileName status"
+    Assert-Equal $record.profile $profile "$fileName profile"
+    Assert-Equal $record.fault.mode 'external_kill' "$fileName mode"
+    Assert-Equal ([int]$record.fault.sender_calls) 1 "$fileName sender_calls"
+    Assert-Equal ([int]$record.fault.automatic_redispatches) 0 "$fileName automatic_redispatches"
+    Assert-Equal ([bool]$record.fault.child_terminated) $true "$fileName child_terminated"
+    Assert-Equal ([bool]$record.fault.child_exited_abruptly) $true "$fileName child_exited_abruptly"
+    Assert-Equal ([bool]$record.fault.durable_marker_before_send) $true "$fileName durable_marker_before_send"
+    Assert-Equal ([bool]$record.fault.startup_recovery_promoted_unknown) $true "$fileName startup_recovery_promoted_unknown"
+    Assert-Equal ([bool]$record.fault.replay_blocked) $true "$fileName replay_blocked"
+    Assert-Equal $record.fault.reconciler_outcome 'RECONCILED_CONFIRMED' "$fileName reconciler_outcome"
+    Assert-Equal ([bool]$record.safety.production_services_called) $false "$fileName production_services_called"
+    Assert-Equal ([bool]$record.safety.lab_returned_empty) $true "$fileName lab_returned_empty"
+    Assert-Equal ([bool]$record.safety.temporary_database_removed) $true "$fileName temporary_database_removed"
+    Assert-Equal ([bool]$record.safety.secrets_redacted) $true "$fileName secrets_redacted"
+    Assert-Equal $record.placement_gate.profile_state 'EXPECTED' "$fileName profile state"
+    Assert-Equal $record.transaction.attempt_final 'RECONCILED_CONFIRMED' "$fileName attempt final"
+    Assert-Equal $record.transaction.intent_dispatch 'STARTED' "$fileName intent dispatch"
+    Assert-Equal ([bool]$record.transaction.response_fact_recorded) $false "$fileName response fact must stay NULL"
+    Assert-Equal ([bool]$record.transaction.waiter_closed) $true "$fileName waiter closed"
+    $killReports += [pscustomobject][ordered]@{
+        profile = $profile
+        status = 'PASS'
+        path = "docs/evidence/qui-12/$fileName"
+        sha256 = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+    }
+}
+
 $gitCommit = (& git -C $root rev-parse HEAD 2>$null | Out-String).Trim()
 $gitStatus = (& git -C $root status --porcelain 2>$null | Out-String)
 $summary = [ordered]@{
@@ -126,17 +162,22 @@ $summary = [ordered]@{
             'The archived 18-case matrix predates the pre-send durable marker evidence fields and must be rerun against the current code.'
         }
     }
+    external_kill_matrix = [ordered]@{
+        status = if (@($killReports).Count -eq 3) { 'PASS' } else { 'FAIL' }
+        expected_reports = 3
+        passed_reports = @($killReports).Count
+        automatic_redispatches = 0
+        reports = $killReports
+    }
     verification_decision = [ordered]@{
         profile_state = 'EXPECTED'
         may_promote_to_verified = $false
         g1_gate = 'PENDING'
     }
     remaining_before_profile_verified = @(
-        'Rerun all 18 three-profile transaction/fault cases against the current pre-send durable-marker implementation.',
-        'Execute an external process kill -9 scenario after body send and before response commit; prove startup recovery reaches UNKNOWN without another Add.',
-        'Persist profile_verification_runs and bind promotion to immutable run/report digests.',
+        'Archive redacted Add/Sync/tracker/transfer-info golden fixtures per profile and persist their digests in verification runs.',
         'Pin the transaction harness image and emit a complete immutable image/source digest manifest.',
-        'Run the P0 matrix three consecutive times from a clean commit and archive all reports plus SHA-256 digests.'
+        'Run the P0 matrix (including external kill -9) three consecutive times from a clean commit and record profile_verification_runs for all repetitions.'
     )
 }
 

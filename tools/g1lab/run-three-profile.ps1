@@ -177,6 +177,24 @@ try {
             $profileName = $profile.ToLowerInvariant().Replace('_', '')
             Set-Content -LiteralPath (Join-Path $evidenceRoot "lab-$profileName-$suffix.json") -Value $output -Encoding utf8
         }
+
+        $env:VERTEX_PRO_G1_FAULT_MODE = 'external_kill'
+        $killOutput = (& go run ./tools/qutransactionprobe 2>&1 | Out-String).Trim()
+        if ($LASTEXITCODE -ne 0) { throw "external kill probe failed for ${profile}: $killOutput" }
+        $killResult = $killOutput | ConvertFrom-Json
+        if ($killResult.status -ne 'PASS' -or $killResult.profile -ne $profile) { throw "unexpected external kill result for $profile" }
+        if (-not $killResult.fault.child_terminated -or -not $killResult.fault.child_exited_abruptly -or -not $killResult.fault.durable_marker_before_send) {
+            throw "external kill boundary evidence missing for $profile"
+        }
+        if (-not $killResult.fault.startup_recovery_promoted_unknown -or -not $killResult.fault.replay_blocked) {
+            throw "external kill recovery evidence missing for $profile"
+        }
+        if ([int]$killResult.fault.sender_calls -ne 1 -or [int]$killResult.fault.automatic_redispatches -ne 0) {
+            throw "external kill replayed the Add for $profile"
+        }
+        $killProfileName = $profile.ToLowerInvariant().Replace('_', '')
+        Set-Content -LiteralPath (Join-Path $evidenceRoot "lab-$killProfileName-external-kill.json") -Value $killOutput -Encoding utf8
+        Remove-Item Env:VERTEX_PRO_G1_FAULT_MODE -ErrorAction SilentlyContinue
     }
 
     & go test ./internal/qbresponse ./internal/addfacts ./internal/dispatchflow -run 'TestAdaptLegacyAndJSONResponsesNeverConfirmsHashSeen|TestRunnerCommitsSyntheticResponseFacts' -count=1
