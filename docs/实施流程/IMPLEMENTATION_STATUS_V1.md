@@ -90,9 +90,10 @@ PENDING -> IN_PROGRESS -> IN_REVIEW -> DONE
 - Windows race 因 `CGO_ENABLED=0` 无法执行；Docker Desktop daemon 未运行，Linux race 和当前源码三 Profile 重跑保持 BLOCKED。
 - 生产 mutation 继续默认关闭；Profile 非 `VERIFIED` 时显式启用仍 fail closed。RSS→规则→Placement→Reservation→Dispatch→FirstConfirm 的生产调度链尚未接通。
 - Profile 验证持久化落地：`a314d42` 新增 `internal/profileverify`、`internal/buildidentity`、`tools/profileverification` 与 migration `0011_profile_verification_runs.sql`，固化 run 级 commit 清洁度、镜像/构件摘要、kill -9 用例与 required_repetitions=3 等硬性约束。
-- Docker Desktop daemon 恢复后，在同一 `a314d42` 源码上重跑三 Profile 3×6 事务/故障矩阵：18/18 PASS、0 次自动重投、全部 `durable_marker_before_send=true` 且响应事实已记录，lab 已清空。矩阵摘要刷新为 `sha256:eab3ed15865d5356a2c42df7d1579279b83ba0e174dbaa7109928c98756c255a`（注意：摘要在运行中生成，`git_clean=false` 属预期，重跑时的源码与提交 `a314d42` 一致）。
+- Docker Desktop daemon 恢复后，在同一 `a314d42` 源码上重跑三 Profile 3×6 事务/故障矩阵：18/18 PASS、0 次自动重投、全部 `durable_marker_before_send=true` 且响应事实已记录，lab 已清空。矩阵摘要刷新为 `sha256:fe251ef0e469333d6ed9bb17c1f7defb03bae804bad7753ae1b9b43c330217da`（注意：摘要在运行中生成，`git_clean=false` 属预期，重跑时的源码与提交 `a314d42` 一致）。
 - 重跑后 G1 剩余阻塞收敛为：外部 `kill -9` 用例、`profile_verification_runs` 正式接线三连跑（P0×3）、固定 harness image 与 clean-commit 发布级证据；三个 Profile 继续保持 `EXPECTED`，G1 保持 `PENDING`。
 - 外部 kill -9 用例落地并三 Profile 全 PASS：`qutransactionprobe` 新增 `external_kill` 模式，父进程 re-exec 真实子进程经 qui Proxy 发送 Add（durable marker 先行、信号后挂起、`dispatchcommit.Record` 永不进入），父进程确认任务物理到达 lab 后强杀子进程；同一数据库启动恢复提升 `ADD_SENT→UNKNOWN`（`STARTUP_INTERRUPTED_DISPATCH`）、重放被拒（`ErrDispatchAlreadyStarted`、0 次额外发送）、快照对账收敛 `RECONCILED_CONFIRMED` 且 `response_fact_at` 保持 NULL（被杀进程从未收到响应，不伪造响应事实）。三份证据 `lab-qb{438,504,522}-external-kill.json` 已归档；矩阵汇总新增 `external_kill_matrix` 段（3/3 PASS）。G1 剩余阻塞收敛为：golden fixture 归档与 digest 持久化、固定 harness image、clean-commit 上 P0×3 连续运行并记录 verification runs。
+- Golden fixture 归档完成并三 Profile 全 PASS：`qutransactionprobe` 新增 `fixture_capture` 模式，经 qui Proxy 采集原始 Add 请求/响应、Sync 全量基线与含新增任务的 follow-up、tracker 行和 transfer 字段子集（`amount_left` 等；因 qB proxy 白名单不暴露 `torrents/transferInfo`，来源在 fixture 内如实标注为 sync 任务字段）。12 份 fixture 写入 `docs/evidence/qui-12/fixtures/` 并由汇总脚本逐文件校验 SHA-256；全部载荷不含凭据。G1 剩余阻塞收敛为：固定 harness image、clean-commit 上 P0×3 连续运行并记录 verification runs。
 
 > 总数由本表的 149 个正式实施项计算。若施工手册新增、删除或改名实施项，必须同 PR 更新本表并由合同检查验证集合一致。
 
@@ -158,7 +159,7 @@ PENDING -> IN_PROGRESS -> IN_REVIEW -> DONE
 | `QUI-09` | 单实例 SyncWatcher | QUI-07,08, DB-09 | IN_PROGRESS | Codex | live-read-only | `docs/evidence/qui-09/sync-watcher-check.json` / sha256:ae1785fcf4074bd3994ff1fb72fec3b031aad84e97814837297ea47805fa346a; `docs/evidence/qui-12/live-qb504-integration-summary.json` / sha256:4bd28967aea8907bd619b86fdf1d6e0f3fdf09a5c02cb777a1dd905fc98c9d21; `docs/evidence/qui-12/live-qb504-go-recovery-summary.json` / sha256:f96286c471fb44ffce912c8f5dd1fb55b7b9546593eee683453a326592be9bc1 |
 | `QUI-10` | Capability/Health 聚合 | QUI-02,04,09 | IN_PROGRESS | Codex | local-only | `docs/evidence/qui-10/capability-health-check.json` / sha256:8a3cc5966d42c08decd91a1734547af372f86257f60e14aa71f26d9dcb5fa362 |
 | `QUI-11` | 协议探针工具 | QUI-03..07, BOOT-09 | IN_PROGRESS | Codex | live-read-only | `docs/evidence/qui-11/protocol-probe-check.json` / sha256:d54c7853dc377d657b6033a5966c7fdde579e6ac49d8d5a3fb265517f3df70e1; `docs/evidence/qui-12/live-qb504-readonly-probe.json` / sha256:39297223c91e68c3117fc6c6e3f0f6038fc6b6fe004eaf68d0f91851908168c5 |
-| `QUI-12` | G1 实验室基线 | BOOT-04,08, QUI-11 | IN_PROGRESS | Codex | `a314d42` revalidation PASS / publish controls open | `docs/evidence/qui-12/g1-baseline-check.json` / sha256:2d2ef86e795bfe0b7d510cd317bc319cf05732235b936549c338575314753828; three-profile summary: `docs/evidence/qui-12/g1-three-profile-summary.json` / sha256:a45e3a5c817acb1e7379e5f53c58dba806f8b74390356815a30affa17413840e; archived matrix: `docs/evidence/qui-12/g1-three-profile-matrix-summary.json` / sha256:eab3ed15865d5356a2c42df7d1579279b83ba0e174dbaa7109928c98756c255a; current-source rerun 2026-09-02: matrix revalidated PASS on `a314d42`; readiness: `docs/evidence/qui-12/g1-lab-readiness-live.json` / sha256:727c532359ad9270c8e79a66645a58350343e49e53f144e31f8eec841ef5c70f |
+| `QUI-12` | G1 实验室基线 | BOOT-04,08, QUI-11 | IN_PROGRESS | Codex | `a314d42` revalidation PASS / publish controls open | `docs/evidence/qui-12/g1-baseline-check.json` / sha256:2d2ef86e795bfe0b7d510cd317bc319cf05732235b936549c338575314753828; three-profile summary: `docs/evidence/qui-12/g1-three-profile-summary.json` / sha256:a45e3a5c817acb1e7379e5f53c58dba806f8b74390356815a30affa17413840e; archived matrix: `docs/evidence/qui-12/g1-three-profile-matrix-summary.json` / sha256:fe251ef0e469333d6ed9bb17c1f7defb03bae804bad7753ae1b9b43c330217da; current-source rerun 2026-09-02: matrix revalidated PASS on `a314d42`; readiness: `docs/evidence/qui-12/g1-lab-readiness-live.json` / sha256:727c532359ad9270c8e79a66645a58350343e49e53f144e31f8eec841ef5c70f |
 
 ### E. RSS、Torrent 与并行准备
 
@@ -231,7 +232,7 @@ PENDING -> IN_PROGRESS -> IN_REVIEW -> DONE
 | `ADD-11` | EXPIRED_UNKNOWN 命令 | ADD-08, ADD-10, CTR-01, CTR-03 | IN_PROGRESS | Codex | local-only | `docs/evidence/add-11/expired-unknown-commands-check.json` / sha256:85b67014361f1119ee91549432a40b96a1d6879d949e0db2ac4de359d351e6ea |
 | `ADD-12` | 两阶段安全重试 | ADD-01,02,10, CAP-09 | IN_PROGRESS | Codex | local-only | `docs/evidence/add-12/safe-retry-check.json` / sha256:51f13958f5e414e2b090b711504deb3c7d15b7cafd45165e99208f86ed7b1704 |
 | `ADD-13` | 启动恢复 | ADD-03..12, CAP-13 | IN_PROGRESS | Codex | `0de553c` / `ec84241` | `docs/evidence/add-13/startup-recovery-check.json` / sha256:62ff4bd32c1f2303a33d0856db134a7036d5cee7b7a90baa2796cd895ce58703; interrupted ADD_SENT→UNKNOWN/no replay: `docs/evidence/add-05/dispatch-commit-check.json` / sha256:ad9e3ab8a18157fb94937e53c323f99ff4026da77e15a452773b696164030304; pinned qui restart/already-present: `docs/evidence/qui-12/g1-three-profile-summary.json` / sha256:a45e3a5c817acb1e7379e5f53c58dba806f8b74390356815a30affa17413840e |
-| `ADD-14` | 故障矩阵 | ADD-01..13, CAP-14 | IN_PROGRESS | Codex | `a314d42` current rerun PASS / kill -9 + P0×3 open | local matrix: `docs/evidence/add-14/fault-matrix-check.json` / sha256:6e29e4c62025219d244fb5f1f304f99666bbe3f46b9e1ac9231e78c390660765; archived 3×6 matrix: `docs/evidence/qui-12/g1-three-profile-matrix-summary.json` / sha256:eab3ed15865d5356a2c42df7d1579279b83ba0e174dbaa7109928c98756c255a; current blocker: `docs/evidence/qui-12/g1-current-revalidation-blocked.json` / sha256:ddee119973fa361b3109a239d3d33e1cbee4b4684619321277875a926e14fab7 |
+| `ADD-14` | 故障矩阵 | ADD-01..13, CAP-14 | IN_PROGRESS | Codex | `a314d42` current rerun PASS / kill -9 + P0×3 open | local matrix: `docs/evidence/add-14/fault-matrix-check.json` / sha256:6e29e4c62025219d244fb5f1f304f99666bbe3f46b9e1ac9231e78c390660765; archived 3×6 matrix: `docs/evidence/qui-12/g1-three-profile-matrix-summary.json` / sha256:fe251ef0e469333d6ed9bb17c1f7defb03bae804bad7753ae1b9b43c330217da; current blocker: `docs/evidence/qui-12/g1-current-revalidation-blocked.json` / sha256:ddee119973fa361b3109a239d3d33e1cbee4b4684619321277875a926e14fab7 |
 
 ### I. API、认证、命令与 SSE
 
@@ -376,7 +377,7 @@ PENDING -> IN_PROGRESS -> IN_REVIEW -> DONE
   - `powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/preflight.ps1`
 - Evidence:
   - `docs/evidence/add-05/dispatch-commit-check.json` / `sha256:ad9e3ab8a18157fb94937e53c323f99ff4026da77e15a452773b696164030304`
-  - `docs/evidence/qui-12/g1-three-profile-matrix-summary.json` / `sha256:eab3ed15865d5356a2c42df7d1579279b83ba0e174dbaa7109928c98756c255a`
+  - `docs/evidence/qui-12/g1-three-profile-matrix-summary.json` / `sha256:fe251ef0e469333d6ed9bb17c1f7defb03bae804bad7753ae1b9b43c330217da`
 - Blockers: clean-commit P0×3 正式证据、golden fixtures、固定 harness image 与生产调度入口尚未完成；外部 kill -9 已由三 Profile lab `external_kill` 用例覆盖。
 - Updated at: `2026-09-02T08:06:00Z`
 
@@ -435,3 +436,4 @@ PENDING -> IN_PROGRESS -> IN_REVIEW -> DONE
 | 2026-09-02 | `ec84241` 固化三 Profile compose/探针并归档 18/18 事务故障报告；因当前代码重跑被 Docker daemon 阻塞及发布控制未齐，Profile 继续 EXPECTED、G1 继续 PENDING | Codex |
 | 2026-09-02 | `a314d42` 落地 profile verification runs 持久化与构建身份；Docker 恢复后同源码重跑 3×6 矩阵 18/18 PASS，G1 阻塞收敛为 kill -9、P0×3、固定 harness 与 clean-commit 证据 | Codex |
 | 2026-09-02 | `qutransactionprobe` 新增 `external_kill` 故障模式并在三 Profile lab 全 PASS（真实子进程发送后强杀、恢复 UNKNOWN、禁重放、对账 RECONCILED_CONFIRMED）；矩阵汇总扩展为 21 用例 | Codex |
+| 2026-09-02 | `qutransactionprobe` 新增 `fixture_capture` 模式，归档三 Profile 共 12 份 Add/Sync/tracker/transfer-info 金样本并逐文件校验 SHA-256；剩余清单收敛为 harness 固定与 P0×3 | Codex |
