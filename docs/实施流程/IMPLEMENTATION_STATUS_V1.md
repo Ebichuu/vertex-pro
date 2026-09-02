@@ -443,3 +443,4 @@ PENDING -> IN_PROGRESS -> IN_REVIEW -> DONE
 | 2026-09-02 | clean-commit P0×3 三连跑全 PASS；9 条 verification runs 持久化（3 Profile × 3 repetition 全 VERIFIED）并产出 activation binding，G1 阻塞全部闭合 | Codex |
 | 2026-09-03 | 新增 `profileverify.ListRuns` 与 `tools/profileverification -replay-from`：campaign 数据库 runs 可幂等重放进生产数据库（重复重放 0 改写），重放后 `profileverify.Apply` 将 Profile 判定为 VERIFIED，生产装配 `ProfileVerificationBinding` 链路就此打通 | Codex |
 | 2026-09-03 | 新增 `internal/dispatchorchestrator`：把 Placement 判定（fail closed，含 PROFILE_NOT_VERIFIED 拒绝）、ReserveAtomic、sync waiter 注册、dispatchflow 恰好一次发送编排为单一生产入口，Prepare 钩子承接上游 race job/容量参考行创建；端到端测试覆盖 VERIFIED 全链与 EXPECTED 拒绝（0 网络调用、0 预留行） | Codex |
+| 2026-09-03 | 补齐链路前半段的生产持久化：`internal/racejobstore`（race_jobs 表 DB Store，重启后创建去重/身份冲突保持）与 `internal/rsssourcedb`（新迁移 `0012_rss_sources.sql`，RSS 来源去重重启存续、字段更新识别）；全量测试通过 | Codex |
