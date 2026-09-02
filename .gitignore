@@ -39,3 +39,4 @@ Thumbs.db
 *.sketch.json
 .od-skills/
 *.exe
+deploy/compose/lab/images/harness/probe

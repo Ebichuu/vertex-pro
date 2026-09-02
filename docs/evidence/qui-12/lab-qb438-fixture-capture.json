@@ -2,10 +2,10 @@
   "status": "PASS",
   "profile": "QB_438",
   "fixtures": {
-    "add": "9824d490d286c9e835e680330c7cf481d8fe8ca2c7991ae1b1c6929c4adce63a",
-    "sync": "da61d1fc92a3acdb850eaf6383647a2a57b88eb27145541d3a91600c6adc93b5",
-    "tracker": "4731ee35a856894cbe2f04a76294abcbfa4831fa7ffb0a38de10d59d1ad29250",
-    "transfer_info": "24200ce08fdc7eae9436fe3ea57d25bf9b8e2001e5ca29e9e2a7b9a882cecda9"
+    "add": "d12009683803efdc7007257aecb40e7e04a20a7bad4c86df1a335d2d8117ca89",
+    "sync": "7274bd47f5a1590652417a6cb1e3fed1266404974d7737879ad5c0a25205f6ce",
+    "tracker": "ee477da524c9995815cf6e063f17736e4caacd18e7ea5d5862ab8720e9f11de3",
+    "transfer_info": "5cab3dc0c3eff2cbcc924ddd6ef3b774a7bb1478ca2540e67b68ea1630476adf"
   },
   "safety": {
     "explicit_isolated_lab_opt_in": true,

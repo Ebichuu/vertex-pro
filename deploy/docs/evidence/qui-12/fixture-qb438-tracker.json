@@ -1,0 +1,36 @@
+{
+  "kind": "vertex-pro-g1-tracker-fixture",
+  "profile_id": "QB_438",
+  "captured_at": "2026-09-02T15:27:00Z",
+  "torrent_id": "16c85feb7eda20c13c6d2a4f85f54e56ee927f0c",
+  "rows": [
+    {
+      "msg": "",
+      "num_downloaded": 0,
+      "num_leeches": 0,
+      "num_peers": 0,
+      "num_seeds": 0,
+      "status": 2,
+      "url": "** [DHT] **"
+    },
+    {
+      "msg": "",
+      "num_downloaded": 0,
+      "num_leeches": 0,
+      "num_peers": 0,
+      "num_seeds": 0,
+      "status": 2,
+      "url": "** [PeX] **"
+    },
+    {
+      "msg": "",
+      "num_downloaded": 0,
+      "num_leeches": 0,
+      "num_peers": 0,
+      "num_seeds": 0,
+      "status": 2,
+      "url": "** [LSD] **"
+    }
+  ],
+  "redactions": "raw qB tracker rows for a trackerless task; no credentials present"
+}

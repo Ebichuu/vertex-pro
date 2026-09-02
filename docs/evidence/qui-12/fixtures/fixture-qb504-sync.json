@@ -1,10 +1,10 @@
 {
   "kind": "vertex-pro-g1-sync-fixture",
   "profile_id": "QB_504",
-  "captured_at": "2026-09-02T15:15:23Z",
+  "captured_at": "2026-09-02T15:32:57Z",
   "baseline_full_update": {
     "full_update": true,
-    "rid": 62,
+    "rid": 63,
     "server_state": {
       "alltime_dl": 0,
       "alltime_ul": 0,
@@ -34,7 +34,7 @@
     },
     "torrents": {
       "f9ab600c6323ce336a8a3f297be3b3b7f31c7105": {
-        "added_on": 1788362123,
+        "added_on": 1788363177,
         "amount_left": 1,
         "auto_tmm": false,
         "availability": 0,
@@ -55,7 +55,7 @@
         "inactive_seeding_time_limit": -2,
         "infohash_v1": "f9ab600c6323ce336a8a3f297be3b3b7f31c7105",
         "infohash_v2": "",
-        "last_activity": 1788362123,
+        "last_activity": 1788363177,
         "magnet_uri": "magnet:?xt=urn:btih:f9ab600c6323ce336a8a3f297be3b3b7f31c7105\u0026dn=vertex-pro-g1-transaction-qb_504-fixture-capture-v1",
         "max_inactive_seeding_time": -1,
         "max_ratio": -1,
@@ -93,9 +93,9 @@
       }
     }
   },
-  "follow_up_rid": 67,
+  "follow_up_rid": 68,
   "follow_up_response": {
-    "rid": 67,
+    "rid": 68,
     "torrents": {
       "f9ab600c6323ce336a8a3f297be3b3b7f31c7105": {
         "state": "stoppedDL"

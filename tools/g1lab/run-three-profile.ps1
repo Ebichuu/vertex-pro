@@ -121,11 +121,39 @@ Push-Location $root
 $profiles = @{}
 try {
     $env:VERTEX_G1_QUI_PORT = [string]$Port
-    $upArguments = @('compose', '-f', $compose, 'up', '-d')
-    if (-not $SkipBuild) { $upArguments += '--build' }
+    $env:VERTEX_PRO_G1_EVIDENCE_DIR = $evidenceRoot
+    if (-not $SkipBuild) {
+        # Build the harness binary on the host so the Go toolchain stamps the
+        # vcs identity; the tree must be source-clean at this point for the
+        # binary to carry vcs.modified=false.
+        $harnessBinDir = Join-Path $root 'deploy/compose/lab/images/harness'
+        $previousGoos = $env:GOOS
+        $previousGoarch = $env:GOARCH
+        $previousCgo = $env:CGO_ENABLED
+        $env:GOOS = 'linux'
+        $env:GOARCH = 'amd64'
+        $env:CGO_ENABLED = '0'
+        & go build -trimpath -o (Join-Path $harnessBinDir 'probe') ./tools/qutransactionprobe
+        $buildExit = $LASTEXITCODE
+        $env:GOOS = $previousGoos
+        $env:GOARCH = $previousGoarch
+        $env:CGO_ENABLED = $previousCgo
+        if ($buildExit -ne 0) { throw 'harness binary build failed' }
+    }
+    $upArguments = @('compose', '-f', $compose, 'up', '-d', '--build')
+    if ($SkipBuild) { $upArguments = @('compose', '-f', $compose, 'up', '-d') }
     & docker @upArguments
     if ($LASTEXITCODE -ne 0) { throw 'docker compose up failed' }
     Wait-HealthyQui
+    $harnessImageId = (& docker image inspect vertex-pro-g1/harness:pinned --format '{{.Id}}').Trim()
+    if ([string]::IsNullOrWhiteSpace($harnessImageId)) { throw 'harness image digest unavailable' }
+    $harnessIdentity = [ordered]@{
+        image = 'vertex-pro-g1/harness:pinned'
+        image_id = $harnessImageId
+        source_commit = (& git -C $root rev-parse HEAD 2>$null | Out-String).Trim()
+        built_at = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
+    }
+    Set-Content -LiteralPath (Join-Path $evidenceRoot 'g1-harness-identity.json') -Value ($harnessIdentity | ConvertTo-Json) -Encoding utf8
 
     $qb504Password = Get-TemporaryPassword -Service 'qb504'
     $qb522Password = Get-TemporaryPassword -Service 'qb522'
@@ -159,7 +187,7 @@ try {
         $env:VERTEX_PRO_QUI_PROXY_KEY = $profiles[$profile].proxy_key
         foreach ($mode in $modes) {
             $env:VERTEX_PRO_G1_FAULT_MODE = $mode
-            $output = (& go run ./tools/qutransactionprobe 2>&1 | Out-String).Trim()
+            $output = (& docker compose -f $compose run --rm `-e VERTEX_PRO_QUI_URL='http://qui:7476' `-e VERTEX_PRO_QUI_PROXY_KEY=$($profiles[$profile].proxy_key) `-e VERTEX_PRO_G1_ISOLATED_LAB=$Confirmation `-e VERTEX_PRO_G1_FAULT_MODE=$mode harness | Out-String).Trim()
             if ($LASTEXITCODE -ne 0) { throw "transaction probe failed for ${profile}/${mode}: $output" }
             $result = $output | ConvertFrom-Json
             if ($result.status -ne 'PASS' -or $result.profile -ne $profile) { throw "unexpected probe result for $profile/$mode" }
@@ -179,7 +207,7 @@ try {
         }
 
         $env:VERTEX_PRO_G1_FAULT_MODE = 'external_kill'
-        $killOutput = (& go run ./tools/qutransactionprobe 2>&1 | Out-String).Trim()
+        $killOutput = (& docker compose -f $compose run --rm `-e VERTEX_PRO_QUI_URL='http://qui:7476' `-e VERTEX_PRO_QUI_PROXY_KEY=$($profiles[$profile].proxy_key) `-e VERTEX_PRO_G1_ISOLATED_LAB=$Confirmation `-e VERTEX_PRO_G1_FAULT_MODE=external_kill harness | Out-String).Trim()
         if ($LASTEXITCODE -ne 0) { throw "external kill probe failed for ${profile}: $killOutput" }
         $killResult = $killOutput | ConvertFrom-Json
         if ($killResult.status -ne 'PASS' -or $killResult.profile -ne $profile) { throw "unexpected external kill result for $profile" }
@@ -197,7 +225,7 @@ try {
 
         $env:VERTEX_PRO_G1_FAULT_MODE = 'fixture_capture'
         $env:VERTEX_PRO_FIXTURE_DIR = Join-Path $evidenceRoot 'fixtures'
-        $fixtureOutput = (& go run ./tools/qutransactionprobe 2>&1 | Out-String).Trim()
+        $fixtureOutput = (& docker compose -f $compose run --rm `-e VERTEX_PRO_QUI_URL='http://qui:7476' `-e VERTEX_PRO_QUI_PROXY_KEY=$($profiles[$profile].proxy_key) `-e VERTEX_PRO_G1_ISOLATED_LAB=$Confirmation `-e VERTEX_PRO_G1_FAULT_MODE=fixture_capture `-e VERTEX_PRO_FIXTURE_DIR=/fixtures harness | Out-String).Trim()
         if ($LASTEXITCODE -ne 0) { throw "fixture capture failed for ${profile}: $fixtureOutput" }
         $fixtureResult = $fixtureOutput | ConvertFrom-Json
         if ($fixtureResult.status -ne 'PASS' -or $fixtureResult.profile -ne $profile) { throw "unexpected fixture capture result for $profile" }

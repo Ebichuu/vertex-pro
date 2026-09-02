@@ -127,6 +127,24 @@ services:
       qb-internal:
         aliases: [qb522]
 
+  harness:
+    image: vertex-pro-g1/harness:pinned
+    build:
+      context: images/harness
+      dockerfile: Dockerfile
+    environment: []
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+    volumes:
+      - ${VERTEX_PRO_G1_EVIDENCE_DIR:?set VERTEX_PRO_G1_EVIDENCE_DIR to the absolute qui-12 evidence dir}:/fixtures
+    networks:
+      - host-bridge
+
 volumes:
   qui-config:
 
