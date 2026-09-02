@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/vertex-pro/vertex-pro/internal/adminauth"
+	"github.com/vertex-pro/vertex-pro/internal/confirmcoordinator"
 	"github.com/vertex-pro/vertex-pro/internal/db"
 	"github.com/vertex-pro/vertex-pro/internal/dispatchflow"
 	"github.com/vertex-pro/vertex-pro/internal/httpapi"
@@ -65,16 +66,17 @@ type QuiConfig struct {
 
 // Runtime owns resources initialized during service startup.
 type Runtime struct {
-	Database *sql.DB
-	Auth     *adminauth.Service
-	Handler  http.Handler
-	Profile  *qbprofile.Profile
-	Dispatch *dispatchflow.Runner
-	Recovery startuprecover.Result
-	hub      *sseserver.Hub
-	watcher  *syncwatcher.Watcher
-	cancel   context.CancelFunc
-	workers  sync.WaitGroup
+	Database      *sql.DB
+	Auth          *adminauth.Service
+	Handler       http.Handler
+	Profile       *qbprofile.Profile
+	Dispatch      *dispatchflow.Runner
+	Recovery      startuprecover.Result
+	hub           *sseserver.Hub
+	watcher       *syncwatcher.Watcher
+	confirmations *confirmcoordinator.Coordinator
+	cancel        context.CancelFunc
+	workers       sync.WaitGroup
 }
 
 // New opens and validates the database before exposing HTTP traffic. A fresh
@@ -301,8 +303,13 @@ func (runtime *Runtime) startQui(ctx context.Context, config QuiConfig, now func
 	if err := updateSyncState(ctx, runtime.Database, config.InstanceID, "READY", now()); err != nil {
 		return err
 	}
+	confirmations, err := confirmcoordinator.New(runtime.Database)
+	if err != nil {
+		return fmt.Errorf("initialize confirmation coordinator: %w", err)
+	}
 	runtime.Profile = &profile
 	runtime.watcher = watcher
+	runtime.confirmations = confirmations
 	workerContext, cancel := context.WithCancel(context.Background())
 	runtime.cancel = cancel
 	interval := config.SyncInterval
@@ -319,18 +326,46 @@ func (runtime *Runtime) startQui(ctx context.Context, config QuiConfig, now func
 			case <-workerContext.Done():
 				return
 			case <-ticker.C:
-				state := "READY"
-				if _, err := watcher.RunOnce(workerContext); err != nil {
-					if errors.Is(err, context.Canceled) {
-						return
-					}
-					state = "STALE"
-				}
-				_ = updateSyncState(workerContext, runtime.Database, config.InstanceID, state, now())
+				runtime.tickSync(workerContext, now)
 			}
 		}
 	}()
 	return nil
+}
+
+// TickSync performs one sync cycle synchronously: fetch the delta, drive the
+// confirmation coordinator over the resulting snapshot, and refresh the
+// instance state. Exposed for tests and diagnostic tooling.
+func (runtime *Runtime) TickSync(ctx context.Context) error {
+	runtime.tickSync(ctx, tickSyncNow(time.Now()))
+	return nil
+}
+
+// tickSyncNow adapts an absolute time into the now-func shape.
+func tickSyncNow(at time.Time) func() time.Time {
+	return func() time.Time { return at }
+}
+
+func (runtime *Runtime) tickSync(ctx context.Context, now func() time.Time) {
+	state := "READY"
+	event, err := runtime.watcher.RunOnce(ctx)
+	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			return
+		}
+		_ = updateSyncState(ctx, runtime.Database, event.InstanceID, "STALE", now())
+		return
+	}
+	// The confirmation coordinator only touches chains created by the
+	// dispatcher; a failed cycle is retried on the next tick because every
+	// operation it performs is idempotent.
+	_, _ = runtime.confirmations.OnSyncEvent(ctx, confirmcoordinator.Event{
+		InstanceID: event.InstanceID,
+		Generation: event.Generation,
+		Revision:   event.Revision,
+		Snapshot:   event.Snapshot,
+	}, now())
+	_ = updateSyncState(ctx, runtime.Database, event.InstanceID, state, now())
 }
 
 func updateSyncState(ctx context.Context, database *sql.DB, instanceID, state string, updatedAt time.Time) error {

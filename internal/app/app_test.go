@@ -134,6 +134,69 @@ func TestNewStartsReadOnlyQuiProfileAndSyncRuntime(t *testing.T) {
 	}
 }
 
+func TestTickSyncRunsConfirmationCoordinator(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		response.Header().Set("Content-Type", "application/json")
+		switch request.URL.Path {
+		case "/api/instances":
+			if request.Header.Get("X-API-Key") != "control-key" {
+				http.Error(response, "unauthorized", http.StatusUnauthorized)
+				return
+			}
+			_, _ = response.Write([]byte(`[{"id":13,"name":"qB 5.0.4","connectionStatus":"connected","isActive":true}]`))
+		case "/api/instances/13/transfer-info":
+			_, _ = response.Write([]byte(`{"dl_info_speed":1,"up_info_speed":2,"dl_info_data":3,"up_info_data":4}`))
+		case "/api/instances/13/capabilities":
+			_, _ = response.Write([]byte(`{"webAPIVersion":"2.11.2"}`))
+		case "/proxy/proxy-key/api/v2/app/version":
+			_, _ = response.Write([]byte(`v5.0.4`))
+		case "/proxy/proxy-key/api/v2/app/webapiVersion":
+			_, _ = response.Write([]byte(`2.11.2`))
+		case "/proxy/proxy-key/api/v2/app/buildInfo":
+			_, _ = response.Write([]byte(`{"libtorrent":"2.0.11.0"}`))
+		case "/proxy/proxy-key/api/v2/app/processInfo":
+			http.NotFound(response, request)
+		case "/proxy/proxy-key/api/v2/sync/maindata":
+			_, _ = response.Write([]byte(`{"rid":43,"full_update":true}`))
+		default:
+			http.NotFound(response, request)
+		}
+	}))
+	defer server.Close()
+	t.Setenv("TEST_QUI_API_KEY", "control-key")
+	t.Setenv("TEST_QUI_PROXY_KEY", "proxy-key")
+	runtime, err := New(context.Background(), Config{
+		Database: db.Config{Path: filepath.Join(t.TempDir(), "vertex-pro.db"), MaxOpenConns: 1, MaxIdleConns: 1},
+		Hosts:    []string{"vertex.local"},
+		Qui: &QuiConfig{
+			BaseURL:      server.URL,
+			InstanceID:   "13",
+			APIKey:       secrets.SecretRef{Provider: "env", Key: "TEST_QUI_API_KEY"},
+			ProxyKey:     secrets.SecretRef{Provider: "env", Key: "TEST_QUI_PROXY_KEY"},
+			Store:        secrets.EnvStore{},
+			SnapshotRoot: filepath.Join(t.TempDir(), "snapshots"),
+			SyncInterval: time.Hour,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer runtime.Close()
+	if runtime.confirmations == nil {
+		t.Fatal("confirmation coordinator is not wired into the runtime")
+	}
+	if err := runtime.TickSync(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	var state string
+	if err := runtime.Database.QueryRow(`SELECT sync_state FROM sync_instance_state WHERE instance_id = '13'`).Scan(&state); err != nil {
+		t.Fatal(err)
+	}
+	if state != "READY" {
+		t.Fatalf("sync state=%s after tick", state)
+	}
+}
+
 func TestNewRejectsDispatchForExpectedProfile(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		response.Header().Set("Content-Type", "application/json")
