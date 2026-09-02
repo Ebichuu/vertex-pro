@@ -37,7 +37,11 @@ func TestUpgradeCreatesBackupAndMigratesSupportedOldSchema(t *testing.T) {
 	}
 	upgraded := openTestDatabaseAtPath(t, path)
 	defer upgraded.Close()
-	assertMigrationCount(t, upgraded, 10)
+	runner, err := DefaultRunner()
+	if err != nil {
+		t.Fatalf("DefaultRunner() error = %v", err)
+	}
+	assertMigrationCount(t, upgraded, len(runner.Migrations))
 	if err := CheckStartupConsistency(context.Background(), upgraded); err != nil {
 		t.Fatalf("upgraded consistency error = %v", err)
 	}

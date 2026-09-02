@@ -3,6 +3,7 @@ package qbprofile
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/vertex-pro/vertex-pro/internal/qui/proxy"
@@ -50,6 +51,9 @@ func TestProbeRecognizesThreeFrozenProfiles(t *testing.T) {
 			if profile.ProfileVerificationState != "EXPECTED" {
 				t.Fatalf("verification state = %q", profile.ProfileVerificationState)
 			}
+			if !strings.HasPrefix(profile.QBBuildFingerprint, "sha256:") || len(profile.QBBuildFingerprint) != 71 {
+				t.Fatalf("qB build fingerprint = %q", profile.QBBuildFingerprint)
+			}
 			if profile.SupportsV2 != (testCase.libtorrent[0] == '2') {
 				t.Fatalf("SupportsV2 = %v", profile.SupportsV2)
 			}
@@ -69,6 +73,20 @@ func TestProbeRejectsMalformedOrMissingFacts(t *testing.T) {
 	fixture := fixtureProxy{web: "2.15.1", libtorrent: "2.0.9", processErr: errors.New("network failure")}
 	if _, err := Probe(context.Background(), fixture); err == nil {
 		t.Fatal("process probe error = nil")
+	}
+}
+
+func TestBuildFingerprintIsCanonicalAcrossMapOrder(t *testing.T) {
+	first, err := buildFingerprint("5.2.2", "2.15.1", map[string]any{"libtorrent": "2.0.13.0", "openssl": "3.0", "bitness": float64(64)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := buildFingerprint("5.2.2", "2.15.1", map[string]any{"bitness": float64(64), "openssl": "3.0", "libtorrent": "2.0.13.0"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first != second {
+		t.Fatalf("fingerprints differ: %s != %s", first, second)
 	}
 }
 

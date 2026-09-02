@@ -2,6 +2,8 @@ package proxy
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,7 +18,17 @@ import (
 	"github.com/vertex-pro/vertex-pro/internal/syncmerge"
 )
 
-const maxAddResponseBytes = 1 << 20
+const (
+	maxAddResponseBytes = 1 << 20
+	proxyRouteContract  = "qui-client-proxy-v1|GET:/proxy/{key}/api/v2/{allowlisted-endpoint}|POST:/proxy/{key}/api/v2/torrents/add|no-direct-qb-origin"
+)
+
+// RouteFingerprint identifies the local qui Client Proxy routing contract used
+// by both verification evidence and runtime activation decisions.
+func RouteFingerprint() string {
+	digest := sha256.Sum256([]byte(proxyRouteContract))
+	return "sha256:" + hex.EncodeToString(digest[:])
+}
 
 type Config struct {
 	BaseURL    string

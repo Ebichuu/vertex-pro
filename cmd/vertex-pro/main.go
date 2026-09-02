@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -14,8 +16,10 @@ import (
 	"time"
 
 	"github.com/vertex-pro/vertex-pro/internal/app"
+	"github.com/vertex-pro/vertex-pro/internal/buildidentity"
 	"github.com/vertex-pro/vertex-pro/internal/db"
 	"github.com/vertex-pro/vertex-pro/internal/observability"
+	"github.com/vertex-pro/vertex-pro/internal/profileverify"
 	"github.com/vertex-pro/vertex-pro/internal/secrets"
 )
 
@@ -55,6 +59,7 @@ func runServe(logger *slog.Logger, arguments []string) error {
 	quiInstanceID := flags.String("qui-instance-id", strings.TrimSpace(os.Getenv("VERTEX_PRO_QUI_INSTANCE_ID")), "qui instance ID")
 	snapshotRoot := flags.String("snapshot-root", envOrDefault("VERTEX_PRO_SNAPSHOT_ROOT", "vertex-pro-snapshots"), "sync snapshot directory")
 	syncInterval := flags.Duration("sync-interval", 10*time.Second, "read-only qui sync interval")
+	profileVerificationBindingPath := flags.String("profile-verification-binding", strings.TrimSpace(os.Getenv("VERTEX_PRO_PROFILE_VERIFICATION_BINDING_FILE")), "path to the exact persisted G1 verification binding JSON")
 	enableDispatch := flags.Bool("enable-dispatch", envBool("VERTEX_PRO_ENABLE_DISPATCH"), "enable qB Add dispatch; fails closed unless the probed Profile is VERIFIED")
 	if err := flags.Parse(arguments); err != nil {
 		return err
@@ -66,16 +71,28 @@ func runServe(logger *slog.Logger, arguments []string) error {
 		Origins:  splitList(*allowedOrigins),
 	}
 	if strings.TrimSpace(*quiURL) != "" {
+		build := buildidentity.Current()
+		var verificationBinding *profileverify.Binding
+		if strings.TrimSpace(*profileVerificationBindingPath) != "" {
+			binding, err := readProfileVerificationBinding(*profileVerificationBindingPath)
+			if err != nil {
+				return err
+			}
+			verificationBinding = &binding
+		}
 		config.Qui = &app.QuiConfig{
-			BaseURL:        *quiURL,
-			InstanceID:     *quiInstanceID,
-			APIKey:         secrets.SecretRef{Provider: "env", Key: "VERTEX_PRO_QUI_API_KEY"},
-			ProxyKey:       secrets.SecretRef{Provider: "env", Key: "VERTEX_PRO_QUI_PROXY_KEY"},
-			Store:          secrets.EnvStore{},
-			SnapshotRoot:   *snapshotRoot,
-			SyncInterval:   *syncInterval,
-			HTTPClient:     &http.Client{Timeout: 30 * time.Second},
-			EnableDispatch: *enableDispatch,
+			BaseURL:                    *quiURL,
+			InstanceID:                 *quiInstanceID,
+			APIKey:                     secrets.SecretRef{Provider: "env", Key: "VERTEX_PRO_QUI_API_KEY"},
+			ProxyKey:                   secrets.SecretRef{Provider: "env", Key: "VERTEX_PRO_QUI_PROXY_KEY"},
+			Store:                      secrets.EnvStore{},
+			SnapshotRoot:               *snapshotRoot,
+			SyncInterval:               *syncInterval,
+			HTTPClient:                 &http.Client{Timeout: 30 * time.Second},
+			ProfileVerificationBinding: verificationBinding,
+			VertexCommit:               build.Revision,
+			VertexWorktreeClean:        build.Available && build.Clean,
+			EnableDispatch:             *enableDispatch,
 		}
 	}
 	runtime, err := app.New(context.Background(), config)
@@ -122,6 +139,24 @@ func runServe(logger *slog.Logger, arguments []string) error {
 		defer cancel()
 		return server.Shutdown(shutdownContext)
 	}
+}
+
+func readProfileVerificationBinding(path string) (profileverify.Binding, error) {
+	file, err := os.Open(strings.TrimSpace(path))
+	if err != nil {
+		return profileverify.Binding{}, fmt.Errorf("open profile verification binding: %w", err)
+	}
+	defer file.Close()
+	decoder := json.NewDecoder(file)
+	decoder.DisallowUnknownFields()
+	var binding profileverify.Binding
+	if err := decoder.Decode(&binding); err != nil {
+		return profileverify.Binding{}, fmt.Errorf("decode profile verification binding: %w", err)
+	}
+	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		return profileverify.Binding{}, errors.New("profile verification binding contains trailing JSON")
+	}
+	return binding, nil
 }
 
 func envOrDefault(key, fallback string) string {

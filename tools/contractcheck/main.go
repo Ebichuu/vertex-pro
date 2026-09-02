@@ -185,17 +185,21 @@ func runFreshSchemaCheck() checkResult {
 		return errorCheck("C1-SCHEMA-FRESH", err)
 	}
 	defer cleanup()
+	runner, err := db.DefaultRunner()
+	if err != nil {
+		return errorCheck("C1-SCHEMA-FRESH", err)
+	}
 	var count int
 	if err := database.QueryRowContext(context.Background(), "SELECT COUNT(*) FROM schema_migrations").Scan(&count); err != nil {
 		return errorCheck("C1-SCHEMA-FRESH", err)
 	}
-	if count != 10 {
-		return errorCheck("C1-SCHEMA-FRESH", fmt.Errorf("applied migration count = %d, want 10", count))
+	if count != len(runner.Migrations) {
+		return errorCheck("C1-SCHEMA-FRESH", fmt.Errorf("applied migration count = %d, want %d", count, len(runner.Migrations)))
 	}
 	if err := db.CheckStartupConsistency(context.Background(), database); err != nil {
 		return errorCheck("C1-SCHEMA-FRESH", err)
 	}
-	return passCheck("C1-SCHEMA-FRESH", "fresh database applied all 10 migrations and passed startup consistency")
+	return passCheck("C1-SCHEMA-FRESH", fmt.Sprintf("fresh database applied all %d migrations and passed startup consistency", count))
 }
 
 func runUpgradeSchemaCheck() checkResult {
@@ -235,13 +239,13 @@ func runUpgradeSchemaCheck() checkResult {
 	if err := upgraded.QueryRowContext(contextValue, "SELECT COUNT(*) FROM schema_migrations").Scan(&count); err != nil {
 		return errorCheck("C1-SCHEMA-UPGRADE", err)
 	}
-	if count != 10 {
-		return errorCheck("C1-SCHEMA-UPGRADE", fmt.Errorf("upgraded migration count = %d, want 10", count))
+	if count != len(runner.Migrations) {
+		return errorCheck("C1-SCHEMA-UPGRADE", fmt.Errorf("upgraded migration count = %d, want %d", count, len(runner.Migrations)))
 	}
 	if err := db.CheckStartupConsistency(contextValue, upgraded); err != nil {
 		return errorCheck("C1-SCHEMA-UPGRADE", err)
 	}
-	return passCheck("C1-SCHEMA-UPGRADE", "legacy baseline upgraded to all 10 migrations with backup and consistency validation")
+	return passCheck("C1-SCHEMA-UPGRADE", fmt.Sprintf("legacy baseline upgraded to all %d migrations with backup and consistency validation", count))
 }
 
 func runForeignKeyCheck() checkResult {

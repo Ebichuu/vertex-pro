@@ -23,8 +23,8 @@ func TestDefaultRunnerAppliesAndSkipsAppliedMigrations(t *testing.T) {
 	if err := database.QueryRow("SELECT COUNT(*) FROM schema_migrations").Scan(&count); err != nil {
 		t.Fatalf("migration count query error = %v", err)
 	}
-	if count != 10 {
-		t.Fatalf("migration count = %d, want 10", count)
+	if count != len(runner.Migrations) {
+		t.Fatalf("migration count = %d, want %d", count, len(runner.Migrations))
 	}
 	var table string
 	if err := database.QueryRow("SELECT name FROM sqlite_master WHERE type='table' AND name='vertex_pro_meta'").Scan(&table); err != nil {

@@ -2,6 +2,8 @@ package app
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +14,8 @@ import (
 
 	"github.com/vertex-pro/vertex-pro/internal/db"
 	"github.com/vertex-pro/vertex-pro/internal/httpapi"
+	"github.com/vertex-pro/vertex-pro/internal/profileverify"
+	"github.com/vertex-pro/vertex-pro/internal/qui/proxy"
 	"github.com/vertex-pro/vertex-pro/internal/secrets"
 )
 
@@ -173,6 +177,109 @@ func TestNewRejectsDispatchForExpectedProfile(t *testing.T) {
 	}
 }
 
+func TestNewEnablesDispatchOnlyFromExactStableVerificationCampaign(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		response.Header().Set("Content-Type", "application/json")
+		switch request.URL.Path {
+		case "/api/instances":
+			_, _ = response.Write([]byte(`[{"id":13,"connectionStatus":"connected","isActive":true}]`))
+		case "/api/instances/13/transfer-info":
+			_, _ = response.Write([]byte(`{"dl_info_speed":0,"up_info_speed":0,"dl_info_data":0,"up_info_data":0}`))
+		case "/api/instances/13/capabilities":
+			_, _ = response.Write([]byte(`{"webAPIVersion":"2.11.2"}`))
+		case "/proxy/proxy-key/api/v2/app/version":
+			_, _ = response.Write([]byte(`v5.0.4`))
+		case "/proxy/proxy-key/api/v2/app/webapiVersion":
+			_, _ = response.Write([]byte(`2.11.2`))
+		case "/proxy/proxy-key/api/v2/app/buildInfo":
+			_, _ = response.Write([]byte(`{"libtorrent":"2.0.11.0"}`))
+		case "/proxy/proxy-key/api/v2/app/processInfo":
+			http.NotFound(response, request)
+		case "/proxy/proxy-key/api/v2/sync/maindata":
+			_, _ = response.Write([]byte(`{"rid":1,"full_update":true,"torrents":{}}`))
+		default:
+			http.NotFound(response, request)
+		}
+	}))
+	defer server.Close()
+	t.Setenv("TEST_QUI_API_KEY", "control-key")
+	t.Setenv("TEST_QUI_PROXY_KEY", "proxy-key")
+
+	path := filepath.Join(t.TempDir(), "verified.db")
+	database, err := db.Open(context.Background(), db.Config{Path: path})
+	if err != nil {
+		t.Fatal(err)
+	}
+	runner, err := db.DefaultRunner()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := runner.Apply(context.Background(), database); err != nil {
+		t.Fatal(err)
+	}
+	base := time.Date(2026, 9, 2, 11, 0, 0, 0, time.UTC)
+	qbFingerprint := sha256Digest(`{"application_version":"5.0.4","webapi_version":"2.11.2","build_info":{"libtorrent":"2.0.11.0"}}`)
+	var latest profileverify.Run
+	for repetition := 1; repetition <= 3; repetition++ {
+		finished := base.Add(time.Duration(repetition) * time.Minute)
+		verifiedAt := finished.Add(time.Second)
+		latest = profileverify.Run{
+			RunID: "runtime-run-" + string(rune('0'+repetition)), CampaignID: "runtime-campaign", Repetition: repetition, RequiredRepetitions: 3,
+			InstanceID: "13", ProfileID: "QB_504", SourceKind: profileverify.SourceRealProxyLab,
+			QBAppVersion: "5.0.4", QBBuildFingerprint: qbFingerprint, QBArtifactDigest: sha256Digest("qb-artifact"), WebAPIVersion: "2.11.2", LibtorrentVersion: "2.0.11.0",
+			QuiVersion: "8fcfc4d2beaf5e68ccebe837d7c0d9be965c8896", QuiImageDigest: sha256Digest("qui-image"),
+			ProxyRouteFingerprint: proxy.RouteFingerprint(), HarnessImageDigest: sha256Digest("harness-image"),
+			VertexCommit: "0123456789abcdef0123456789abcdef01234567", VertexWorktreeClean: true, TestSuiteRevision: profileverify.CurrentTestSuiteRevision,
+			AddFixtureDigest: sha256Digest("add"), SyncFixtureDigest: sha256Digest("sync"), TrackerFixtureDigest: sha256Digest("tracker"), TransferInfoFixtureDigest: sha256Digest("transfer"),
+			VerificationReportDigest: sha256Digest("runtime-report-" + string(rune('0'+repetition))), RequiredCaseCount: 18, PassedCaseCount: 18,
+			LabIsolated: true, LabReturnedEmpty: true, SecretsRedacted: true, Kill9CasePassed: true,
+			VerificationState: profileverify.StateVerified, StartedAt: finished.Add(-time.Minute), FinishedAt: finished, VerifiedAt: &verifiedAt, CreatedAt: verifiedAt, ExpiresAt: verifiedAt.Add(24 * time.Hour),
+		}
+		if _, err := profileverify.Record(context.Background(), database, latest); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := database.Close(); err != nil {
+		t.Fatal(err)
+	}
+	binding := profileverify.BindingFromRun(latest)
+	_, err = New(context.Background(), Config{
+		Database: db.Config{Path: path}, Hosts: []string{"vertex.local"},
+		Now: func() time.Time { return base.Add(30 * time.Minute) },
+		Qui: &QuiConfig{
+			BaseURL: server.URL, InstanceID: "13",
+			APIKey: secrets.SecretRef{Provider: "env", Key: "TEST_QUI_API_KEY"}, ProxyKey: secrets.SecretRef{Provider: "env", Key: "TEST_QUI_PROXY_KEY"}, Store: secrets.EnvStore{},
+			SnapshotRoot: filepath.Join(t.TempDir(), "dirty-snapshots"), ProfileVerificationBinding: &binding,
+			VertexCommit: latest.VertexCommit, VertexWorktreeClean: false, EnableDispatch: true,
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), "dispatch remains fail closed") {
+		t.Fatalf("dirty build error=%v", err)
+	}
+
+	runtime, err := New(context.Background(), Config{
+		Database: db.Config{Path: path},
+		Hosts:    []string{"vertex.local"},
+		Now:      func() time.Time { return base.Add(30 * time.Minute) },
+		Qui: &QuiConfig{
+			BaseURL: server.URL, InstanceID: "13",
+			APIKey: secrets.SecretRef{Provider: "env", Key: "TEST_QUI_API_KEY"}, ProxyKey: secrets.SecretRef{Provider: "env", Key: "TEST_QUI_PROXY_KEY"}, Store: secrets.EnvStore{},
+			SnapshotRoot: filepath.Join(t.TempDir(), "snapshots"), SyncInterval: time.Hour,
+			ProfileVerificationBinding: &binding, VertexCommit: latest.VertexCommit, VertexWorktreeClean: true, EnableDispatch: true,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer runtime.Close()
+	if runtime.Dispatch == nil || runtime.Profile == nil || runtime.Profile.ProfileVerificationState != profileverify.StateVerified {
+		t.Fatalf("runtime profile=%+v dispatch=%v", runtime.Profile, runtime.Dispatch)
+	}
+	if runtime.Profile.VerificationReportDigest != latest.VerificationReportDigest || runtime.Profile.VerifiedQBArtifactDigest != latest.QBArtifactDigest || runtime.Profile.VerifiedQuiVersion != latest.QuiVersion || runtime.Profile.VerifiedQuiImageDigest != latest.QuiImageDigest || runtime.Profile.VerifiedHarnessImageDigest != latest.HarnessImageDigest || runtime.Profile.ProfileVerifiedAt == nil {
+		t.Fatalf("verified profile metadata=%+v", runtime.Profile)
+	}
+}
+
 func TestNewFailsClosedOnRecoveryInvariantViolation(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "recovery-invalid.db")
 	database, err := db.Open(context.Background(), db.Config{Path: path, MaxOpenConns: 1, MaxIdleConns: 1})
@@ -207,6 +314,11 @@ func TestNewFailsClosedOnRecoveryInvariantViolation(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "startup recovery failed closed") {
 		t.Fatalf("New() error = %v, want recovery invariant failure", err)
 	}
+}
+
+func sha256Digest(value string) string {
+	digest := sha256.Sum256([]byte(value))
+	return "sha256:" + hex.EncodeToString(digest[:])
 }
 
 func TestNewRejectsIncompleteStartupSchema(t *testing.T) {

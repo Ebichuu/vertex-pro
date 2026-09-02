@@ -14,6 +14,7 @@ import (
 	"github.com/vertex-pro/vertex-pro/internal/db"
 	"github.com/vertex-pro/vertex-pro/internal/dispatchflow"
 	"github.com/vertex-pro/vertex-pro/internal/httpapi"
+	"github.com/vertex-pro/vertex-pro/internal/profileverify"
 	"github.com/vertex-pro/vertex-pro/internal/qbprofile"
 	"github.com/vertex-pro/vertex-pro/internal/qui/control"
 	"github.com/vertex-pro/vertex-pro/internal/qui/proxy"
@@ -44,18 +45,22 @@ type Config struct {
 	Qui                          *QuiConfig
 }
 
-// QuiConfig enables the read-only qui control/profile/sync runtime. Add and
-// other mutating qB operations are deliberately not started here.
+// QuiConfig enables the qui control/profile/sync runtime. Dispatch remains
+// disabled unless explicitly requested and an exact persisted verification
+// campaign promotes the detected qB Profile to VERIFIED.
 type QuiConfig struct {
-	BaseURL        string
-	InstanceID     string
-	APIKey         secrets.SecretRef
-	ProxyKey       secrets.SecretRef
-	Store          secrets.Store
-	SnapshotRoot   string
-	SyncInterval   time.Duration
-	HTTPClient     *http.Client
-	EnableDispatch bool
+	BaseURL                    string
+	InstanceID                 string
+	APIKey                     secrets.SecretRef
+	ProxyKey                   secrets.SecretRef
+	Store                      secrets.Store
+	SnapshotRoot               string
+	SyncInterval               time.Duration
+	HTTPClient                 *http.Client
+	ProfileVerificationBinding *profileverify.Binding
+	VertexCommit               string
+	VertexWorktreeClean        bool
+	EnableDispatch             bool
 }
 
 // Runtime owns resources initialized during service startup.
@@ -254,6 +259,20 @@ func (runtime *Runtime) startQui(ctx context.Context, config QuiConfig, now func
 	profile, err := qbprofile.Probe(ctx, proxyClient)
 	if err != nil {
 		return err
+	}
+	if config.ProfileVerificationBinding != nil {
+		binding := *config.ProfileVerificationBinding
+		binding.CurrentVertexCommit = strings.TrimSpace(config.VertexCommit)
+		binding.CurrentWorktreeClean = config.VertexWorktreeClean
+		if config.VertexWorktreeClean && strings.TrimSpace(config.VertexCommit) != "" &&
+			binding.VertexCommit == strings.TrimSpace(config.VertexCommit) &&
+			binding.TestSuiteRevision == profileverify.CurrentTestSuiteRevision &&
+			binding.ProxyRouteFingerprint == proxy.RouteFingerprint() {
+			profile, _, err = profileverify.Apply(ctx, runtime.Database, profile, binding, now().UTC())
+			if err != nil {
+				return fmt.Errorf("resolve persisted qB profile verification: %w", err)
+			}
+		}
 	}
 	if config.EnableDispatch {
 		if profile.ProfileVerificationState != "VERIFIED" {

@@ -2,10 +2,14 @@ package qbprofile
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/vertex-pro/vertex-pro/internal/qui/proxy"
 )
@@ -18,17 +22,28 @@ type Proxy interface {
 }
 
 type Profile struct {
-	ID                       string
-	QBAppVersion             string
-	WebAPIVersion            string
-	LibtorrentVersion        string
-	AddStartField            string
-	AddResponseFormat        string
-	IdentityMode             string
-	SupportsV2               bool
-	SupportsHybrid           bool
-	SupportsProcessInfo      bool
-	ProfileVerificationState string
+	ID                                string
+	QBAppVersion                      string
+	QBBuildFingerprint                string
+	WebAPIVersion                     string
+	LibtorrentVersion                 string
+	AddStartField                     string
+	AddResponseFormat                 string
+	IdentityMode                      string
+	SupportsV2                        bool
+	SupportsHybrid                    bool
+	SupportsProcessInfo               bool
+	ProfileVerificationState          string
+	VerifiedQBArtifactDigest          string
+	VerifiedQuiVersion                string
+	VerifiedQuiImageDigest            string
+	VerifiedHarnessImageDigest        string
+	VerificationReportDigest          string
+	VerificationAddFixtureDigest      string
+	VerificationSyncFixtureDigest     string
+	VerificationTrackerFixtureDigest  string
+	VerificationTransferFixtureDigest string
+	ProfileVerifiedAt                 *time.Time
 }
 
 func Probe(ctx context.Context, client Proxy) (Profile, error) {
@@ -47,7 +62,9 @@ func Probe(ctx context.Context, client Proxy) (Profile, error) {
 	if err != nil {
 		return Profile{}, fmt.Errorf("probe qB build info: %w", err)
 	}
-	libtorrent := stringValue(buildInfo, "libtorrent", "libtorrent_version")
+	appVersion = normalizeVersion(appVersion)
+	webAPI = normalizeVersion(webAPI)
+	libtorrent := normalizeVersion(stringValue(buildInfo, "libtorrent", "libtorrent_version"))
 	major, minor, err := versionParts(webAPI)
 	if err != nil {
 		return Profile{}, fmt.Errorf("parse qB WebAPI version %q: %w", webAPI, err)
@@ -57,6 +74,10 @@ func Probe(ctx context.Context, client Proxy) (Profile, error) {
 		WebAPIVersion:            webAPI,
 		LibtorrentVersion:        libtorrent,
 		ProfileVerificationState: "EXPECTED",
+	}
+	profile.QBBuildFingerprint, err = buildFingerprint(profile.QBAppVersion, profile.WebAPIVersion, buildInfo)
+	if err != nil {
+		return Profile{}, err
 	}
 	switch {
 	case major == 2 && minor <= 8:
@@ -96,6 +117,23 @@ func Probe(ctx context.Context, client Proxy) (Profile, error) {
 		}
 	}
 	return profile, nil
+}
+
+func normalizeVersion(raw string) string {
+	return strings.TrimPrefix(strings.TrimSpace(raw), "v")
+}
+
+func buildFingerprint(applicationVersion, webAPIVersion string, buildInfo map[string]any) (string, error) {
+	payload, err := json.Marshal(struct {
+		ApplicationVersion string         `json:"application_version"`
+		WebAPIVersion      string         `json:"webapi_version"`
+		BuildInfo          map[string]any `json:"build_info"`
+	}{ApplicationVersion: applicationVersion, WebAPIVersion: webAPIVersion, BuildInfo: buildInfo})
+	if err != nil {
+		return "", fmt.Errorf("encode qB build fingerprint facts: %w", err)
+	}
+	digest := sha256.Sum256(payload)
+	return "sha256:" + hex.EncodeToString(digest[:]), nil
 }
 
 func stringValue(values map[string]any, keys ...string) string {

@@ -16,6 +16,7 @@ var requiredIndexes = []string{
 	"uq_job_active_attempt",
 	"uq_identity_active_delivery_chain",
 	"uq_attempt_active_waiter",
+	"ix_profile_verification_runs_binding",
 }
 
 var requiredTriggers = []string{
@@ -34,6 +35,8 @@ var requiredTriggers = []string{
 	"system_events_append_only_guard",
 	"api_command_identity_immutable_guard",
 	"api_command_state_transition_guard",
+	"profile_verification_runs_update_guard",
+	"profile_verification_runs_delete_guard",
 }
 
 // StartupConsistencyReport describes every fail-closed startup violation.
