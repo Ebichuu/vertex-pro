@@ -15,6 +15,7 @@ import (
 	"github.com/vertex-pro/vertex-pro/internal/confirmcoordinator"
 	"github.com/vertex-pro/vertex-pro/internal/db"
 	"github.com/vertex-pro/vertex-pro/internal/dispatchflow"
+	"github.com/vertex-pro/vertex-pro/internal/dispatchstage"
 	"github.com/vertex-pro/vertex-pro/internal/httpapi"
 	"github.com/vertex-pro/vertex-pro/internal/matchpipeline"
 	"github.com/vertex-pro/vertex-pro/internal/profileverify"
@@ -54,6 +55,17 @@ type Config struct {
 	RecoveryReconciliationWindow time.Duration
 	Qui                          *QuiConfig
 	Scheduler                    *SchedulerConfig
+	DispatchStage                *DispatchStageConfig
+}
+
+// DispatchStageConfig enables the runtime worker that advances prepared race
+// jobs into dispatch through dispatchorchestrator. It only starts when
+// dispatch itself is enabled, which requires a VERIFIED profile.
+type DispatchStageConfig struct {
+	Enabled              bool
+	Storage              dispatchstage.StorageConfig
+	Interval             time.Duration
+	AllowedArtifactHosts []string
 }
 
 // SchedulerConfig enables the RSS poll cycle. The cycle stops at race job
@@ -82,6 +94,7 @@ type QuiConfig struct {
 	VertexCommit               string
 	VertexWorktreeClean        bool
 	EnableDispatch             bool
+	DispatchStage              *DispatchStageConfig
 }
 
 // Runtime owns resources initialized during service startup.
@@ -96,6 +109,7 @@ type Runtime struct {
 	watcher       *syncwatcher.Watcher
 	confirmations *confirmcoordinator.Coordinator
 	scheduler     *schedulercycle.Cycle
+	dispatchStage *dispatchstage.Stage
 	cancel        context.CancelFunc
 	workers       sync.WaitGroup
 }
@@ -195,7 +209,7 @@ func New(ctx context.Context, config Config) (*Runtime, error) {
 	mux.Handle("/", webembed.Handler())
 	runtime := &Runtime{Database: database, Auth: auth, Handler: mux, Recovery: recovery, hub: hub}
 	if config.Qui != nil {
-		if err := runtime.startQui(ctx, *config.Qui, config.Scheduler, now); err != nil {
+		if err := runtime.startQui(ctx, *config.Qui, config.Scheduler, config.Qui.DispatchStage, now); err != nil {
 			return nil, err
 		}
 	}
@@ -238,7 +252,7 @@ func (runtime *Runtime) SubscriberCount() int {
 	return runtime.hub.SubscriberCount()
 }
 
-func (runtime *Runtime) startQui(ctx context.Context, config QuiConfig, schedulerConfig *SchedulerConfig, now func() time.Time) error {
+func (runtime *Runtime) startQui(ctx context.Context, config QuiConfig, schedulerConfig *SchedulerConfig, dispatchStageConfig *DispatchStageConfig, now func() time.Time) error {
 	if strings.TrimSpace(config.InstanceID) == "" {
 		return errors.New("qui instance ID is required")
 	}
@@ -306,6 +320,13 @@ func (runtime *Runtime) startQui(ctx context.Context, config QuiConfig, schedule
 			return fmt.Errorf("initialize dispatch flow: %w", err)
 		}
 		runtime.Dispatch = dispatch
+		if dispatchStageConfig != nil && dispatchStageConfig.Enabled {
+			stage, err := newDispatchStage(runtime.Database, dispatchStageConfig, proxyClient, profile, now)
+			if err != nil {
+				return fmt.Errorf("initialize dispatch stage: %w", err)
+			}
+			runtime.dispatchStage = stage
+		}
 	}
 	store, err := snapshot.New(runtime.Database, config.SnapshotRoot)
 	if err != nil {
@@ -333,6 +354,26 @@ func (runtime *Runtime) startQui(ctx context.Context, config QuiConfig, schedule
 	runtime.watcher = watcher
 	workerContext, cancel := context.WithCancel(context.Background())
 	runtime.cancel = cancel
+	if runtime.dispatchStage != nil {
+		stageInterval := 30 * time.Second
+		if dispatchStageConfig.Interval > 0 {
+			stageInterval = dispatchStageConfig.Interval
+		}
+		runtime.workers.Add(1)
+		go func() {
+			defer runtime.workers.Done()
+			ticker := time.NewTicker(stageInterval)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-workerContext.Done():
+					return
+				case <-ticker.C:
+					_, _, _ = runtime.dispatchStage.Run(workerContext)
+				}
+			}
+		}()
+	}
 	if schedulerConfig != nil && schedulerConfig.Enabled {
 		scheduler, err := newSchedulerCycle(runtime.Database, schedulerConfig, config.InstanceID)
 		if err != nil {
@@ -414,6 +455,20 @@ func (runtime *Runtime) databaseEnabledFeeds(ctx context.Context) ([]schedulercy
 		feeds = append(feeds, feed)
 	}
 	return feeds, rows.Err()
+}
+
+func newDispatchStage(database *sql.DB, config *DispatchStageConfig, proxyClient *proxy.Client, profile qbprofile.Profile, now func() time.Time) (*dispatchstage.Stage, error) {
+	downloader, err := torrentdownload.New(torrentdownload.Config{AllowedHosts: config.AllowedArtifactHosts})
+	if err != nil {
+		return nil, err
+	}
+	return dispatchstage.New(database, dispatchstage.Config{
+		Storage:    config.Storage,
+		Downloader: downloader,
+		Profile:    profile,
+		Sender:     proxyClient,
+		Now:        now,
+	})
 }
 
 func newSchedulerCycle(database *sql.DB, config *SchedulerConfig, instanceID string) (*schedulercycle.Cycle, error) {
