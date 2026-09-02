@@ -441,3 +441,4 @@ PENDING -> IN_PROGRESS -> IN_REVIEW -> DONE
 | 2026-09-02 | `qutransactionprobe` 新增 `fixture_capture` 模式，归档三 Profile 共 12 份 Add/Sync/tracker/transfer-info 金样本并逐文件校验 SHA-256；剩余清单收敛为 harness 固定与 P0×3 | Codex |
 | 2026-09-02 | harness 固化为 `vertex-pro-g1/harness:pinned` 容器镜像（vcs 身份内嵌、non-root 只读根文件系统），21 用例 + 3 fixture 采集容器化全 PASS；剩余清单收敛为 clean-commit P0×3 | Codex |
 | 2026-09-02 | clean-commit P0×3 三连跑全 PASS；9 条 verification runs 持久化（3 Profile × 3 repetition 全 VERIFIED）并产出 activation binding，G1 阻塞全部闭合 | Codex |
+| 2026-09-03 | 新增 `profileverify.ListRuns` 与 `tools/profileverification -replay-from`：campaign 数据库 runs 可幂等重放进生产数据库（重复重放 0 改写），重放后 `profileverify.Apply` 将 Profile 判定为 VERIFIED，生产装配 `ProfileVerificationBinding` 链路就此打通 | Codex |

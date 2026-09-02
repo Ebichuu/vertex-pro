@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -50,8 +51,15 @@ func execute(ctx context.Context, arguments []string, writer io.Writer) error {
 	trackerFixturePath := flags.String("tracker-fixture", "", "redacted tracker golden fixture")
 	transferFixturePath := flags.String("transfer-info-fixture", "", "redacted transfer-info golden fixture")
 	bindingOutputPath := flags.String("binding-output", "", "write the exact activation binding after a complete stable campaign")
+	replayFromPath := flags.String("replay-from", "", "source SQLite database whose persisted runs are replayed into -database")
 	if err := flags.Parse(arguments); err != nil {
 		return err
+	}
+	if *replayFromPath != "" {
+		if *databasePath == "" || *runPath != "" || *reportPath != "" {
+			return errors.New("-replay-from requires -database only")
+		}
+		return replayRuns(ctx, *databasePath, *replayFromPath, writer)
 	}
 	if *databasePath == "" || *runPath == "" || *reportPath == "" {
 		return errors.New("-database, -run, and -report are required")
@@ -141,6 +149,70 @@ func execute(ctx context.Context, arguments []string, writer io.Writer) error {
 	encoder := json.NewEncoder(writer)
 	encoder.SetIndent("", "  ")
 	return encoder.Encode(result)
+}
+
+// replayRuns copies every persisted profile verification run from a campaign
+// database into the production database. Record is idempotent for identical
+// rows and refuses conflicting ones, so replays never rewrite history; runs
+// remain bound to their immutable report and fixture digests.
+func replayRuns(ctx context.Context, databasePath, sourcePath string, writer io.Writer) error {
+	if databasePath == sourcePath {
+		return errors.New("replay source and target databases must differ")
+	}
+	source, err := openMigrated(ctx, sourcePath)
+	if err != nil {
+		return err
+	}
+	defer source.Close()
+	runs, err := profileverify.ListRuns(ctx, source)
+	if err != nil {
+		return err
+	}
+	target, err := openMigrated(ctx, databasePath)
+	if err != nil {
+		return err
+	}
+	defer target.Close()
+	replayed, idempotent := 0, 0
+	for _, run := range runs {
+		result, err := profileverify.Record(ctx, target, run)
+		if err != nil {
+			return fmt.Errorf("replay run %s: %w", run.RunID, err)
+		}
+		if result.Idempotent {
+			idempotent++
+		} else {
+			replayed++
+		}
+	}
+	encoder := json.NewEncoder(writer)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(map[string]any{
+		"source_runs": len(runs),
+		"replayed":    replayed,
+		"idempotent":  idempotent,
+	})
+}
+
+func openMigrated(ctx context.Context, path string) (*sql.DB, error) {
+	database, err := db.Open(ctx, db.Config{Path: path, MaxOpenConns: 1, MaxIdleConns: 1})
+	if err != nil {
+		return nil, err
+	}
+	runner, err := db.DefaultRunner()
+	if err != nil {
+		_ = database.Close()
+		return nil, err
+	}
+	if err := runner.Apply(ctx, database); err != nil {
+		_ = database.Close()
+		return nil, err
+	}
+	if err := db.CheckStartupConsistency(ctx, database); err != nil {
+		_ = database.Close()
+		return nil, err
+	}
+	return database, nil
 }
 
 func verifyDigest(path, expected, name string) error {

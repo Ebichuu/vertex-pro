@@ -15,6 +15,7 @@ import (
 	"github.com/vertex-pro/vertex-pro/internal/buildidentity"
 	"github.com/vertex-pro/vertex-pro/internal/db"
 	"github.com/vertex-pro/vertex-pro/internal/profileverify"
+	"github.com/vertex-pro/vertex-pro/internal/qbprofile"
 	"github.com/vertex-pro/vertex-pro/internal/qui/proxy"
 )
 
@@ -173,4 +174,88 @@ func toolRun(repetition int, finished time.Time) profileverify.Run {
 func toolDigest(value string) string {
 	digest := sha256.Sum256([]byte(value))
 	return "sha256:" + hex.EncodeToString(digest[:])
+}
+
+func TestReplayImportsCampaignRunsAndVerifiesProfile(t *testing.T) {
+	directory := t.TempDir()
+	campaignPath := filepath.Join(directory, "campaign.db")
+	productionPath := filepath.Join(directory, "vertex-pro.db")
+	base := time.Date(2026, 9, 2, 12, 0, 0, 0, time.UTC)
+	campaign, err := db.Open(context.Background(), db.Config{Path: campaignPath, MaxOpenConns: 1, MaxIdleConns: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	runner, err := db.DefaultRunner()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := runner.Apply(context.Background(), campaign); err != nil {
+		t.Fatal(err)
+	}
+	third := toolRun(3, base.Add(3*time.Minute))
+	for repetition := 1; repetition <= 3; repetition++ {
+		if _, err := profileverify.Record(context.Background(), campaign, toolRun(repetition, base.Add(time.Duration(repetition)*time.Minute))); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_ = third
+	if err := campaign.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	var output bytes.Buffer
+	if err := execute(context.Background(), []string{
+		"-database", productionPath, "-replay-from", campaignPath,
+	}, &output); err != nil {
+		t.Fatal(err)
+	}
+	var result struct {
+		SourceRuns int `json:"source_runs"`
+		Replayed   int `json:"replayed"`
+		Idempotent int `json:"idempotent"`
+	}
+	if err := json.Unmarshal(output.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.SourceRuns != 3 || result.Replayed != 3 || result.Idempotent != 0 {
+		t.Fatalf("replay output=%s", output.String())
+	}
+
+	// A second replay must be fully idempotent and never rewrite history.
+	output.Reset()
+	if err := execute(context.Background(), []string{
+		"-database", productionPath, "-replay-from", campaignPath,
+	}, &output); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(output.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.Replayed != 0 || result.Idempotent != 3 {
+		t.Fatalf("second replay output=%s", output.String())
+	}
+
+	production, err := db.Open(context.Background(), db.Config{Path: productionPath, MaxOpenConns: 1, MaxIdleConns: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer production.Close()
+	runs, err := profileverify.ListRuns(context.Background(), production)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(runs) != 3 {
+		t.Fatalf("production run count=%d", len(runs))
+	}
+	binding := profileverify.BindingFromRun(third)
+	binding.CurrentVertexCommit = third.VertexCommit
+	binding.CurrentWorktreeClean = true
+	detected := qbprofile.Profile{ID: "QB_522", QBAppVersion: "5.2.2", QBBuildFingerprint: toolDigest("qb-build"), WebAPIVersion: "2.15.1", LibtorrentVersion: "2.0.13.0", ProfileVerificationState: profileverify.StateExpected}
+	profile, decision, err := profileverify.Apply(context.Background(), production, detected, binding, base.Add(4*time.Minute))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if profile.ProfileVerificationState != profileverify.StateVerified || decision.State != profileverify.StateVerified {
+		t.Fatalf("profile=%s decision=%+v", profile.ProfileVerificationState, decision)
+	}
 }
