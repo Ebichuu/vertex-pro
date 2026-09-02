@@ -39,7 +39,7 @@ type Report struct {
 }
 
 func NewBaseline() Baseline {
-	return Baseline{QuiImage: "UNSET", QuiDigest: "UNSET", HarnessImage: "UNSET", Profiles: []Profile{{ID: "QB_438", QBVersion: "4.3.8", WebAPIVersion: "2.8.1", Libtorrent: "1.2.x"}, {ID: "QB_504", QBVersion: "5.0.4", WebAPIVersion: "2.11.x", Libtorrent: "2.0.x"}, {ID: "QB_522", QBVersion: "5.2.2", WebAPIVersion: "2.14.x", Libtorrent: "2.0.x"}}, ExternalCalls: false}
+	return Baseline{QuiImage: "UNSET", QuiDigest: "UNSET", HarnessImage: "UNSET", Profiles: []Profile{{ID: "QB_438", QBVersion: "4.3.8", WebAPIVersion: "2.8.2", Libtorrent: "1.2.14.0"}, {ID: "QB_504", QBVersion: "5.0.4", WebAPIVersion: "2.11.2", Libtorrent: "2.0.11.0"}, {ID: "QB_522", QBVersion: "5.2.2", WebAPIVersion: "2.15.1", Libtorrent: "2.0.13.0"}}, ExternalCalls: false}
 }
 func Validate(b Baseline) error {
 	if strings.TrimSpace(b.QuiImage) == "" || strings.TrimSpace(b.QuiDigest) == "" || strings.TrimSpace(b.HarnessImage) == "" {

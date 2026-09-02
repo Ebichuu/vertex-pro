@@ -1,0 +1,25 @@
+{
+  "status": "PASS",
+  "profile": "QB_438",
+  "safety": {
+    "explicit_opt_in": true,
+    "start_inactive": true,
+    "trackerless": true,
+    "existing_tasks_preserved": true,
+    "delete_endpoint_called": false,
+    "test_task_retained": true
+  },
+  "add": {
+    "http_status": 200,
+    "response_format": "legacy_text",
+    "success_count": 1,
+    "side_effect_fact": "POSSIBLE_EFFECT"
+  },
+  "confirmation": {
+    "matcher_status": "MATCHED",
+    "observed": true,
+    "inactive": true,
+    "state": "pausedDL",
+    "task_delta": 1
+  }
+}

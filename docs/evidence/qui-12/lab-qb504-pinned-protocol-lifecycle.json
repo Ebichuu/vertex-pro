@@ -1,0 +1,42 @@
+{
+  "status": "PASS",
+  "profile": "QB_504",
+  "fixture": {
+    "identity_present_before": true,
+    "task_count_before": 2,
+    "start_field": "stopped",
+    "fixture_sha256": "d517360f3641ae6d8eb54b5eab566f80274f029e8d1e8ba7456377ef78aa6599"
+  },
+  "duplicate_add": {
+    "http_status": 200,
+    "body_class": "legacy_fails",
+    "task_set_unchanged": true
+  },
+  "invalid_add": {
+    "http_status": 415,
+    "body_class": "nonempty_error",
+    "request_rejected": true,
+    "task_set_unchanged": true
+  },
+  "reads": {
+    "trackers_http_status": 200,
+    "trackers_json": true,
+    "transfer_info_http_status": 200,
+    "transfer_info_json": true
+  },
+  "delete": {
+    "http_status": 200,
+    "response_empty": true,
+    "removed_count_observed": 2,
+    "incremental_removed_observed": true,
+    "full_update_reset_count": 0,
+    "task_count_after": 0,
+    "lab_returned_empty": true
+  },
+  "safety": {
+    "isolated_lab_only": true,
+    "production_services_called": false,
+    "all_deleted_hashes_from_lab_baseline": true,
+    "secrets_redacted": true
+  }
+}

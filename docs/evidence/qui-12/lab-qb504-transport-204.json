@@ -1,0 +1,47 @@
+{
+  "status": "PASS",
+  "profile": "QB_504",
+  "safety": {
+    "explicit_isolated_lab_opt_in": true,
+    "baseline_empty": true,
+    "start_inactive": true,
+    "trackerless": true,
+    "production_services_called": false,
+    "delete_only_added_identity": true,
+    "lab_returned_empty": true,
+    "temporary_database_removed": true,
+    "secrets_redacted": true
+  },
+  "placement_gate": {
+    "profile_state": "EXPECTED",
+    "selected": false,
+    "rejection_code": "PROFILE_NOT_VERIFIED",
+    "lab_bypass": "TRANSACTION_FIXTURE_ONLY_NO_PROFILE_PROMOTION"
+  },
+  "fault": {
+    "mode": "transport_204",
+    "sender_calls": 1,
+    "reconciler_outcome": "RECONCILED_NO_EFFECT",
+    "automatic_redispatches": 0,
+    "synthetic_response": true
+  },
+  "transaction": {
+    "reservation_state": "ACTIVE",
+    "attempt_after_reserve": "RESERVED",
+    "dispatch_http_status": 204,
+    "dispatch_format": "empty",
+    "dispatch_commit_state": "UNKNOWN",
+    "sync_matched": false,
+    "sync_evidence_source": "SYNTHETIC_TRANSPORT_FIXTURE",
+    "observed_inactive": false,
+    "observed_state": "",
+    "waiter_closed": true,
+    "attempt_final": "RECONCILED_NO_EFFECT",
+    "job_final": "RECONCILED_NO_EFFECT",
+    "intent_dispatch": "STARTED",
+    "reservation_final": "RELEASED",
+    "binding_created": false,
+    "first_confirm_replay_idempotent": false,
+    "event_count": 2
+  }
+}

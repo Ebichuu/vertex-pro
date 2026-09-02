@@ -1,0 +1,137 @@
+name: vertex-pro-g1
+
+services:
+  qui-volume-init:
+    image: alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
+    command: ["chown", "-R", "10001:10001", "/config"]
+    user: "0:0"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+    volumes:
+      - qui-config:/config
+    networks:
+      - qb-internal
+    restart: "no"
+
+  qui-config-init:
+    image: vertex-pro-g1/qui:pinned-8fcfc4d
+    command: ["generate-config", "--config-dir", "/config"]
+    depends_on:
+      qui-volume-init:
+        condition: service_completed_successfully
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    volumes:
+      - qui-config:/config
+    networks:
+      - qb-internal
+    restart: "no"
+
+  qui:
+    image: vertex-pro-g1/qui:pinned-8fcfc4d
+    build:
+      context: images/qui
+      dockerfile: Dockerfile
+      args:
+        QUI_COMMIT: 8fcfc4d2beaf5e68ccebe837d7c0d9be965c8896
+    depends_on:
+      qui-config-init:
+        condition: service_completed_successfully
+      qb438:
+        condition: service_started
+      qb504:
+        condition: service_started
+      qb522:
+        condition: service_started
+    command: ["serve", "--config-dir", "/config", "--data-dir", "/config"]
+    environment:
+      QUI__PORT: "7476"
+      QUI__DATA_DIR: /config
+    ports:
+      - "127.0.0.1:${VERTEX_G1_QUI_PORT:-17481}:7476"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+      - /home/qui:rw,noexec,nosuid,size=16m
+    volumes:
+      - qui-config:/config
+    networks:
+      - qb-internal
+      - host-bridge
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:7476/health"]
+      interval: 2s
+      timeout: 2s
+      retries: 45
+      start_period: 2s
+
+  qb438:
+    image: vertex-pro-g1/qbittorrent:4.3.8-static
+    build:
+      context: images/qb438
+      dockerfile: Dockerfile
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+      - /config:rw,noexec,nosuid,size=64m
+      - /downloads:rw,noexec,nosuid,size=64m
+    networks:
+      qb-internal:
+        aliases: [qb438]
+
+  qb504:
+    image: lscr.io/linuxserver/qbittorrent:5.0.4@sha256:46f4e80af074fa2ffc0214fe0b7d59384748cfb34685892a53b7a3c87407a333
+    environment:
+      WEBUI_PORT: "8080"
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+      - /config:rw,noexec,nosuid,size=64m
+      - /downloads:rw,noexec,nosuid,size=64m
+    networks:
+      qb-internal:
+        aliases: [qb504]
+
+  qb522:
+    image: vertex-pro-g1/qbittorrent:5.2.2-static
+    build:
+      context: images/qb522
+      dockerfile: Dockerfile
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+      - /config:rw,noexec,nosuid,size=64m
+      - /downloads:rw,noexec,nosuid,size=64m
+    networks:
+      qb-internal:
+        aliases: [qb522]
+
+volumes:
+  qui-config:
+
+networks:
+  qb-internal:
+    internal: true
+  host-bridge:
+    internal: false

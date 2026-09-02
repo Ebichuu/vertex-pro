@@ -1,0 +1,20 @@
+{
+  "item": "QUI-12 / ADD-14 current-source revalidation",
+  "status": "BLOCKED",
+  "checked_at": "2026-09-02T07:45:00Z",
+  "git_commit": "0de553ca20876ef1532f63c819febd4d4e25a08f",
+  "command": "docker info --format '{{json .ServerVersion}}'",
+  "exit_code": 1,
+  "error": "failed to connect to the docker API at npipe:////./pipe/dockerDesktopLinuxEngine; the system cannot find the file specified",
+  "impact": [
+    "The archived 18-case matrix remains valid as historical lab evidence.",
+    "The matrix cannot yet qualify the current pre-send durable-marker implementation because Docker Desktop is not running.",
+    "No Profile promotion or G1 Gate transition is allowed from this blocked run."
+  ],
+  "safety": {
+    "lab_started": false,
+    "production_services_called": false,
+    "external_tasks_created_or_deleted": 0,
+    "secrets_persisted": false
+  }
+}

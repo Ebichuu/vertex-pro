@@ -1,12 +1,14 @@
 {
   "item": "QUI-12",
   "status": "IN_PROGRESS",
-  "executed_at": "2026-09-01T12:44:00Z",
+  "executed_at": "2026-09-01T16:05:00Z",
   "safety": {
     "real_qui_instance_touched": false,
     "real_qb_instance_touched": false,
-    "lab_containers_created": 2,
-    "external_tasks_created_or_deleted": 0
+    "lab_containers_created": 4,
+    "external_tasks_created_or_deleted": 0,
+    "lab_tasks_deleted_after_test": true,
+    "lab_containers_removed": true
   },
   "docker": {
     "engine_available": true,
@@ -16,35 +18,45 @@
     "backend": "Docker Desktop WSL2"
   },
   "available_local_images": {
+    "qb_438": {
+      "reference": "vertex-pro-g1/qbittorrent:4.3.8-static",
+      "binary_sha256": "487ac667f188df6a86623410193c8d03f14bff718223a5cd4f0a84a5bfe2a327",
+      "local_image_digest": "sha256:bacd6e6a0cee31c58287ec05d6b526ad0824e65f9572730f2ae0cb3b397c3452",
+      "present": true
+    },
     "qb_504": {
       "reference": "lscr.io/linuxserver/qbittorrent:5.0.4",
       "manifest_digest": "sha256:46f4e80af074fa2ffc0214fe0b7d59384748cfb34685892a53b7a3c87407a333",
       "exact_build_label": "5.0.4-r0-ls390",
       "present": true
     },
-    "qb_438": {
-      "present": false
-    },
     "qb_522": {
-      "present": false
+      "reference": "vertex-pro-g1/qbittorrent:5.2.2-static",
+      "binary_sha256": "0d219aa16905d75161e5eaee82288358c5d63947ffd48623997fc5dd481664e3",
+      "local_image_digest": "sha256:684f7897e670d8af07db69869c4b6dddeea4186d7c8472b9fcbb5dbd6c33912f",
+      "present": true
     },
     "qui": {
-      "present": true,
-      "reference": "vertex-pro-g1/qui:1.0.0-source-d5526ca",
-      "local_image_digest": "sha256:bbc4f629a5ffa2d5751bc2d547428f53b1de5b865958b2e3fc75de8603e1dc8d",
-      "matches_required_lock_commit": false
+      "reference": "vertex-pro-g1/qui:pinned-8fcfc4d",
+      "upstream_commit": "8fcfc4d2beaf5e68ccebe837d7c0d9be965c8896",
+      "local_image_digest": "sha256:0d966729169f06e1803dd2772016e3c738ab262e4588e28540042bb765e0735f",
+      "matches_required_lock_commit": true,
+      "present": true
     }
   },
-  "remote_manifests": {
-    "qui_v1_0_0_linux_amd64": "sha256:3dbde1ab20addcaa460a222ff6541ec291704cf64cec9a92e801a3f3abdc4cde",
-    "qb_522_linux_amd64": "sha256:f6bc57461a97a9c55962e373fb275283a846065fe14d088818179af2f28a0782",
-    "qb_438_exact_tag_found": false
-  },
-  "blockers": [
-    "Registry pulls timed out, so a local qui v1.0.0 image was built from upstream commit d5526ca59e7d04cc1e31377f0bcde844ad914212; it does not match the required lock commit.",
-    "Pulling the pinned qB 5.2.2 image timed out before completion.",
-    "An exact reproducible qB 4.3.8 runnable image is not yet available locally.",
-    "The current lab compose file contains only the Vertex Pro service; the successful QB_504 lifecycle was assembled as an ephemeral two-container lab and is not yet codified as the three-profile compose baseline."
+  "completed": [
+    "All three exact qB versions are runnable locally.",
+    "The qui build matches third_party/qui/UPSTREAM_LOCK.yaml.",
+    "All three profiles passed read-only Control/Profile/Sync probes.",
+    "All three profiles passed production Go inactive Add and core protocol lifecycle cases.",
+    "Persistent qui restart preserved instances and allowed already-present no-dispatch recovery.",
+    "All lab tasks, containers, volumes and temporary secret files were removed."
   ],
-  "result": "An isolated QB_504 partial G1 lifecycle now passes, including production Go Add and incremental delete observation. Full G1 remains incomplete, QB_504 stays EXPECTED, and real Placement/Add remains fail closed."
+  "remaining_blockers": [
+    "The 18 archived transaction/fault reports predate the current pre-send durable-marker evidence fields and must be rerun; Docker Desktop is currently unavailable.",
+    "An external process kill -9 case after body send and before response commit has not been executed.",
+    "profile_verification_runs persistence and immutable promotion binding are not implemented.",
+    "The transaction harness image is not pinned, and the P0 matrix has not passed three consecutive times from a clean commit."
+  ],
+  "result": "The exact three-profile core lifecycle and archived 3 x 6 transaction/fault matrix are passing. Full G1 remains IN_PROGRESS; all Profiles stay EXPECTED and production Placement/Add remains fail closed until current-source revalidation and the remaining release controls pass."
 }

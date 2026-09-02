@@ -1,0 +1,21 @@
+{
+  "status": "PASS",
+  "profiles": {
+    "QB_438": {
+      "task_count_before_cleanup": 1,
+      "delete_http_status": 200,
+      "task_count_after_cleanup": 0
+    },
+    "QB_504": {
+      "task_count_before_cleanup": 1,
+      "delete_http_status": 200,
+      "task_count_after_cleanup": 0
+    },
+    "QB_522": {
+      "task_count_before_cleanup": 1,
+      "delete_http_status": 200,
+      "task_count_after_cleanup": 0
+    }
+  },
+  "production_services_called": false
+}

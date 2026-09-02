@@ -1,0 +1,36 @@
+{
+  "status": "PASS",
+  "safety": {
+    "read_only": true,
+    "write_endpoints_called": false,
+    "secrets_redacted": true
+  },
+  "instance": {
+    "id": "3",
+    "status": "firewalled",
+    "enabled": true,
+    "transfer_info_valid": true,
+    "capability_count": 19
+  },
+  "profile": {
+    "ID": "QB_522",
+    "QBAppVersion": "v5.2.2",
+    "WebAPIVersion": "2.15.1",
+    "LibtorrentVersion": "2.0.13.0",
+    "AddStartField": "stopped",
+    "AddResponseFormat": "json_counts",
+    "IdentityMode": "dual_hash",
+    "SupportsV2": true,
+    "SupportsHybrid": true,
+    "SupportsProcessInfo": true,
+    "ProfileVerificationState": "EXPECTED"
+  },
+  "sync": {
+    "initial_rid": 4,
+    "next_rid": 5,
+    "full_update": true,
+    "torrent_count": 0,
+    "removed_count": 0,
+    "task_set_unchanged": true
+  }
+}

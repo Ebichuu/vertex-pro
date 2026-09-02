@@ -6,7 +6,7 @@
     "G1 baseline manifest for the three frozen qB profiles",
     "deterministic baseline validation and digest report harness",
     "explicit external_calls=false guard",
-    "all local-only profile results remain EXPECTED until real qui/qB lab execution"
+    "profile results remain EXPECTED until the complete write/fault/transaction G1 matrix passes"
   ],
   "profiles": ["QB_438", "QB_504", "QB_522"],
   "artifacts": [
@@ -32,12 +32,12 @@
     {"profile_id": "QB_522", "status": "EXPECTED"}
   ],
   "inputs": [
-    {"path": "internal/g1lab/baseline.go", "sha256": "607624b554cb3907b92f8f419e70e86307d8d6866924641b8caa64343ee9a129"},
+    {"path": "internal/g1lab/baseline.go", "sha256": "897f9ea98ea7b2d39ea24b8d40e493fb99774aa057b9472240076f3f9afcfe4b"},
     {"path": "internal/g1lab/baseline_test.go", "sha256": "847612556a4a37835fe43c86eca4d00d27fbc9eac0bb5b6ad754c73dd011b5cb"},
-    {"path": "deploy/compose/lab/g1-baseline.yaml", "sha256": "2999d13f2613ae2cc8cce2a4860022642efc372fe43fd0756396eec4d11114be"},
+    {"path": "deploy/compose/lab/g1-baseline.yaml", "sha256": "6d60d12e30ee94dd035dc230b17bcc43c58b20b531b7a4b7cdcf2faa4d896b4a"},
     {"path": "internal/quprobe/probe.go", "sha256": "2961c43775d3d9da70128505b46d121760f731cba7620e6d4ec34a8de1184c94"}
   ],
-  "blocker": "No real qui image digest, qB build, network harness, or lab execution was available; therefore no profile is VERIFIED/PASSED and no capability is promoted.",
+  "blocker": "An archived 3 Profile x 6 mode transaction/fault matrix is PASS, but it predates the current pre-send durable-marker evidence fields. Current-source lab revalidation, external kill -9 coverage, persisted profile_verification_runs, a pinned harness image, and three consecutive clean-commit P0 runs remain incomplete; therefore no profile is VERIFIED/PASSED and no capability is promoted.",
   "no_external_service_calls": true
 }
 

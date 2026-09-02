@@ -1,0 +1,117 @@
+{
+  "item": "QUI-12 / ADD-05..14",
+  "status": "IN_PROGRESS",
+  "updated_at": "2026-09-02T07:41:00Z",
+  "isolation": {
+    "docker_internal_network": true,
+    "production_qui_called": false,
+    "production_qb_called": false,
+    "all_qb_profiles_returned_empty": true,
+    "lab_containers_removed": true,
+    "lab_secrets_removed": true
+  },
+  "qui": {
+    "upstream_commit": "8fcfc4d2beaf5e68ccebe837d7c0d9be965c8896",
+    "matches_upstream_lock": true,
+    "local_image_digest": "sha256:0d966729169f06e1803dd2772016e3c738ab262e4588e28540042bb765e0735f"
+  },
+  "profiles": {
+    "QB_438": {
+      "qb_version": "v4.3.8",
+      "webapi_version": "2.8.2",
+      "libtorrent_version": "1.2.14.0",
+      "binary_sha256": "487ac667f188df6a86623410193c8d03f14bff718223a5cd4f0a84a5bfe2a327",
+      "local_image_digest": "sha256:bacd6e6a0cee31c58287ec05d6b526ad0824e65f9572730f2ae0cb3b397c3452",
+      "inactive_start_field": "paused",
+      "add_response_format": "legacy_text",
+      "core_lifecycle": "PASS",
+      "archived_transaction_fault_cases": "6/6 PASS"
+    },
+    "QB_504": {
+      "qb_version": "v5.0.4",
+      "webapi_version": "2.11.2",
+      "libtorrent_version": "2.0.11.0",
+      "local_image_digest": "sha256:46f4e80af074fa2ffc0214fe0b7d59384748cfb34685892a53b7a3c87407a333",
+      "inactive_start_field": "stopped",
+      "add_response_format": "legacy_text",
+      "core_lifecycle": "PASS",
+      "archived_transaction_fault_cases": "6/6 PASS"
+    },
+    "QB_522": {
+      "qb_version": "v5.2.2",
+      "webapi_version": "2.15.1",
+      "libtorrent_version": "2.0.13.0",
+      "binary_sha256": "0d219aa16905d75161e5eaee82288358c5d63947ffd48623997fc5dd481664e3",
+      "local_image_digest": "sha256:684f7897e670d8af07db69869c4b6dddeea4186d7c8472b9fcbb5dbd6c33912f",
+      "inactive_start_field": "stopped",
+      "add_response_format": "json",
+      "core_lifecycle": "PASS",
+      "archived_transaction_fault_cases": "6/6 PASS"
+    }
+  },
+  "verified_core_cases": [
+    "Control instance/transfer/capabilities reads",
+    "Profile and exact version probe",
+    "Initial and follow-up Sync",
+    "Production Go DispatchWorker inactive Add",
+    "IdentityMatcher confirmation to pausedDL/stoppedDL",
+    "Duplicate Add with unchanged task set",
+    "Invalid torrent rejection with unchanged task set",
+    "Tracker and transfer-info reads",
+    "Incremental torrents_removed observation",
+    "Persistent qui restart with preserved Client Proxy keys and already-present skip",
+    "Final lab task cleanup"
+  ],
+  "archived_transaction_fault_matrix": {
+    "status": "PASS",
+    "reports": 18,
+    "profiles": 3,
+    "modes_per_profile": [
+      "none",
+      "response_loss",
+      "timeout",
+      "transport_202",
+      "transport_204",
+      "transport_409"
+    ],
+    "sender_calls": 18,
+    "automatic_redispatches": 0,
+    "all_labs_returned_empty": true,
+    "current_dispatch_boundary_revalidated": false,
+    "note": "These archived reports predate the pre-send durable ADD_SENT/STARTED evidence fields. They prove the earlier transaction/fault outcomes but do not qualify the current safety boundary without a rerun."
+  },
+  "remaining_before_profile_verified": [
+    "Rerun all 18 three-profile cases against the current pre-send durable-marker implementation; Docker Desktop was unavailable during this source revision.",
+    "Execute an external process kill -9 after body send and before response commit, then prove startup recovery reaches UNKNOWN without another Add.",
+    "Persist profile_verification_runs and bind Profile promotion to immutable run/report digests.",
+    "Pin the transaction harness image and emit a complete immutable image/source digest manifest.",
+    "Run the P0 matrix three consecutive times from a clean commit and archive all reports and SHA-256 digests."
+  ],
+  "verification_decision": {
+    "profile_state": "EXPECTED",
+    "may_promote_to_verified": false,
+    "g1_gate": "PENDING"
+  },
+  "evidence": {
+    "core_lifecycle": {
+      "path": "docs/evidence/qui-12/g1-three-profile-core-lifecycle.json",
+      "sha256": "4619df9123306b2b23e50962d517a8459b0a086aefb14f7925488d7ed33abee9"
+    },
+    "restart_recovery": {
+      "path": "docs/evidence/qui-12/g1-qui-restart-recovery.json",
+      "sha256": "2780b06d54e78ce4759b1c3c23a503f5a3830d558d31da536babab2c6f5fa020"
+    },
+    "final_cleanup": {
+      "path": "docs/evidence/qui-12/g1-final-lab-cleanup.json",
+      "sha256": "5605a8283f89a75fb1890456462011132d1d0c8c1a34b4f804f20f330df9f6c8"
+    },
+    "archived_transaction_fault_matrix": {
+      "path": "docs/evidence/qui-12/g1-three-profile-matrix-summary.json",
+      "sha256": "edaa50ab12c53ff4452e250d44f360bb8413dd7d5fdf66e9b43bf78ec6b0bd18"
+    },
+    "current_revalidation_blocker": {
+      "path": "docs/evidence/qui-12/g1-current-revalidation-blocked.json",
+      "sha256": "ddee119973fa361b3109a239d3d33e1cbee4b4684619321277875a926e14fab7"
+    }
+  }
+}
