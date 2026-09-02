@@ -1,7 +1,7 @@
 {
   "kind": "vertex-pro-g1-transfer-info-fixture",
   "profile_id": "QB_438",
-  "captured_at": "2026-09-02T15:32:46Z",
+  "captured_at": "2026-09-02T15:56:54Z",
   "source": "QBITTORRENT_SYNC_MAINDATA_TASK_FIELDS (the qB proxy allowlist does not expose torrents/transferInfo; amount_left and transfer facts come from the task's sync fields)",
   "torrent_id": "16c85feb7eda20c13c6d2a4f85f54e56ee927f0c",
   "transfer_fields": {

@@ -1,9 +1,9 @@
 {
   "item": "QUI-12 / ADD-05..14",
   "status": "IN_PROGRESS",
-  "generated_at": "2026-09-02T15:36:35Z",
+  "generated_at": "2026-09-02T15:57:21Z",
   "source": {
-    "git_commit": "d3f91dbeef51219c1f23f42dbb375ea0a58d1be0",
+    "git_commit": "15707ff3f0f6522a362e3d7503464cf09d9846a9",
     "git_clean": false,
     "report_count": 18
   },
@@ -323,37 +323,37 @@
         "profile": "QB_438",
         "status": "PASS",
         "digests": {
-          "add": "d12009683803efdc7007257aecb40e7e04a20a7bad4c86df1a335d2d8117ca89",
-          "sync": "7274bd47f5a1590652417a6cb1e3fed1266404974d7737879ad5c0a25205f6ce",
-          "tracker": "ee477da524c9995815cf6e063f17736e4caacd18e7ea5d5862ab8720e9f11de3",
-          "transfer_info": "5cab3dc0c3eff2cbcc924ddd6ef3b774a7bb1478ca2540e67b68ea1630476adf"
+          "add": "778b261ecef5f92db72a7cc758232a47b225ec1d7238529cd6f3c4ba26e9049e",
+          "sync": "ed5a7a27e935cc07434a0f54b7d75141f5a8670331561c86efabd037d41716c4",
+          "tracker": "356b5ae47f0488b119ab5d86bbbb96cb083d3af3ff2195ea4ce512cd258c3cc6",
+          "transfer_info": "75faed3c9960fa45770c07f7928f806f07d422d60872ba808d18236af536c657"
         },
         "capture_report": "docs/evidence/qui-12/lab-qb438-fixture-capture.json",
-        "capture_report_sha256": "01f7bb734f63e3752e808662249dc7d8ae6c70412bf3a1beabbc2de52736a05a"
+        "capture_report_sha256": "0806d45a3b86b8f8ec94c1a0350deb9e0a6129b2c097b34f08c1fa872ddfba4e"
       },
       {
         "profile": "QB_504",
         "status": "PASS",
         "digests": {
-          "add": "cdd4bce67c71ad6d05799fc01207413de811870e8796f0933935469cfd907689",
-          "sync": "5ad1a3a5efd4002ff285413ec9d831a5dc5f70ca104ea147d3c3dd582a02dca0",
-          "tracker": "d36d22e318379975ccfaee1e53d49c1190bf287bf1050ec06139f8c3954fb222",
-          "transfer_info": "3263251e9869a9f89fa15a488bb19c498937f9089ae13fa6a8706d3798fee16c"
+          "add": "dd8045e0536ebb3a46ce3c2fb181c68ee7f9cf171e723092bed7102f993aca6d",
+          "sync": "37424e5732d569c8fbf7fe08c2197883f50d02fe92cd5a293bd890716391076e",
+          "tracker": "440cd30dece00ffa2bcd71df08ab7dca317d2b6ebc8df73ce8fcb43d29eb2045",
+          "transfer_info": "591f087820f1f7eadb05ba6ddc3815fd0a1e9288fbbc5329d38167bcfb1423bc"
         },
         "capture_report": "docs/evidence/qui-12/lab-qb504-fixture-capture.json",
-        "capture_report_sha256": "dde1993e6aa642985fccb2685f56367704cad718665676a78a8884e52879d169"
+        "capture_report_sha256": "10f48bb9765905882d7f700d57276e8cb4e4316cc38a97b162c58fb452a2b48f"
       },
       {
         "profile": "QB_522",
         "status": "PASS",
         "digests": {
-          "add": "72afdcf16a6e069137c09e9521836e084d620f5c8b21b1246216b9cd0f703b91",
-          "sync": "fe2163d50e7c4c1700c744576a01785e179ef73e6e6e9bf10a9130852746c6a0",
-          "tracker": "89f0adb8c294cd5308b069bda9d2425058e2cb19b487721977f8157c4d99b4aa",
-          "transfer_info": "cd45629c08692313e5ba69d97be7ffdb7b607f8be9e69d2bbe43abc3f120a87a"
+          "add": "91833f87e7f48099e296bda78c9518f5ed7c2e0efea4f227a48e1d241832ba8e",
+          "sync": "53e398ffb5df5711007bf936fc7b30dd089474b4fcabd96a0b5b22cba570936a",
+          "tracker": "49a3f37d4bca9eb5ef8b5e1b1a9acdc2d1b5a4617d7414c68ee282eb431ff790",
+          "transfer_info": "64450dfc9b581e5db77e04dd53f61667076702b560f30bed8647a82b752b2e09"
         },
         "capture_report": "docs/evidence/qui-12/lab-qb522-fixture-capture.json",
-        "capture_report_sha256": "73c0dcb718c4629a1d4d86d5e6ee0521ea117d41fef8391e0b174e759f22dc69"
+        "capture_report_sha256": "d3f895be83210e43bde184b13632010255d56fcf8f0d595d11f8a27b9d355ca6"
       }
     ]
   },

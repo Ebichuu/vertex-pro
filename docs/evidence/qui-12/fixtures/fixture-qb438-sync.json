@@ -1,7 +1,7 @@
 {
   "kind": "vertex-pro-g1-sync-fixture",
   "profile_id": "QB_438",
-  "captured_at": "2026-09-02T15:32:46Z",
+  "captured_at": "2026-09-02T15:56:54Z",
   "baseline_full_update": {
     "categories": {},
     "full_update": true,
@@ -118,7 +118,7 @@
     "tags": [],
     "torrents": {
       "16c85feb7eda20c13c6d2a4f85f54e56ee927f0c": {
-        "added_on": 1788363166,
+        "added_on": 1788364614,
         "amount_left": 1,
         "auto_tmm": false,
         "availability": 0,
@@ -133,7 +133,7 @@
         "eta": 8640000,
         "f_l_piece_prio": false,
         "force_start": false,
-        "last_activity": 1788363166,
+        "last_activity": 1788364614,
         "magnet_uri": "magnet:?xt=urn:btih:16c85feb7eda20c13c6d2a4f85f54e56ee927f0c\u0026dn=vertex-pro-g1-transaction-qb_438-fixture-capture-v1",
         "max_ratio": -1,
         "max_seeding_time": -1,
