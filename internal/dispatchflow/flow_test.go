@@ -1,12 +1,19 @@
 package dispatchflow
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"os"
+	"os/exec"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -145,6 +152,187 @@ func TestCrashAfterSendBeforeRecordRecoversUnknownWithoutReplay(t *testing.T) {
 	if calls != 1 {
 		t.Fatalf("sender calls=%d want=1", calls)
 	}
+}
+
+func TestExternalProcessKillAfterSendBeforeRecordRecoversWithoutReplay(t *testing.T) {
+	if os.Getenv("VERTEX_PRO_DISPATCH_CRASH_CHILD") == "1" {
+		runDispatchCrashChild(t)
+		return
+	}
+
+	directory := t.TempDir()
+	databasePath := filepath.Join(directory, "crash.db")
+	database, err := db.Open(context.Background(), db.Config{Path: databasePath, MaxOpenConns: 1, MaxIdleConns: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	migrationRunner, err := db.DefaultRunner()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := migrationRunner.Apply(context.Background(), database); err != nil {
+		t.Fatal(err)
+	}
+	_ = prepareReservedFlow(t, database)
+	if err := database.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	var networkCalls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		body, readErr := io.ReadAll(request.Body)
+		if readErr != nil || request.Method != http.MethodPost || request.URL.Path != "/api/v2/torrents/add" || len(body) == 0 {
+			http.Error(response, "invalid add", http.StatusBadRequest)
+			return
+		}
+		networkCalls.Add(1)
+		response.WriteHeader(http.StatusOK)
+		_, _ = response.Write([]byte("Ok."))
+	}))
+	defer server.Close()
+
+	signalPath := filepath.Join(directory, "response-received.signal")
+	command := exec.Command(os.Args[0], "-test.run=^TestExternalProcessKillAfterSendBeforeRecordRecoversWithoutReplay$")
+	command.Env = append(os.Environ(),
+		"VERTEX_PRO_DISPATCH_CRASH_CHILD=1",
+		"VERTEX_PRO_DISPATCH_CRASH_DB="+databasePath,
+		"VERTEX_PRO_DISPATCH_CRASH_URL="+server.URL,
+		"VERTEX_PRO_DISPATCH_CRASH_SIGNAL="+signalPath,
+	)
+	var childOutput bytes.Buffer
+	command.Stdout = &childOutput
+	command.Stderr = &childOutput
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	childDone := make(chan error, 1)
+	go func() { childDone <- command.Wait() }()
+	childRunning := true
+	t.Cleanup(func() {
+		if childRunning && command.Process != nil {
+			_ = command.Process.Kill()
+			<-childDone
+		}
+	})
+
+	deadline := time.NewTimer(15 * time.Second)
+	poll := time.NewTicker(10 * time.Millisecond)
+	defer deadline.Stop()
+	defer poll.Stop()
+waitForSignal:
+	for {
+		select {
+		case err := <-childDone:
+			childRunning = false
+			t.Fatalf("crash child exited before kill boundary: %v\n%s", err, childOutput.String())
+		case <-deadline.C:
+			t.Fatalf("timed out waiting for post-send/pre-Record boundary\n%s", childOutput.String())
+		case <-poll.C:
+			if _, err := os.Stat(signalPath); err == nil {
+				break waitForSignal
+			}
+		}
+	}
+	if networkCalls.Load() != 1 {
+		t.Fatalf("network calls before kill=%d want=1", networkCalls.Load())
+	}
+	if err := command.Process.Kill(); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-childDone; err == nil {
+		t.Fatal("crash child exited cleanly after an abrupt kill")
+	}
+	childRunning = false
+
+	recoveredDatabase, err := db.Open(context.Background(), db.Config{Path: databasePath, MaxOpenConns: 1, MaxIdleConns: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer recoveredDatabase.Close()
+	now := time.Date(2026, 9, 1, 16, 1, 0, 0, time.UTC)
+	recovery, err := startuprecover.Recover(context.Background(), recoveredDatabase, startuprecover.Input{Now: now, ConfirmationWindow: 10 * time.Minute, ReconciliationWindow: time.Hour})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(recovery.PromotedUnknown) != 1 || recovery.PromotedUnknown[0] != "attempt-1" || len(recovery.KeptWaiters) != 1 {
+		t.Fatalf("recovery=%+v", recovery)
+	}
+	assertAttempt(t, recoveredDatabase, "UNKNOWN", "STARTED", "POSSIBLE_EFFECT", true)
+	var responseFact sql.NullString
+	if err := recoveredDatabase.QueryRow(`SELECT response_fact_at FROM submit_intents WHERE submit_intent_id='intent-1'`).Scan(&responseFact); err != nil {
+		t.Fatal(err)
+	}
+	if responseFact.Valid {
+		t.Fatalf("response_fact_at=%q, want NULL after killed process", responseFact.String)
+	}
+	var reason string
+	if err := recoveredDatabase.QueryRow(`SELECT reason_code FROM race_events WHERE attempt_id='attempt-1' AND to_state='UNKNOWN' ORDER BY event_id DESC LIMIT 1`).Scan(&reason); err != nil {
+		t.Fatal(err)
+	}
+	if reason != "STARTUP_INTERRUPTED_DISPATCH" {
+		t.Fatalf("recovery reason=%q", reason)
+	}
+
+	localReplayCalls := 0
+	replayRunner, err := New(recoveredDatabase, senderFunc(func(context.Context, *http.Request) (qbresponse.RawResponse, error) {
+		localReplayCalls++
+		return qbresponse.RawResponse{}, nil
+	}), time.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = replayRunner.Run(context.Background(), Request{AttemptID: "attempt-1", SubmitIntentID: "intent-1", WaiterID: "waiter-1", APIVersion: "2.11.2", HTTPRequest: addRequest(t, "2.11.2")})
+	if !errors.Is(err, dispatchcommit.ErrDispatchAlreadyStarted) {
+		t.Fatalf("replay error=%v", err)
+	}
+	if localReplayCalls != 0 || networkCalls.Load() != 1 {
+		t.Fatalf("local replay calls=%d total network calls=%d", localReplayCalls, networkCalls.Load())
+	}
+}
+
+func runDispatchCrashChild(t *testing.T) {
+	databasePath := os.Getenv("VERTEX_PRO_DISPATCH_CRASH_DB")
+	baseURL := os.Getenv("VERTEX_PRO_DISPATCH_CRASH_URL")
+	signalPath := os.Getenv("VERTEX_PRO_DISPATCH_CRASH_SIGNAL")
+	if databasePath == "" || baseURL == "" || signalPath == "" {
+		t.Fatal("crash child environment is incomplete")
+	}
+	database, err := db.Open(context.Background(), db.Config{Path: databasePath, MaxOpenConns: 1, MaxIdleConns: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer database.Close()
+	runner, err := New(database, senderFunc(func(ctx context.Context, request *http.Request) (qbresponse.RawResponse, error) {
+		target, parseErr := url.Parse(baseURL)
+		if parseErr != nil {
+			return qbresponse.RawResponse{}, parseErr
+		}
+		request.URL.Scheme = target.Scheme
+		request.URL.Host = target.Host
+		request.Host = target.Host
+		response, sendErr := (&http.Client{Timeout: 10 * time.Second}).Do(request.WithContext(ctx))
+		if sendErr != nil {
+			return qbresponse.RawResponse{}, sendErr
+		}
+		closeErr := response.Body.Close()
+		if closeErr != nil {
+			return qbresponse.RawResponse{}, closeErr
+		}
+		if err := os.WriteFile(signalPath, []byte("response received; dispatchcommit.Record not entered\n"), 0o600); err != nil {
+			return qbresponse.RawResponse{}, fmt.Errorf("write crash boundary signal: %w", err)
+		}
+		// The parent terminates this process at the boundary; block forever
+		// without reaching Record. A bare for{} is a terminating statement,
+		// so no unreachable return is needed for the Sender signature.
+		for {
+			select {}
+		}
+	}), func() time.Time { return time.Date(2026, 9, 1, 16, 0, 0, 0, time.UTC) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = runner.Run(context.Background(), Request{AttemptID: "attempt-1", SubmitIntentID: "intent-1", WaiterID: "waiter-1", APIVersion: "2.11.2", HTTPRequest: addRequest(t, "2.11.2")})
+	t.Fatalf("dispatch returned before external kill: %v", err)
 }
 
 func TestRunnerDoesNotSendWhenDurableMarkerAlreadyExists(t *testing.T) {
