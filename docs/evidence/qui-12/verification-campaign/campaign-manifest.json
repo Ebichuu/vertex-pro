@@ -1,0 +1,58 @@
+{
+  "item": "QUI-12 / G1 P0 campaign",
+  "campaign_id": "g1-p0-campaign-20260902",
+  "vertex_commit": "63161b18013b487fca5cbd26327f59d5b5959006",
+  "harness_image_id": "sha256:624069b7ad377e8f0ef08addea7ba1f19803f85e4dbff6061c8e9d08902a99da",
+  "harness_source_commit": "15707ff3f0f6522a362e3d7503464cf09d9846a9",
+  "notes": "Harness binary was built from clean tree 15707ff (docs-only diff to 63161b1); recorder binary identity is 63161b1 clean. Three consecutive full P0 matrix runs (18 transaction/fault + 3 external kill -9 + 3 fixture captures per repetition) all PASS with 0 automatic redispatches; runs persisted in the campaign SQLite database (kept outside the repository).",
+  "artifacts": [
+    {
+      "path": "docs/evidence/qui-12/verification-campaign/binding-qb438.json",
+      "sha256": "sha256:2a2d682d9f3017fa6042c87522c491b4aeeceb7a2965177e4725d9f266f38cec"
+    },
+    {
+      "path": "docs/evidence/qui-12/verification-campaign/binding-qb504.json",
+      "sha256": "sha256:3341b61356107d8a5586d86900afab8ad4d3c986b3a913227c07f8869fbf557d"
+    },
+    {
+      "path": "docs/evidence/qui-12/verification-campaign/binding-qb522.json",
+      "sha256": "sha256:7839c56d840e5b30f005dbfae1602800defe5ae65ed1fb4705a6f2c2c92af964"
+    },
+    {
+      "path": "docs/evidence/qui-12/verification-campaign/run-qb438-rep1.json",
+      "sha256": "sha256:aba769c35b50678c9914d3a96e14b078bf8db827a2659299673b7da2217c59ed"
+    },
+    {
+      "path": "docs/evidence/qui-12/verification-campaign/run-qb438-rep2.json",
+      "sha256": "sha256:d16799ae263d871688199c3cd83f803a220662cfdd8b6bf3c49f7e8a2478626f"
+    },
+    {
+      "path": "docs/evidence/qui-12/verification-campaign/run-qb438-rep3.json",
+      "sha256": "sha256:b43483e9c34e2cc8cbc56ad778367128ae5f732236126d3df7ed90b1430dc25e"
+    },
+    {
+      "path": "docs/evidence/qui-12/verification-campaign/run-qb504-rep1.json",
+      "sha256": "sha256:c24f88b8c5bece682511b3fbc4ca9af94ab36e54d6a184e714dcdfac99c5b042"
+    },
+    {
+      "path": "docs/evidence/qui-12/verification-campaign/run-qb504-rep2.json",
+      "sha256": "sha256:5a08923463ea1fa9e1d681ac5b96f9997e66667dd70e669a5d6572b191950b4c"
+    },
+    {
+      "path": "docs/evidence/qui-12/verification-campaign/run-qb504-rep3.json",
+      "sha256": "sha256:e17f164e7f7c7ed7b258e34b286f8aada6165cdecc89d96376b2dbb56737e3e2"
+    },
+    {
+      "path": "docs/evidence/qui-12/verification-campaign/run-qb522-rep1.json",
+      "sha256": "sha256:1b808ef86428a79f7534b2a1c3b8a8ace08ba92cec3bea737f4db4ba7d279d83"
+    },
+    {
+      "path": "docs/evidence/qui-12/verification-campaign/run-qb522-rep2.json",
+      "sha256": "sha256:62055d28210ddb4a90d12cd3a2c5bf2abbeecf9020ffcd917a59484452d3b864"
+    },
+    {
+      "path": "docs/evidence/qui-12/verification-campaign/run-qb522-rep3.json",
+      "sha256": "sha256:11efe46674d65c5cdae18efcafa6700b6beaceb80b8f1ebfa4045d0ba362031a"
+    }
+  ]
+}

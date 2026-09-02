@@ -1,0 +1,23 @@
+{
+  "run_id": "g1-p0-campaign-20260902-qb_504-rep3",
+  "campaign_id": "g1-p0-campaign-20260902",
+  "repetition": 3,
+  "profile_id": "QB_504",
+  "qb_app_version": "v5.0.4",
+  "qb_build_fingerprint": "sha256:46f4e80af074fa2ffc0214fe0b7d59384748cfb34685892a53b7a3c87407a333",
+  "qb_artifact_digest": "sha256:46f4e80af074fa2ffc0214fe0b7d59384748cfb34685892a53b7a3c87407a333",
+  "webapi_version": "2.11.2",
+  "libtorrent_version": "2.0.11.0",
+  "qui_version": "8fcfc4d2beaf5e68ccebe837d7c0d9be965c8896",
+  "qui_image_digest": "sha256:0d966729169f06e1803dd2772016e3c738ab262e4588e28540042bb765e0735f",
+  "proxy_route_fingerprint": "sha256:cb00da6a3a54f22105f910932a641915870b905f543fc8cb0059ab45f1b677b5",
+  "harness_image_digest": "sha256:624069b7ad377e8f0ef08addea7ba1f19803f85e4dbff6061c8e9d08902a99da",
+  "vertex_commit": "63161b18013b487fca5cbd26327f59d5b5959006",
+  "test_suite_revision": "g1-profile-verification-v1",
+  "add_fixture_digest": "sha256:dd8045e0536ebb3a46ce3c2fb181c68ee7f9cf171e723092bed7102f993aca6d",
+  "sync_fixture_digest": "sha256:37424e5732d569c8fbf7fe08c2197883f50d02fe92cd5a293bd890716391076e",
+  "tracker_fixture_digest": "sha256:440cd30dece00ffa2bcd71df08ab7dca317d2b6ebc8df73ce8fcb43d29eb2045",
+  "transfer_info_fixture_digest": "sha256:591f087820f1f7eadb05ba6ddc3815fd0a1e9288fbbc5329d38167bcfb1423bc",
+  "verification_report_digest": "sha256:b978cf9b6dc735ba615ddd308e385a9ba29329cf24c062f4e55ef9d697c1b59c",
+  "expires_at": "2026-10-02T16:01:16Z"
+}
