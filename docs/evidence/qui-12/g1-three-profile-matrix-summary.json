@@ -1,9 +1,9 @@
 {
   "item": "QUI-12 / ADD-05..14",
   "status": "IN_PROGRESS",
-  "generated_at": "2026-09-02T07:54:03Z",
+  "generated_at": "2026-09-02T14:42:49Z",
   "source": {
-    "git_commit": "0de553ca20876ef1532f63c819febd4d4e25a08f",
+    "git_commit": "a314d42aa25a0f43fcdbc1bcc8d2aa6baa825828",
     "git_clean": false,
     "report_count": 18
   },
@@ -37,10 +37,10 @@
         "dispatch_commit_state": "AWAITING_CONFIRMATION",
         "attempt_final": "HASH_SEEN",
         "lab_returned_empty": true,
-        "durable_marker_before_send": null,
-        "response_fact_recorded": null,
+        "durable_marker_before_send": true,
+        "response_fact_recorded": true,
         "path": "docs/evidence/qui-12/lab-qb438-transaction-flow.json",
-        "sha256": "93804701ef91027c05796d786bf118b53af7d65726637c312eebfbb2261a8c7a"
+        "sha256": "9666ceb5ac757deaf30d05f348a0300c3f21f8fd6ce6afa527a3bd1f70f535ea"
       },
       {
         "profile": "QB_438",
@@ -51,10 +51,10 @@
         "dispatch_commit_state": "UNKNOWN",
         "attempt_final": "RECONCILED_CONFIRMED",
         "lab_returned_empty": true,
-        "durable_marker_before_send": null,
-        "response_fact_recorded": null,
+        "durable_marker_before_send": true,
+        "response_fact_recorded": true,
         "path": "docs/evidence/qui-12/lab-qb438-response-loss-reconcile.json",
-        "sha256": "acca210b2503182d4e5d7c979a8795191df3a8333bbf82fa5c73473fefdea028"
+        "sha256": "93a4d79e96055731de15ad5b4a8fbf9277a893f24f2fe931fa2e66b6704e8cf9"
       },
       {
         "profile": "QB_438",
@@ -65,10 +65,10 @@
         "dispatch_commit_state": "UNKNOWN",
         "attempt_final": "RECONCILED_NO_EFFECT",
         "lab_returned_empty": true,
-        "durable_marker_before_send": null,
-        "response_fact_recorded": null,
+        "durable_marker_before_send": true,
+        "response_fact_recorded": true,
         "path": "docs/evidence/qui-12/lab-qb438-timeout-no-effect.json",
-        "sha256": "7214a6b90c8db4a9a0e580d1a396680bd164a94c0a916865d6b0855ed1efb1ba"
+        "sha256": "6aa236e74058ff0fee63af08838d2a3c59cf7fbfe53ccfc58b75b63a8106c806"
       },
       {
         "profile": "QB_438",
@@ -79,10 +79,10 @@
         "dispatch_commit_state": "AWAITING_CONFIRMATION",
         "attempt_final": "HASH_SEEN",
         "lab_returned_empty": true,
-        "durable_marker_before_send": null,
-        "response_fact_recorded": null,
+        "durable_marker_before_send": true,
+        "response_fact_recorded": true,
         "path": "docs/evidence/qui-12/lab-qb438-transport-202.json",
-        "sha256": "52ba41db8dcb1d73519ee5800a0596ae298ec25c82fe9c684b8e7b48f0ab5452"
+        "sha256": "9a2564bd1197372ee824971a4a46be18470e377c1e2eaeabde7db907efebbfcc"
       },
       {
         "profile": "QB_438",
@@ -93,10 +93,10 @@
         "dispatch_commit_state": "UNKNOWN",
         "attempt_final": "RECONCILED_NO_EFFECT",
         "lab_returned_empty": true,
-        "durable_marker_before_send": null,
-        "response_fact_recorded": null,
+        "durable_marker_before_send": true,
+        "response_fact_recorded": true,
         "path": "docs/evidence/qui-12/lab-qb438-transport-204.json",
-        "sha256": "34af321506aae5e6608070b29c6c980f9df9530fa48bbeef0d8d2968468241ec"
+        "sha256": "ffba08cce97ad6b9a94bac94e3c7370ebb985309ee414c30ce5163aa47bc7e32"
       },
       {
         "profile": "QB_438",
@@ -107,10 +107,10 @@
         "dispatch_commit_state": "UNKNOWN",
         "attempt_final": "RECONCILED_NO_EFFECT",
         "lab_returned_empty": true,
-        "durable_marker_before_send": null,
-        "response_fact_recorded": null,
+        "durable_marker_before_send": true,
+        "response_fact_recorded": true,
         "path": "docs/evidence/qui-12/lab-qb438-transport-409.json",
-        "sha256": "869fce77707bedde64e97712d0625b834903af2d4666365def2775ba816da0d6"
+        "sha256": "ab33c9a4bb08136a18b1c8f1149cc705e18b34bb609ba97962102fcd19626569"
       },
       {
         "profile": "QB_504",
@@ -121,10 +121,10 @@
         "dispatch_commit_state": "AWAITING_CONFIRMATION",
         "attempt_final": "HASH_SEEN",
         "lab_returned_empty": true,
-        "durable_marker_before_send": null,
-        "response_fact_recorded": null,
+        "durable_marker_before_send": true,
+        "response_fact_recorded": true,
         "path": "docs/evidence/qui-12/lab-qb504-transaction-flow.json",
-        "sha256": "a14cb9864c3efcbe089805c3fc1e7f72d94e9091e9b40ecb797d2cce1d2a50f0"
+        "sha256": "7cff8e3185f50904cfa42ab6fd8b751a745ab7aa4308016bbdace319904cd4a7"
       },
       {
         "profile": "QB_504",
@@ -135,10 +135,10 @@
         "dispatch_commit_state": "UNKNOWN",
         "attempt_final": "RECONCILED_CONFIRMED",
         "lab_returned_empty": true,
-        "durable_marker_before_send": null,
-        "response_fact_recorded": null,
+        "durable_marker_before_send": true,
+        "response_fact_recorded": true,
         "path": "docs/evidence/qui-12/lab-qb504-response-loss-reconcile.json",
-        "sha256": "4a5577dfd0a58623d09a59663220a2ff85be65d24651cd189f0e7fad6850ff5b"
+        "sha256": "c180105b8d3c8be15b942dccd3b0064d686cf896234ca83dcfea65443c54adbb"
       },
       {
         "profile": "QB_504",
@@ -149,10 +149,10 @@
         "dispatch_commit_state": "UNKNOWN",
         "attempt_final": "RECONCILED_NO_EFFECT",
         "lab_returned_empty": true,
-        "durable_marker_before_send": null,
-        "response_fact_recorded": null,
+        "durable_marker_before_send": true,
+        "response_fact_recorded": true,
         "path": "docs/evidence/qui-12/lab-qb504-timeout-no-effect.json",
-        "sha256": "53d6f6098b832342c83530c1c75b030aa34339f2f746532fe83df950765d683b"
+        "sha256": "02867b4223e5728487fb9796da77db90779d8229488eefbb3e64e5f22b217ad9"
       },
       {
         "profile": "QB_504",
@@ -163,10 +163,10 @@
         "dispatch_commit_state": "AWAITING_CONFIRMATION",
         "attempt_final": "HASH_SEEN",
         "lab_returned_empty": true,
-        "durable_marker_before_send": null,
-        "response_fact_recorded": null,
+        "durable_marker_before_send": true,
+        "response_fact_recorded": true,
         "path": "docs/evidence/qui-12/lab-qb504-transport-202.json",
-        "sha256": "098a900008e9d76e6c9b7be05181aa13f6e3d22d9feb2da7b33c837c8bbeef52"
+        "sha256": "2792450d6dfcfbbcb76d23be2b288ce32475216208d934ce7a7313b14fd65ca7"
       },
       {
         "profile": "QB_504",
@@ -177,10 +177,10 @@
         "dispatch_commit_state": "UNKNOWN",
         "attempt_final": "RECONCILED_NO_EFFECT",
         "lab_returned_empty": true,
-        "durable_marker_before_send": null,
-        "response_fact_recorded": null,
+        "durable_marker_before_send": true,
+        "response_fact_recorded": true,
         "path": "docs/evidence/qui-12/lab-qb504-transport-204.json",
-        "sha256": "08da72dc39345c954ab9ab3a42477838118632a564bab8fa47f175822522fa5e"
+        "sha256": "d39cd08eb059503341b9a119f1a6eea357c8bf2149d182bd8fce71731cb9e183"
       },
       {
         "profile": "QB_504",
@@ -191,10 +191,10 @@
         "dispatch_commit_state": "UNKNOWN",
         "attempt_final": "RECONCILED_NO_EFFECT",
         "lab_returned_empty": true,
-        "durable_marker_before_send": null,
-        "response_fact_recorded": null,
+        "durable_marker_before_send": true,
+        "response_fact_recorded": true,
         "path": "docs/evidence/qui-12/lab-qb504-transport-409.json",
-        "sha256": "bb7281f4aca0b24a0433c20b6bdfac61a3824468995872645e20bb87ab0bc098"
+        "sha256": "bdf57d0fa879517244e792b5d9eb97675aa318627abca0e632cb119db9eb6993"
       },
       {
         "profile": "QB_522",
@@ -205,10 +205,10 @@
         "dispatch_commit_state": "AWAITING_CONFIRMATION",
         "attempt_final": "HASH_SEEN",
         "lab_returned_empty": true,
-        "durable_marker_before_send": null,
-        "response_fact_recorded": null,
+        "durable_marker_before_send": true,
+        "response_fact_recorded": true,
         "path": "docs/evidence/qui-12/lab-qb522-transaction-flow.json",
-        "sha256": "7032c466d3dccb1e1ec5de2be667c39b737cf6368bde6db5cb50f4f5e5eead14"
+        "sha256": "e83935fc3455f09e344c014708962594d61cf591a6490942dac606b625ed9267"
       },
       {
         "profile": "QB_522",
@@ -219,10 +219,10 @@
         "dispatch_commit_state": "UNKNOWN",
         "attempt_final": "RECONCILED_CONFIRMED",
         "lab_returned_empty": true,
-        "durable_marker_before_send": null,
-        "response_fact_recorded": null,
+        "durable_marker_before_send": true,
+        "response_fact_recorded": true,
         "path": "docs/evidence/qui-12/lab-qb522-response-loss-reconcile.json",
-        "sha256": "968ec86bf93e0391eba4222f5a6f79a891af1299e5172578a83e076072e6275c"
+        "sha256": "101579b88556a9b0c34e1c2cc051f27d0d65f26a4266fa999b541aed3c8c9dc8"
       },
       {
         "profile": "QB_522",
@@ -233,10 +233,10 @@
         "dispatch_commit_state": "UNKNOWN",
         "attempt_final": "RECONCILED_NO_EFFECT",
         "lab_returned_empty": true,
-        "durable_marker_before_send": null,
-        "response_fact_recorded": null,
+        "durable_marker_before_send": true,
+        "response_fact_recorded": true,
         "path": "docs/evidence/qui-12/lab-qb522-timeout-no-effect.json",
-        "sha256": "86f2c67b4431e7fd9e3b34a81d0a28309aad2df6b445f6e9f64857ba00cf016f"
+        "sha256": "094135f59da5865160da3dd81c8ed7e642ae61e29eea9585264974e49d80671c"
       },
       {
         "profile": "QB_522",
@@ -247,10 +247,10 @@
         "dispatch_commit_state": "AWAITING_CONFIRMATION",
         "attempt_final": "HASH_SEEN",
         "lab_returned_empty": true,
-        "durable_marker_before_send": null,
-        "response_fact_recorded": null,
+        "durable_marker_before_send": true,
+        "response_fact_recorded": true,
         "path": "docs/evidence/qui-12/lab-qb522-transport-202.json",
-        "sha256": "0f96a166c1f5aafa1ead02d8b01b398beb395c1fbc00bd0c8e3a5e5f55fa2910"
+        "sha256": "e00bf51769bb2c80173216b63f2871899651e9a1f7486044827f0485c9e7ddd3"
       },
       {
         "profile": "QB_522",
@@ -261,10 +261,10 @@
         "dispatch_commit_state": "UNKNOWN",
         "attempt_final": "RECONCILED_NO_EFFECT",
         "lab_returned_empty": true,
-        "durable_marker_before_send": null,
-        "response_fact_recorded": null,
+        "durable_marker_before_send": true,
+        "response_fact_recorded": true,
         "path": "docs/evidence/qui-12/lab-qb522-transport-204.json",
-        "sha256": "9966bd674b92e494547afbce94a14559fb586966895ef60d1cc3ff331b5473e3"
+        "sha256": "876d395e8045fcb094ad1d2cf42890fd25c0ad62928b417e4fc93402e4394914"
       },
       {
         "profile": "QB_522",
@@ -275,18 +275,18 @@
         "dispatch_commit_state": "UNKNOWN",
         "attempt_final": "RECONCILED_NO_EFFECT",
         "lab_returned_empty": true,
-        "durable_marker_before_send": null,
-        "response_fact_recorded": null,
+        "durable_marker_before_send": true,
+        "response_fact_recorded": true,
         "path": "docs/evidence/qui-12/lab-qb522-transport-409.json",
-        "sha256": "bee8ee503fa7408f7c0c4b3d1a28e3a6330f4c3e25238e38bd1af059b3f865c8"
+        "sha256": "793d7129b41703d3c9ecbde7ca0bfaf8fc4a57c8b9b95b5a62357c60502511f5"
       }
     ]
   },
   "current_dispatch_boundary": {
-    "durable_marker_before_send_evidenced_by_all_reports": false,
-    "current_code_revalidated_in_three_profile_lab": false,
-    "status": "PENDING_REVALIDATION",
-    "note": "The archived 18-case matrix predates the pre-send durable marker evidence fields and must be rerun against the current code."
+    "durable_marker_before_send_evidenced_by_all_reports": true,
+    "current_code_revalidated_in_three_profile_lab": true,
+    "status": "PASS",
+    "note": "All reports were produced after the pre-send durable marker was added."
   },
   "verification_decision": {
     "profile_state": "EXPECTED",

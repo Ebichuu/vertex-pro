@@ -31,6 +31,8 @@
     "dispatch_http_status": 0,
     "dispatch_format": "transport_error",
     "dispatch_commit_state": "UNKNOWN",
+    "durable_marker_before_send": true,
+    "response_fact_recorded": true,
     "sync_matched": false,
     "sync_evidence_source": "QBITTORRENT_SYNC",
     "observed_inactive": false,
@@ -42,6 +44,6 @@
     "reservation_final": "RELEASED",
     "binding_created": false,
     "first_confirm_replay_idempotent": false,
-    "event_count": 2
+    "event_count": 3
   }
 }
