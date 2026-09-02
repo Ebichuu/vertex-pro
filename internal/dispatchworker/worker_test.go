@@ -53,7 +53,7 @@ func testRequest(t *testing.T) *http.Request {
 
 func testInput(t *testing.T, request *http.Request) Request {
 	t.Helper()
-	return Request{AttemptID: "attempt-1", SubmitIntentID: "intent-1", WaiterID: "waiter-1", APIVersion: "2.8.0", HTTPRequest: request, AttemptState: "RESERVED", AttemptDispatchState: "NOT_STARTED"}
+	return Request{AttemptID: "attempt-1", SubmitIntentID: "intent-1", WaiterID: "waiter-1", APIVersion: "2.8.0", HTTPRequest: request, AttemptState: "ADD_SENT", AttemptDispatchState: "STARTED", AttemptSideEffectFact: "POSSIBLE_EFFECT"}
 }
 
 func TestDispatchClassifiesResponseAndDoesNotConfirmHash(t *testing.T) {
@@ -74,7 +74,7 @@ func TestDispatchClassifiesResponseAndDoesNotConfirmHash(t *testing.T) {
 	}
 }
 
-func TestDispatchNotSentCanBeRetried(t *testing.T) {
+func TestDispatchNotSentIsReportedWithoutReusingAttempt(t *testing.T) {
 	sender := &fakeSender{err: &NotSentError{Err: io.ErrClosedPipe}}
 	worker, err := New(sender)
 	if err != nil {
@@ -88,11 +88,11 @@ func TestDispatchNotSentCanBeRetried(t *testing.T) {
 	if result.DispatchState != "NOT_STARTED" || result.SideEffectFact != "FAILED_NO_EFFECT" {
 		t.Fatalf("unexpected result: %+v", result)
 	}
-	if _, err := worker.Dispatch(context.Background(), testInput(t, testRequest(t))); err != nil {
-		t.Fatal(err)
+	if _, err := worker.Dispatch(context.Background(), testInput(t, testRequest(t))); !errors.Is(err, ErrDispatchAlreadyAttempted) {
+		t.Fatalf("error = %v, want already attempted", err)
 	}
-	if sender.Calls() != 2 {
-		t.Fatalf("calls = %d, want 2", sender.Calls())
+	if sender.Calls() != 1 {
+		t.Fatalf("calls = %d, want 1", sender.Calls())
 	}
 }
 
@@ -130,9 +130,9 @@ func TestDispatchRejectsInvalidRequestAndPriorEffect(t *testing.T) {
 			input.HTTPRequest.URL.Path = "/api/v2/app/version"
 			return input
 		}()},
-		{name: "prior possible effect", input: func() Request {
+		{name: "missing durable side effect", input: func() Request {
 			input := testInput(t, testRequest(t))
-			input.AttemptSideEffectFact = "POSSIBLE_EFFECT"
+			input.AttemptSideEffectFact = ""
 			return input
 		}()},
 	}
@@ -181,8 +181,12 @@ func TestDispatchHonorsCancellationBeforeSend(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, err := worker.Dispatch(ctx, testInput(t, testRequest(t))); !errors.Is(err, context.Canceled) {
+	result, err := worker.Dispatch(ctx, testInput(t, testRequest(t)))
+	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("error = %v, want canceled", err)
+	}
+	if result.DispatchState != "NOT_STARTED" || result.SideEffectFact != "FAILED_NO_EFFECT" {
+		t.Fatalf("result = %+v", result)
 	}
 	if sender.Calls() != 0 {
 		t.Fatalf("calls = %d, want 0", sender.Calls())

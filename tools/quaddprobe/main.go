@@ -27,8 +27,9 @@ import (
 const liveAddConfirmation = "I_UNDERSTAND_ADD_ONE_INACTIVE_TASK"
 
 type report struct {
-	Status string `json:"status"`
-	Safety struct {
+	Status  string `json:"status"`
+	Profile string `json:"profile"`
+	Safety  struct {
 		ExplicitOptIn          bool `json:"explicit_opt_in"`
 		StartInactive          bool `json:"start_inactive"`
 		Trackerless            bool `json:"trackerless"`
@@ -79,8 +80,8 @@ func run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if profile.ID != "QB_504" || profile.AddStartField != "stopped" {
-		return fmt.Errorf("inactive Add probe requires QB_504 stopped semantics, got %s/%s", profile.ID, profile.AddStartField)
+	if !supportsInactiveAddProfile(profile) {
+		return fmt.Errorf("inactive Add probe does not support profile %s/%s", profile.ID, profile.AddStartField)
 	}
 	baselineDelta, err := client.Fetch(ctx, 0)
 	if err != nil {
@@ -91,7 +92,7 @@ func run(ctx context.Context) error {
 		return err
 	}
 
-	name := "vertex-pro-live-probe-qb504-v1"
+	name := "vertex-pro-live-probe-" + strings.ToLower(profile.ID) + "-v1"
 	artifact := buildTrackerlessTorrent(name)
 	parsed, err := torrentparse.Parse(artifact, torrentparse.DefaultLimits())
 	if err != nil {
@@ -104,7 +105,7 @@ func run(ctx context.Context) error {
 	if existing, exists := baseline.Snapshot.Torrents[strings.ToLower(identity.V1)]; exists {
 		state, _ := existing.Fields["state"].(string)
 		inactive := inactiveState(state)
-		output := report{Status: "PASS"}
+		output := report{Status: "PASS", Profile: profile.ID}
 		output.Safety.ExplicitOptIn = true
 		output.Safety.StartInactive = true
 		output.Safety.Trackerless = true
@@ -140,14 +141,16 @@ func run(ctx context.Context) error {
 		return err
 	}
 	result, err := worker.Dispatch(ctx, dispatchworker.Request{
-		AttemptID:             "live-add-probe-attempt",
-		SubmitIntentID:        "live-add-probe-intent",
-		WaiterID:              "live-add-probe-waiter",
-		APIVersion:            profile.WebAPIVersion,
-		HTTPRequest:           request,
-		AttemptState:          "RESERVED",
-		AttemptDispatchState:  "NOT_STARTED",
-		AttemptSideEffectFact: "",
+		AttemptID:      "live-add-probe-attempt-" + strings.ToLower(profile.ID),
+		SubmitIntentID: "live-add-probe-intent-" + strings.ToLower(profile.ID),
+		WaiterID:       "live-add-probe-waiter-" + strings.ToLower(profile.ID),
+		APIVersion:     profile.WebAPIVersion,
+		HTTPRequest:    request,
+		// The isolated protocol harness has no product database. These facts
+		// explicitly model the durable ADD_SENT marker required before Send.
+		AttemptState:          "ADD_SENT",
+		AttemptDispatchState:  "STARTED",
+		AttemptSideEffectFact: "POSSIBLE_EFFECT",
 	})
 	if err != nil {
 		return err
@@ -186,7 +189,7 @@ func run(ctx context.Context) error {
 	inactive := inactiveState(state)
 	preserved := containsAll(current.Torrents, baseline.Snapshot.Torrents)
 
-	output := report{Status: "PASS"}
+	output := report{Status: "PASS", Profile: profile.ID}
 	output.Safety.ExplicitOptIn = true
 	output.Safety.StartInactive = true
 	output.Safety.Trackerless = true
@@ -252,6 +255,17 @@ func snapshotCandidates(snapshot syncmerge.Snapshot) []identitymatcher.Candidate
 		candidates = append(candidates, identitymatcher.Candidate{ID: id, Identity: identity, QBTorrentID: id, LegacyMapKey: id})
 	}
 	return candidates
+}
+
+func supportsInactiveAddProfile(profile qbprofile.Profile) bool {
+	switch profile.ID {
+	case "QB_438":
+		return profile.AddStartField == "paused"
+	case "QB_504", "QB_522":
+		return profile.AddStartField == "stopped"
+	default:
+		return false
+	}
 }
 
 func inactiveState(state string) bool {

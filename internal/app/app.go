@@ -12,6 +12,7 @@ import (
 
 	"github.com/vertex-pro/vertex-pro/internal/adminauth"
 	"github.com/vertex-pro/vertex-pro/internal/db"
+	"github.com/vertex-pro/vertex-pro/internal/dispatchflow"
 	"github.com/vertex-pro/vertex-pro/internal/httpapi"
 	"github.com/vertex-pro/vertex-pro/internal/qbprofile"
 	"github.com/vertex-pro/vertex-pro/internal/qui/control"
@@ -25,32 +26,36 @@ import (
 	"github.com/vertex-pro/vertex-pro/internal/secrets"
 	"github.com/vertex-pro/vertex-pro/internal/snapshot"
 	"github.com/vertex-pro/vertex-pro/internal/sseserver"
+	"github.com/vertex-pro/vertex-pro/internal/startuprecover"
 	"github.com/vertex-pro/vertex-pro/internal/syncwatcher"
 	"github.com/vertex-pro/vertex-pro/internal/webembed"
 )
 
 // Config contains the dependencies needed to start the single-process service.
-// External clients and workers are deliberately not started here until their
-// runtime configuration and lifecycle supervisors are available.
+// Startup recovery is always run before HTTP traffic is exposed. External
+// mutation workers remain opt-in and are not started by this constructor.
 type Config struct {
-	Database db.Config
-	Hosts    []string
-	Origins  []string
-	Now      func() time.Time
-	Qui      *QuiConfig
+	Database                     db.Config
+	Hosts                        []string
+	Origins                      []string
+	Now                          func() time.Time
+	RecoveryConfirmationWindow   time.Duration
+	RecoveryReconciliationWindow time.Duration
+	Qui                          *QuiConfig
 }
 
 // QuiConfig enables the read-only qui control/profile/sync runtime. Add and
 // other mutating qB operations are deliberately not started here.
 type QuiConfig struct {
-	BaseURL      string
-	InstanceID   string
-	APIKey       secrets.SecretRef
-	ProxyKey     secrets.SecretRef
-	Store        secrets.Store
-	SnapshotRoot string
-	SyncInterval time.Duration
-	HTTPClient   *http.Client
+	BaseURL        string
+	InstanceID     string
+	APIKey         secrets.SecretRef
+	ProxyKey       secrets.SecretRef
+	Store          secrets.Store
+	SnapshotRoot   string
+	SyncInterval   time.Duration
+	HTTPClient     *http.Client
+	EnableDispatch bool
 }
 
 // Runtime owns resources initialized during service startup.
@@ -59,6 +64,8 @@ type Runtime struct {
 	Auth     *adminauth.Service
 	Handler  http.Handler
 	Profile  *qbprofile.Profile
+	Dispatch *dispatchflow.Runner
+	Recovery startuprecover.Result
 	hub      *sseserver.Hub
 	watcher  *syncwatcher.Watcher
 	cancel   context.CancelFunc
@@ -100,6 +107,18 @@ func New(ctx context.Context, config Config) (*Runtime, error) {
 	now := config.Now
 	if now == nil {
 		now = time.Now
+	}
+	confirmationWindow := config.RecoveryConfirmationWindow
+	if confirmationWindow <= 0 {
+		confirmationWindow = 10 * time.Minute
+	}
+	reconciliationWindow := config.RecoveryReconciliationWindow
+	if reconciliationWindow <= 0 {
+		reconciliationWindow = time.Hour
+	}
+	recovery, err := startuprecover.Recover(ctx, database, startuprecover.Input{Now: now().UTC(), ConfirmationWindow: confirmationWindow, ReconciliationWindow: reconciliationWindow})
+	if err != nil {
+		return nil, fmt.Errorf("recover interrupted dispatch chains: %w", err)
 	}
 
 	auth, err := adminauth.New(database)
@@ -146,7 +165,7 @@ func New(ctx context.Context, config Config) (*Runtime, error) {
 	mux := http.NewServeMux()
 	mux.Handle("/api/v1/", api)
 	mux.Handle("/", webembed.Handler())
-	runtime := &Runtime{Database: database, Auth: auth, Handler: mux, hub: hub}
+	runtime := &Runtime{Database: database, Auth: auth, Handler: mux, Recovery: recovery, hub: hub}
 	if config.Qui != nil {
 		if err := runtime.startQui(ctx, *config.Qui, now); err != nil {
 			return nil, err
@@ -156,8 +175,8 @@ func New(ctx context.Context, config Config) (*Runtime, error) {
 	return runtime, nil
 }
 
-// Close releases the runtime database. Hub subscribers are closed by their
-// request contexts; no background workers are owned by this initial runtime.
+// Close stops owned read-only workers before releasing the runtime database.
+// Hub subscribers are closed by their request contexts.
 func (runtime *Runtime) Close() error {
 	if runtime == nil || runtime.Database == nil {
 		return nil
@@ -235,6 +254,16 @@ func (runtime *Runtime) startQui(ctx context.Context, config QuiConfig, now func
 	profile, err := qbprofile.Probe(ctx, proxyClient)
 	if err != nil {
 		return err
+	}
+	if config.EnableDispatch {
+		if profile.ProfileVerificationState != "VERIFIED" {
+			return fmt.Errorf("qB profile %s is %s; dispatch remains fail closed", profile.ID, profile.ProfileVerificationState)
+		}
+		dispatch, err := dispatchflow.New(runtime.Database, proxyClient, now)
+		if err != nil {
+			return fmt.Errorf("initialize dispatch flow: %w", err)
+		}
+		runtime.Dispatch = dispatch
 	}
 	store, err := snapshot.New(runtime.Database, config.SnapshotRoot)
 	if err != nil {

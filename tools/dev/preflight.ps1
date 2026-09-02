@@ -34,10 +34,10 @@ try {
             & pnpm --dir web test
         }
         'test-contracts' = { & go run ./tools/contractcheck }
-        'test-integration' = { & go test ./internal/app ./internal/resourcesapi ./internal/rssservice ./internal/syncwatcher -count=1 }
+        'test-integration' = { & go test ./internal/app ./internal/dispatchflow ./internal/resourcesapi ./internal/rssservice ./internal/syncwatcher -count=1 }
         'test-e2e' = { & go test ./cmd/vertex-pro ./internal/httpapi ./internal/resourcesapi ./internal/sseserver -count=1 }
         'test-protocol' = { & go test ./internal/qui/... ./internal/qbadd ./internal/qbprofile ./internal/qbresponse ./internal/syncmerge -count=1 }
-        'test-fault' = { & go test ./internal/addfaultmatrix ./internal/qbexecutor ./internal/saferetry ./internal/startuprecover ./internal/unknownreconciler -count=1 }
+        'test-fault' = { & go test ./internal/addfaultmatrix ./internal/dispatchcommit ./internal/qbexecutor ./internal/saferetry ./internal/startuprecover ./internal/unknownreconciler -count=1 }
         'verify-license' = { & powershell -NoProfile -ExecutionPolicy Bypass -File tools/licensecheck/verify-license.ps1 }
         'verify-implementation-plan' = { & powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/verify-implementation-plan.ps1 }
     }

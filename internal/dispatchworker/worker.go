@@ -75,15 +75,29 @@ func New(sender Sender) (*Worker, error) {
 	return &Worker{sender: sender, busy: make(map[string]struct{}), used: make(map[string]struct{})}, nil
 }
 
-func (w *Worker) Dispatch(ctx context.Context, input Request) (Result, error) {
+// Validate performs all local request checks without invoking the sender. A
+// caller that persists a durable dispatch marker must run this before that
+// marker is committed, so malformed input cannot create an uncertain chain.
+func Validate(input Request) error {
 	if err := validateInput(input); err != nil {
-		return Result{}, fmt.Errorf("%w: %v", ErrInvalidDispatchRequest, err)
+		return fmt.Errorf("%w: %v", ErrInvalidDispatchRequest, err)
 	}
 	if err := validateMultipartRequest(input.HTTPRequest); err != nil {
-		return Result{}, fmt.Errorf("%w: %v", ErrInvalidDispatchRequest, err)
+		return fmt.Errorf("%w: %v", ErrInvalidDispatchRequest, err)
+	}
+	return nil
+}
+
+func (w *Worker) Dispatch(ctx context.Context, input Request) (Result, error) {
+	if err := Validate(input); err != nil {
+		return Result{}, err
 	}
 	if err := ctx.Err(); err != nil {
-		return Result{}, err
+		response, classifyErr := qbresponse.ClassifyNotSent(input.APIVersion, err)
+		if classifyErr != nil {
+			return Result{}, fmt.Errorf("classify canceled dispatch: %w", classifyErr)
+		}
+		return Result{AttemptID: input.AttemptID, DispatchState: response.DispatchState, SideEffectFact: response.SideEffectFact, Response: response}, err
 	}
 
 	w.mu.Lock()
@@ -101,9 +115,7 @@ func (w *Worker) Dispatch(ctx context.Context, input Request) (Result, error) {
 	raw, err := w.sender.Send(ctx, input.HTTPRequest)
 	w.mu.Lock()
 	delete(w.busy, input.AttemptID)
-	if err == nil || !isNotSent(err) {
-		w.used[input.AttemptID] = struct{}{}
-	}
+	w.used[input.AttemptID] = struct{}{}
 	w.mu.Unlock()
 
 	if err != nil && isNotSent(err) {
@@ -139,14 +151,14 @@ func validateInput(input Request) error {
 	if input.HTTPRequest == nil || input.HTTPRequest.URL == nil || !qbadd.IsAddEndpoint(input.HTTPRequest.URL) {
 		return errors.New("request endpoint is not qB Add endpoint")
 	}
-	if input.AttemptState != "RESERVED" && input.AttemptState != "ADD_SENT" && input.AttemptState != "AWAITING_CONFIRMATION" {
-		return errors.New("attempt state is not dispatchable")
+	if input.AttemptState != "ADD_SENT" {
+		return errors.New("attempt state is not durably marked ADD_SENT")
 	}
-	if input.AttemptDispatchState != "NOT_STARTED" {
-		return errors.New("attempt dispatch state is not NOT_STARTED")
+	if input.AttemptDispatchState != "STARTED" {
+		return errors.New("attempt dispatch state is not durably marked STARTED")
 	}
-	if input.AttemptSideEffectFact != "" && input.AttemptSideEffectFact != "FAILED_NO_EFFECT" {
-		return errors.New("attempt has a prior possible or observed side effect")
+	if input.AttemptSideEffectFact != "POSSIBLE_EFFECT" {
+		return errors.New("attempt side-effect fact is not durably marked POSSIBLE_EFFECT")
 	}
 	return nil
 }

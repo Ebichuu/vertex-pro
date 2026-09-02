@@ -3,12 +3,14 @@ package startuprecover
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/vertex-pro/vertex-pro/internal/db"
+	"github.com/vertex-pro/vertex-pro/internal/dispatchcommit"
 )
 
 func TestRecoverReordersChainsDeterministically(t *testing.T) {
@@ -44,6 +46,10 @@ func TestRecoverReordersChainsDeterministically(t *testing.T) {
 	if strings.Join(result.KeptWaiters, ",") != "waiter-2,waiter-5" {
 		t.Fatalf("kept=%v", result.KeptWaiters)
 	}
+	if strings.Join(result.PromotedUnknown, ",") != "attempt-5" {
+		t.Fatalf("promoted_unknown=%v", result.PromotedUnknown)
+	}
+	assertAttemptState(t, database, "attempt-5", "UNKNOWN")
 	if len(result.Violations) != 0 {
 		t.Fatalf("violations=%v", result.Violations)
 	}
@@ -57,13 +63,38 @@ func TestRecoverReordersChainsDeterministically(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(second.ClosedWaiters) != 0 || len(second.RestoredWaiters) != 0 {
+	if len(second.ClosedWaiters) != 0 || len(second.RestoredWaiters) != 0 || len(second.PromotedUnknown) != 0 {
 		t.Fatalf("second run=%+v", second)
 	}
 	if strings.Join(second.ResumedChains, ",") != "attempt-1" || strings.Join(second.HeldChains, ",") != "attempt-2,attempt-3,attempt-5" {
 		t.Fatalf("second chains=%+v", second)
 	}
 	assertWaiterState(t, database, "waiter-4", "CLOSED")
+}
+
+func TestRecoverHoldsCrashAfterDurableDispatchMarkerWithoutReplay(t *testing.T) {
+	database := openMigrated(t)
+	seedChain(t, database, "1", "RESERVED", "NOT_STARTED", true, "ACTIVE")
+	now := time.Date(2026, 9, 2, 7, 0, 0, 0, time.UTC)
+	if _, err := dispatchcommit.Begin(context.Background(), database, dispatchcommit.BeginRequest{
+		AttemptID: "attempt-1", SubmitIntentID: "intent-1", WaiterID: "waiter-1", Now: now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := Recover(context.Background(), database, Input{Now: now.Add(time.Minute), ConfirmationWindow: 10 * time.Minute, ReconciliationWindow: time.Hour})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.ResumedChains) != 0 || strings.Join(result.HeldChains, ",") != "attempt-1" || strings.Join(result.KeptWaiters, ",") != "waiter-1" || strings.Join(result.PromotedUnknown, ",") != "attempt-1" {
+		t.Fatalf("recovery=%+v", result)
+	}
+	assertAttemptState(t, database, "attempt-1", "UNKNOWN")
+	if _, err := dispatchcommit.Begin(context.Background(), database, dispatchcommit.BeginRequest{
+		AttemptID: "attempt-1", SubmitIntentID: "intent-1", WaiterID: "waiter-1", Now: now.Add(2 * time.Minute),
+	}); !errors.Is(err, dispatchcommit.ErrDispatchAlreadyStarted) {
+		t.Fatalf("dispatch replay error=%v", err)
+	}
 }
 
 func TestRecoverFailsClosedOnInvariantViolations(t *testing.T) {
@@ -193,5 +224,16 @@ func assertWaiterState(t *testing.T, database *sql.DB, waiterID, want string) {
 	}
 	if state != want {
 		t.Fatalf("waiter %s = %s want %s", waiterID, state, want)
+	}
+}
+
+func assertAttemptState(t *testing.T, database *sql.DB, attemptID, want string) {
+	t.Helper()
+	var attemptState, jobState string
+	if err := database.QueryRow(`SELECT a.attempt_state, j.job_state FROM placement_attempts a JOIN race_jobs j ON j.job_id=a.job_id WHERE a.attempt_id=?`, attemptID).Scan(&attemptState, &jobState); err != nil {
+		t.Fatal(err)
+	}
+	if attemptState != want || jobState != want {
+		t.Fatalf("attempt/job %s states=%s/%s want=%s", attemptID, attemptState, jobState, want)
 	}
 }

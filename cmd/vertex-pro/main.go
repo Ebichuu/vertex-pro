@@ -55,6 +55,7 @@ func runServe(logger *slog.Logger, arguments []string) error {
 	quiInstanceID := flags.String("qui-instance-id", strings.TrimSpace(os.Getenv("VERTEX_PRO_QUI_INSTANCE_ID")), "qui instance ID")
 	snapshotRoot := flags.String("snapshot-root", envOrDefault("VERTEX_PRO_SNAPSHOT_ROOT", "vertex-pro-snapshots"), "sync snapshot directory")
 	syncInterval := flags.Duration("sync-interval", 10*time.Second, "read-only qui sync interval")
+	enableDispatch := flags.Bool("enable-dispatch", envBool("VERTEX_PRO_ENABLE_DISPATCH"), "enable qB Add dispatch; fails closed unless the probed Profile is VERIFIED")
 	if err := flags.Parse(arguments); err != nil {
 		return err
 	}
@@ -66,14 +67,15 @@ func runServe(logger *slog.Logger, arguments []string) error {
 	}
 	if strings.TrimSpace(*quiURL) != "" {
 		config.Qui = &app.QuiConfig{
-			BaseURL:      *quiURL,
-			InstanceID:   *quiInstanceID,
-			APIKey:       secrets.SecretRef{Provider: "env", Key: "VERTEX_PRO_QUI_API_KEY"},
-			ProxyKey:     secrets.SecretRef{Provider: "env", Key: "VERTEX_PRO_QUI_PROXY_KEY"},
-			Store:        secrets.EnvStore{},
-			SnapshotRoot: *snapshotRoot,
-			SyncInterval: *syncInterval,
-			HTTPClient:   &http.Client{Timeout: 30 * time.Second},
+			BaseURL:        *quiURL,
+			InstanceID:     *quiInstanceID,
+			APIKey:         secrets.SecretRef{Provider: "env", Key: "VERTEX_PRO_QUI_API_KEY"},
+			ProxyKey:       secrets.SecretRef{Provider: "env", Key: "VERTEX_PRO_QUI_PROXY_KEY"},
+			Store:          secrets.EnvStore{},
+			SnapshotRoot:   *snapshotRoot,
+			SyncInterval:   *syncInterval,
+			HTTPClient:     &http.Client{Timeout: 30 * time.Second},
+			EnableDispatch: *enableDispatch,
 		}
 	}
 	runtime, err := app.New(context.Background(), config)
@@ -127,6 +129,15 @@ func envOrDefault(key, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+func envBool(key string) bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(key))) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
 }
 
 func splitList(value string) []string {

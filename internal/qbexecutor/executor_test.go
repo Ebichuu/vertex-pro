@@ -159,7 +159,7 @@ func testInput(t *testing.T, attemptID string) dispatchworker.Request {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return dispatchworker.Request{AttemptID: attemptID, SubmitIntentID: "intent-" + attemptID, WaiterID: "waiter-" + attemptID, APIVersion: "2.8.0", HTTPRequest: request, AttemptState: "RESERVED", AttemptDispatchState: "NOT_STARTED"}
+	return dispatchworker.Request{AttemptID: attemptID, SubmitIntentID: "intent-" + attemptID, WaiterID: "waiter-" + attemptID, APIVersion: "2.8.0", HTTPRequest: request, AttemptState: "ADD_SENT", AttemptDispatchState: "STARTED", AttemptSideEffectFact: "POSSIBLE_EFFECT"}
 }
 
 func waitForCalls(t *testing.T, sender *fakeSender) {

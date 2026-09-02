@@ -8,6 +8,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/vertex-pro/vertex-pro/internal/db"
 	"github.com/vertex-pro/vertex-pro/internal/syncwaiter"
 )
 
@@ -37,6 +38,7 @@ type Result struct {
 	ClosedWaiters   []string
 	ResumedChains   []string
 	HeldChains      []string
+	PromotedUnknown []string
 	Violations      []string
 }
 
@@ -47,6 +49,7 @@ type chain struct {
 	identityKey   string
 	attemptState  string
 	attemptDispa  string
+	sideEffect    string
 	jobState      string
 	currentPtr    sql.NullString
 	intentID      sql.NullString
@@ -61,8 +64,9 @@ type chain struct {
 // Job/Attempt 镜像不变量（违反即 fail-closed，不做任何写入），关闭终局
 // Attempt 的遗留 waiter，为可继续的链重新注册缺失的 waiter（恢复 Worker
 // 可重新注册），并把链分类为可恢复 dispatch（RESERVED 且未开始）或继续
-// 等待确认/对账（dispatch 已开始）。恢复不按进程退出时间释放任何
-// Reservation，也不自动重放网络请求；相同数据库状态与输入必然得到相同结果。
+// 等待确认/对账（dispatch 已开始）。崩溃遗留的 ADD_SENT 会原子提升为
+// UNKNOWN；恢复不按进程退出时间释放任何 Reservation，也不自动重放网络
+// 请求。相同数据库状态与输入必然得到相同结果。
 func Recover(ctx context.Context, database *sql.DB, input Input) (Result, error) {
 	result := Result{}
 	if err := validateInput(input); err != nil {
@@ -88,6 +92,7 @@ func Recover(ctx context.Context, database *sql.DB, input Input) (Result, error)
 	sort.Strings(result.ClosedWaiters)
 	sort.Strings(result.ResumedChains)
 	sort.Strings(result.HeldChains)
+	sort.Strings(result.PromotedUnknown)
 	return result, nil
 }
 
@@ -102,7 +107,7 @@ func validateInput(input Input) error {
 }
 
 func loadChains(ctx context.Context, database *sql.DB) ([]chain, error) {
-	rows, err := database.QueryContext(ctx, `SELECT a.attempt_id, a.job_id, a.instance_id, a.identity_key, a.attempt_state, a.dispatch_state, j.job_state, j.current_attempt_id, s.submit_intent_id, s.dispatch_state, w.waiter_id, w.waiter_state, s.pre_add_sync_generation, s.pre_add_snapshot_revision FROM placement_attempts a JOIN race_jobs j ON j.job_id = a.job_id LEFT JOIN submit_intents s ON s.attempt_id = a.attempt_id LEFT JOIN sync_waiters w ON w.attempt_id = a.attempt_id ORDER BY a.attempt_id`)
+	rows, err := database.QueryContext(ctx, `SELECT a.attempt_id, a.job_id, a.instance_id, a.identity_key, a.attempt_state, a.dispatch_state, COALESCE(a.side_effect_fact,''), j.job_state, j.current_attempt_id, s.submit_intent_id, s.dispatch_state, w.waiter_id, w.waiter_state, s.pre_add_sync_generation, s.pre_add_snapshot_revision FROM placement_attempts a JOIN race_jobs j ON j.job_id = a.job_id LEFT JOIN submit_intents s ON s.attempt_id = a.attempt_id LEFT JOIN sync_waiters w ON w.attempt_id = a.attempt_id ORDER BY a.attempt_id`)
 	if err != nil {
 		return nil, fmt.Errorf("list chains: %w", err)
 	}
@@ -110,7 +115,7 @@ func loadChains(ctx context.Context, database *sql.DB) ([]chain, error) {
 	chains := make([]chain, 0)
 	for rows.Next() {
 		var item chain
-		if err := rows.Scan(&item.attemptID, &item.jobID, &item.instanceID, &item.identityKey, &item.attemptState, &item.attemptDispa, &item.jobState, &item.currentPtr, &item.intentID, &item.intentDispa, &item.waiterID, &item.waiterState, &item.preGeneration, &item.preRevision); err != nil {
+		if err := rows.Scan(&item.attemptID, &item.jobID, &item.instanceID, &item.identityKey, &item.attemptState, &item.attemptDispa, &item.sideEffect, &item.jobState, &item.currentPtr, &item.intentID, &item.intentDispa, &item.waiterID, &item.waiterState, &item.preGeneration, &item.preRevision); err != nil {
 			return nil, fmt.Errorf("scan chain: %w", err)
 		}
 		chains = append(chains, item)
@@ -140,9 +145,14 @@ func checkInvariants(ctx context.Context, database *sql.DB, chains []chain, resu
 			} else if item.intentDispa.Valid && item.intentDispa.String == "STARTED" {
 				result.Violations = append(result.Violations, "RESERVED_CHAIN_WITH_STARTED_INTENT:"+item.attemptID)
 			}
+			if item.attemptDispa != "NOT_STARTED" || item.sideEffect != "" {
+				result.Violations = append(result.Violations, "RESERVED_CHAIN_WITH_DISPATCH_FACT:"+item.attemptID)
+			}
 		}
-		if item.attemptState == "ADD_SENT" && (!item.intentDispa.Valid || item.intentDispa.String != "STARTED") {
-			result.Violations = append(result.Violations, "ADD_SENT_WITHOUT_STARTED_INTENT:"+item.attemptID)
+		if item.attemptState == "ADD_SENT" || item.attemptState == "AWAITING_CONFIRMATION" || item.attemptState == "UNKNOWN" {
+			if item.attemptDispa != "STARTED" || item.sideEffect != "POSSIBLE_EFFECT" || !item.intentDispa.Valid || item.intentDispa.String != "STARTED" {
+				result.Violations = append(result.Violations, "STARTED_CHAIN_FACT_MISMATCH:"+item.attemptID)
+			}
 		}
 	}
 	return nil
@@ -163,13 +173,52 @@ func recoverChain(ctx context.Context, database *sql.DB, item chain, input Input
 			return err
 		}
 		result.ResumedChains = append(result.ResumedChains, item.attemptID)
-	case "ADD_SENT", "AWAITING_CONFIRMATION", "UNKNOWN":
+	case "ADD_SENT":
+		if err := promoteInterruptedDispatch(ctx, database, item, input.Now); err != nil {
+			return err
+		}
+		item.attemptState = "UNKNOWN"
+		item.jobState = "UNKNOWN"
+		result.PromotedUnknown = append(result.PromotedUnknown, item.attemptID)
+		if err := ensureWaiter(ctx, database, item, input, result); err != nil {
+			return err
+		}
+		result.HeldChains = append(result.HeldChains, item.attemptID)
+	case "AWAITING_CONFIRMATION", "UNKNOWN":
 		if err := ensureWaiter(ctx, database, item, input, result); err != nil {
 			return err
 		}
 		result.HeldChains = append(result.HeldChains, item.attemptID)
 	}
 	return nil
+}
+
+// promoteInterruptedDispatch converts the durable pre-send ADD_SENT marker to
+// UNKNOWN during startup. The process may have crashed before or after qB read
+// the request body, so recovery must not replay the Add and must converge only
+// from a fresh Sync snapshot.
+func promoteInterruptedDispatch(ctx context.Context, database *sql.DB, item chain, now time.Time) error {
+	timestamp := now.UTC().Format(time.RFC3339Nano)
+	return db.RunImmediate(ctx, database, func(ctx context.Context, transaction *db.ImmediateTx) error {
+		update, err := transaction.ExecContext(ctx, `UPDATE placement_attempts SET attempt_state='UNKNOWN' WHERE attempt_id=? AND attempt_state='ADD_SENT' AND dispatch_state='STARTED' AND side_effect_fact='POSSIBLE_EFFECT'`, item.attemptID)
+		if err != nil {
+			return fmt.Errorf("promote interrupted attempt %s: %w", item.attemptID, err)
+		}
+		if rows, err := update.RowsAffected(); err != nil || rows != 1 {
+			return fmt.Errorf("promote interrupted attempt %s rows=%d err=%v", item.attemptID, rows, err)
+		}
+		update, err = transaction.ExecContext(ctx, `UPDATE race_jobs SET job_state='UNKNOWN', updated_at=? WHERE job_id=? AND job_state='ADD_SENT' AND current_attempt_id=?`, timestamp, item.jobID, item.attemptID)
+		if err != nil {
+			return fmt.Errorf("promote interrupted job %s: %w", item.jobID, err)
+		}
+		if rows, err := update.RowsAffected(); err != nil || rows != 1 {
+			return fmt.Errorf("promote interrupted job %s rows=%d err=%v", item.jobID, rows, err)
+		}
+		if _, err := transaction.ExecContext(ctx, `INSERT INTO race_events(job_id, attempt_id, event_type, from_state, to_state, reason_code, safe_metadata_json, occurred_at) VALUES (?, ?, 'attempt.state.changed', 'ADD_SENT', 'UNKNOWN', 'STARTUP_INTERRUPTED_DISPATCH', '{}', ?)`, item.jobID, item.attemptID, timestamp); err != nil {
+			return fmt.Errorf("record interrupted dispatch %s: %w", item.attemptID, err)
+		}
+		return nil
+	})
 }
 
 // ensureWaiter 保证链上存在 ACTIVE waiter；崩溃可能发生在注册与重启之间，

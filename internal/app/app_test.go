@@ -117,6 +117,9 @@ func TestNewStartsReadOnlyQuiProfileAndSyncRuntime(t *testing.T) {
 	if runtime.Profile == nil || runtime.Profile.ID != "QB_504" {
 		t.Fatalf("runtime profile = %+v", runtime.Profile)
 	}
+	if runtime.Dispatch != nil {
+		t.Fatal("dispatch flow started without explicit enablement")
+	}
 	var state string
 	var rid, revision int
 	if err := runtime.Database.QueryRow(`SELECT sync_state, rid, snapshot_revision FROM sync_instance_state WHERE instance_id = '13'`).Scan(&state, &rid, &revision); err != nil {
@@ -124,6 +127,85 @@ func TestNewStartsReadOnlyQuiProfileAndSyncRuntime(t *testing.T) {
 	}
 	if state != "READY" || rid != 42 || revision != 1 {
 		t.Fatalf("sync state = %s, rid = %d, revision = %d", state, rid, revision)
+	}
+}
+
+func TestNewRejectsDispatchForExpectedProfile(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		response.Header().Set("Content-Type", "application/json")
+		switch request.URL.Path {
+		case "/api/instances":
+			_, _ = response.Write([]byte(`[{"id":13,"connectionStatus":"connected","isActive":true}]`))
+		case "/api/instances/13/transfer-info":
+			_, _ = response.Write([]byte(`{"dl_info_speed":0,"up_info_speed":0,"dl_info_data":0,"up_info_data":0}`))
+		case "/api/instances/13/capabilities":
+			_, _ = response.Write([]byte(`{"webAPIVersion":"2.11.2"}`))
+		case "/proxy/proxy-key/api/v2/app/version":
+			_, _ = response.Write([]byte(`v5.0.4`))
+		case "/proxy/proxy-key/api/v2/app/webapiVersion":
+			_, _ = response.Write([]byte(`2.11.2`))
+		case "/proxy/proxy-key/api/v2/app/buildInfo":
+			_, _ = response.Write([]byte(`{"libtorrent":"2.0.11.0"}`))
+		case "/proxy/proxy-key/api/v2/app/processInfo":
+			http.NotFound(response, request)
+		default:
+			http.NotFound(response, request)
+		}
+	}))
+	defer server.Close()
+	t.Setenv("TEST_QUI_API_KEY", "control-key")
+	t.Setenv("TEST_QUI_PROXY_KEY", "proxy-key")
+	_, err := New(context.Background(), Config{
+		Database: db.Config{Path: filepath.Join(t.TempDir(), "vertex-pro.db")},
+		Hosts:    []string{"vertex.local"},
+		Qui: &QuiConfig{
+			BaseURL:        server.URL,
+			InstanceID:     "13",
+			APIKey:         secrets.SecretRef{Provider: "env", Key: "TEST_QUI_API_KEY"},
+			ProxyKey:       secrets.SecretRef{Provider: "env", Key: "TEST_QUI_PROXY_KEY"},
+			Store:          secrets.EnvStore{},
+			SnapshotRoot:   filepath.Join(t.TempDir(), "snapshots"),
+			EnableDispatch: true,
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), "dispatch remains fail closed") {
+		t.Fatalf("New() error = %v, want EXPECTED profile rejection", err)
+	}
+}
+
+func TestNewFailsClosedOnRecoveryInvariantViolation(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "recovery-invalid.db")
+	database, err := db.Open(context.Background(), db.Config{Path: path, MaxOpenConns: 1, MaxIdleConns: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	runner, err := db.DefaultRunner()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := runner.Apply(context.Background(), database); err != nil {
+		t.Fatal(err)
+	}
+	statements := []string{
+		`INSERT INTO storage_targets(storage_target_id, instance_id, path, storage_verification_state, created_at, updated_at) VALUES ('target-1','qb-1','/data','VERIFIED','2026-09-01T15:00:00Z','2026-09-01T15:00:00Z')`,
+		`INSERT INTO race_jobs(job_id, source_id, identity_key, job_state, rule_state, torrent_state, placement_state, participation_deadline, observation_deadline, created_at, updated_at) VALUES ('job-1','source-1','identity-1','READY','MATCHED','READY','PREPARED','2026-09-02T00:00:00Z','2026-09-02T00:00:00Z','2026-09-01T15:00:00Z','2026-09-01T15:00:00Z')`,
+		`INSERT INTO placement_attempts(attempt_id, job_id, identity_key, attempt_no, instance_id, storage_target_id, attempt_state, dispatch_state, allocation_epoch, reserved_bytes, started_at) VALUES ('attempt-1','job-1','identity-1',1,'qb-1','target-1','RESERVED','NOT_STARTED',1,100,'2026-09-01T15:00:00Z')`,
+		`INSERT INTO capacity_reservations(reservation_id, attempt_id, storage_target_id, reserved_bytes, allocation_epoch, reservation_state, reflected_physical_bytes) VALUES ('reservation-1','attempt-1','target-1',100,1,'ACTIVE',0)`,
+		`INSERT INTO submit_intents(submit_intent_id, attempt_id, instance_id, identity_key, request_fingerprint, target_fingerprint, dispatch_state, pre_add_sync_generation, pre_add_snapshot_revision, pre_add_snapshot_digest, pre_add_identity_fact, created_at, dispatch_started_at) VALUES ('intent-1','attempt-1','qb-1','identity-1','request','target','STARTED',0,0,'baseline','ABSENT','2026-09-01T15:00:00Z','2026-09-01T15:00:01Z')`,
+		`UPDATE race_jobs SET job_state='RESERVED', current_attempt_id='attempt-1' WHERE job_id='job-1'`,
+	}
+	for _, statement := range statements {
+		if _, err := database.Exec(statement); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := database.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = New(context.Background(), Config{Database: db.Config{Path: path}, Hosts: []string{"vertex.local"}})
+	if err == nil || !strings.Contains(err.Error(), "startup recovery failed closed") {
+		t.Fatalf("New() error = %v, want recovery invariant failure", err)
 	}
 }
 
