@@ -1,0 +1,21 @@
+{
+  "status": "PASS",
+  "profile": "QB_438",
+  "fixtures": {
+    "add": "9824d490d286c9e835e680330c7cf481d8fe8ca2c7991ae1b1c6929c4adce63a",
+    "sync": "da61d1fc92a3acdb850eaf6383647a2a57b88eb27145541d3a91600c6adc93b5",
+    "tracker": "4731ee35a856894cbe2f04a76294abcbfa4831fa7ffb0a38de10d59d1ad29250",
+    "transfer_info": "24200ce08fdc7eae9436fe3ea57d25bf9b8e2001e5ca29e9e2a7b9a882cecda9"
+  },
+  "safety": {
+    "explicit_isolated_lab_opt_in": true,
+    "baseline_empty": true,
+    "start_inactive": true,
+    "trackerless": true,
+    "production_services_called": false,
+    "delete_only_added_identity": true,
+    "lab_returned_empty": true,
+    "secrets_redacted": true
+  },
+  "notes": "captured inactive (pausedDL) task via qui proxy; fixture digests are sha256 of the archived file bytes"
+}

@@ -126,7 +126,7 @@ func run(ctx context.Context) error {
 	if faultMode == "" {
 		faultMode = "none"
 	}
-	if faultMode != "none" && faultMode != "response_loss" && faultMode != "timeout" && faultMode != "external_kill" && !isSyntheticTransportMode(faultMode) {
+	if faultMode != "none" && faultMode != "response_loss" && faultMode != "timeout" && faultMode != "external_kill" && faultMode != "fixture_capture" && !isSyntheticTransportMode(faultMode) {
 		return fmt.Errorf("unsupported VERTEX_PRO_G1_FAULT_MODE %q", faultMode)
 	}
 	baselineDelta, err := client.Fetch(ctx, 0)
@@ -190,6 +190,13 @@ func run(ctx context.Context) error {
 
 	now := time.Now().UTC().Truncate(time.Second)
 	baselineDigest := snapshotDigest(baseline.Snapshot)
+	if faultMode == "fixture_capture" {
+		fixtureDir := strings.TrimSpace(os.Getenv("VERTEX_PRO_FIXTURE_DIR"))
+		if fixtureDir == "" {
+			return errors.New("VERTEX_PRO_FIXTURE_DIR is required for fixture_capture")
+		}
+		return runFixtureCapture(ctx, client, profile, identity, artifact, name, fixtureDir)
+	}
 	if faultMode == "external_kill" {
 		return runExternalKill(ctx, client, profile, identity, identityKey, name, rejection, baselineDigest)
 	}

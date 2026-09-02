@@ -194,7 +194,22 @@ try {
         }
         $killProfileName = $profile.ToLowerInvariant().Replace('_', '')
         Set-Content -LiteralPath (Join-Path $evidenceRoot "lab-$killProfileName-external-kill.json") -Value $killOutput -Encoding utf8
+
+        $env:VERTEX_PRO_G1_FAULT_MODE = 'fixture_capture'
+        $env:VERTEX_PRO_FIXTURE_DIR = Join-Path $evidenceRoot 'fixtures'
+        $fixtureOutput = (& go run ./tools/qutransactionprobe 2>&1 | Out-String).Trim()
+        if ($LASTEXITCODE -ne 0) { throw "fixture capture failed for ${profile}: $fixtureOutput" }
+        $fixtureResult = $fixtureOutput | ConvertFrom-Json
+        if ($fixtureResult.status -ne 'PASS' -or $fixtureResult.profile -ne $profile) { throw "unexpected fixture capture result for $profile" }
+        foreach ($fixtureKind in @('add', 'sync', 'tracker', 'transfer_info')) {
+            $digestProperty = $fixtureResult.fixtures.PSObject.Properties[$fixtureKind]
+            if ($null -eq $digestProperty -or [string]::IsNullOrWhiteSpace($digestProperty.Value)) {
+                throw "fixture digest missing for $profile/$fixtureKind"
+            }
+        }
+        Set-Content -LiteralPath (Join-Path $evidenceRoot "lab-$killProfileName-fixture-capture.json") -Value $fixtureOutput -Encoding utf8
         Remove-Item Env:VERTEX_PRO_G1_FAULT_MODE -ErrorAction SilentlyContinue
+        Remove-Item Env:VERTEX_PRO_FIXTURE_DIR -ErrorAction SilentlyContinue
     }
 
     & go test ./internal/qbresponse ./internal/addfacts ./internal/dispatchflow -run 'TestAdaptLegacyAndJSONResponsesNeverConfirmsHashSeen|TestRunnerCommitsSyntheticResponseFacts' -count=1

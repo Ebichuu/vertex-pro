@@ -129,6 +129,42 @@ foreach ($profile in $profiles) {
     }
 }
 
+$fixtureCaptures = @()
+foreach ($profile in $profiles) {
+    $profileName = $profile.ToLowerInvariant().Replace('_', '')
+    $fileName = "lab-$profileName-fixture-capture.json"
+    $path = Join-Path $EvidenceRoot $fileName
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+        throw "missing fixture capture evidence: $fileName"
+    }
+    $record = Get-Content -LiteralPath $path -Raw -Encoding utf8 | ConvertFrom-Json
+    Assert-Equal $record.status 'PASS' "$fileName status"
+    Assert-Equal $record.profile $profile "$fileName profile"
+    Assert-Equal ([bool]$record.safety.secrets_redacted) $true "$fileName secrets_redacted"
+    Assert-Equal ([bool]$record.safety.lab_returned_empty) $true "$fileName lab_returned_empty"
+    $fixtureDigests = [ordered]@{}
+    foreach ($fixtureKind in @('add', 'sync', 'tracker', 'transfer_info')) {
+        $digest = $record.fixtures.PSObject.Properties[$fixtureKind].Value
+        if ([string]::IsNullOrWhiteSpace($digest)) {
+            throw "fixture digest missing in $fileName for $fixtureKind"
+        }
+        $fixturePath = Join-Path $EvidenceRoot "fixtures/fixture-$profileName-$fixtureKind.json"
+        if (-not (Test-Path -LiteralPath $fixturePath -PathType Leaf)) {
+            throw "missing fixture file: fixture-$profileName-$fixtureKind.json"
+        }
+        $actual = (Get-FileHash -LiteralPath $fixturePath -Algorithm SHA256).Hash.ToLowerInvariant()
+        Assert-Equal $actual $digest "fixture-$profileName-$fixtureKind digest"
+        $fixtureDigests[$fixtureKind] = $actual
+    }
+    $fixtureCaptures += [pscustomobject][ordered]@{
+        profile = $profile
+        status = 'PASS'
+        digests = $fixtureDigests
+        capture_report = "docs/evidence/qui-12/$fileName"
+        capture_report_sha256 = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+    }
+}
+
 $gitCommit = (& git -C $root rev-parse HEAD 2>$null | Out-String).Trim()
 $gitStatus = (& git -C $root status --porcelain 2>$null | Out-String)
 $summary = [ordered]@{
@@ -169,15 +205,20 @@ $summary = [ordered]@{
         automatic_redispatches = 0
         reports = $killReports
     }
+    golden_fixtures = [ordered]@{
+        status = if (@($fixtureCaptures).Count -eq 3) { 'PASS' } else { 'FAIL' }
+        expected_profiles = 3
+        captured_profiles = @($fixtureCaptures).Count
+        captures = $fixtureCaptures
+    }
     verification_decision = [ordered]@{
         profile_state = 'EXPECTED'
         may_promote_to_verified = $false
         g1_gate = 'PENDING'
     }
     remaining_before_profile_verified = @(
-        'Archive redacted Add/Sync/tracker/transfer-info golden fixtures per profile and persist their digests in verification runs.',
         'Pin the transaction harness image and emit a complete immutable image/source digest manifest.',
-        'Run the P0 matrix (including external kill -9) three consecutive times from a clean commit and record profile_verification_runs for all repetitions.'
+        'Run the P0 matrix (including external kill -9) three consecutive times from a clean commit and record profile_verification_runs for all repetitions with the archived fixture digests.'
     )
 }
 

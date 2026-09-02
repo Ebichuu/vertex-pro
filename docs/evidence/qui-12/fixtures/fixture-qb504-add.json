@@ -1,0 +1,12 @@
+{
+  "kind": "vertex-pro-g1-add-fixture",
+  "profile_id": "QB_504",
+  "captured_at": "2026-09-02T15:15:23Z",
+  "method": "POST",
+  "path": "/api/v2/torrents/add",
+  "content_type": "multipart/form-data; boundary=6df344103a681731f0781097d8a5c998f75b9b63884213ffe4d024c3e3dd",
+  "body_base64": "LS02ZGYzNDQxMDNhNjgxNzMxZjA3ODEwOTdkOGE1Yzk5OGY3NWI5YjYzODg0MjEzZmZlNGQwMjRjM2UzZGQNCkNvbnRlbnQtRGlzcG9zaXRpb246IGZvcm0tZGF0YTsgbmFtZT0idG9ycmVudHMiOyBmaWxlbmFtZT0idmVydGV4LXByby1nMS10cmFuc2FjdGlvbi1xYl81MDQtZml4dHVyZS1jYXB0dXJlLXYxLnRvcnJlbnQiDQpDb250ZW50LVR5cGU6IGFwcGxpY2F0aW9uL29jdGV0LXN0cmVhbQ0KDQpkNDppbmZvZDY6bGVuZ3RoaTFlNDpuYW1lNTE6dmVydGV4LXByby1nMS10cmFuc2FjdGlvbi1xYl81MDQtZml4dHVyZS1jYXB0dXJlLXYxMTI6cGllY2UgbGVuZ3RoaTE2Mzg0ZTY6cGllY2VzMjA6W6k8nbDP+T9StSHXQg5D9u2ieE9lZQ0KLS02ZGYzNDQxMDNhNjgxNzMxZjA3ODEwOTdkOGE1Yzk5OGY3NWI5YjYzODg0MjEzZmZlNGQwMjRjM2UzZGQNCkNvbnRlbnQtRGlzcG9zaXRpb246IGZvcm0tZGF0YTsgbmFtZT0iYXV0b1RNTSINCg0KZmFsc2UNCi0tNmRmMzQ0MTAzYTY4MTczMWYwNzgxMDk3ZDhhNWM5OThmNzViOWI2Mzg4NDIxM2ZmZTRkMDI0YzNlM2RkDQpDb250ZW50LURpc3Bvc2l0aW9uOiBmb3JtLWRhdGE7IG5hbWU9InN0b3BwZWQiDQoNCnRydWUNCi0tNmRmMzQ0MTAzYTY4MTczMWYwNzgxMDk3ZDhhNWM5OThmNzViOWI2Mzg4NDIxM2ZmZTRkMDI0YzNlM2RkLS0NCg==",
+  "response_status": 200,
+  "response_body": "Ok.",
+  "redactions": "no credentials present; the qui proxy key only appears in the live request URL and is not recorded"
+}
