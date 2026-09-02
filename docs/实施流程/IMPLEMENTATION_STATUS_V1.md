@@ -95,6 +95,7 @@ PENDING -> IN_PROGRESS -> IN_REVIEW -> DONE
 - 外部 kill -9 用例落地并三 Profile 全 PASS：`qutransactionprobe` 新增 `external_kill` 模式，父进程 re-exec 真实子进程经 qui Proxy 发送 Add（durable marker 先行、信号后挂起、`dispatchcommit.Record` 永不进入），父进程确认任务物理到达 lab 后强杀子进程；同一数据库启动恢复提升 `ADD_SENT→UNKNOWN`（`STARTUP_INTERRUPTED_DISPATCH`）、重放被拒（`ErrDispatchAlreadyStarted`、0 次额外发送）、快照对账收敛 `RECONCILED_CONFIRMED` 且 `response_fact_at` 保持 NULL（被杀进程从未收到响应，不伪造响应事实）。三份证据 `lab-qb{438,504,522}-external-kill.json` 已归档；矩阵汇总新增 `external_kill_matrix` 段（3/3 PASS）。G1 剩余阻塞收敛为：golden fixture 归档与 digest 持久化、固定 harness image、clean-commit 上 P0×3 连续运行并记录 verification runs。
 - Golden fixture 归档完成并三 Profile 全 PASS：`qutransactionprobe` 新增 `fixture_capture` 模式，经 qui Proxy 采集原始 Add 请求/响应、Sync 全量基线与含新增任务的 follow-up、tracker 行和 transfer 字段子集（`amount_left` 等；因 qB proxy 白名单不暴露 `torrents/transferInfo`，来源在 fixture 内如实标注为 sync 任务字段）。12 份 fixture 写入 `docs/evidence/qui-12/fixtures/` 并由汇总脚本逐文件校验 SHA-256；全部载荷不含凭据。G1 剩余阻塞收敛为：固定 harness image、clean-commit 上 P0×3 连续运行并记录 verification runs。
 - Harness 固化为容器镜像并完成首个完整容器化矩阵运行：`deploy/compose/lab/images/harness/Dockerfile` 将宿主机 clean 树构建（linux/amd64、`-trimpath`、嵌入 vcs 身份）的 `qutransactionprobe` 二进制封装进 pinned alpine 镜像 `vertex-pro-g1/harness:pinned`，probe 全部经 `docker compose run` 以 non-root、只读根文件系统、drop ALL、tmpfs /tmp 执行，evidence 目录经 `VERTEX_PRO_G1_EVIDENCE_DIR` 显式挂载；`g1-harness-identity.json` 归档 image_id 与 source commit。21 事务/故障用例与 3 份 fixture 采集在此镜像内全 PASS。G1 剩余阻塞收敛为：clean-commit 上 P0×3 连续运行并记录 verification runs。
+- Clean-commit P0×3 战役完成并全 PASS：harness 二进制/镜像从 clean 树 `15707ff` 构建（`vertex-pro-g1/harness:pinned` = `sha256:624069b7...`），三轮完整 P0 矩阵（18 事务/故障 + 3 外部 kill -9 + 3 fixture 采集 ×3）全部 PASS、0 自动重投；每轮矩阵摘要归档于仓库外 campaign 目录并按轮次取摘要。9 条 `profile_verification_runs`（3 Profile × 3 repetition，`required_case_count=21`、`kill9_case_passed=true`、`verification_state=VERIFIED`）经 `tools/profileverification` 持久化，第三次重复后 Resolve 判定 `VERIFIED_RUN_MATCHED` 并产出三份 profile activation binding，连同 run JSON 与 campaign-manifest 归档于 `docs/evidence/qui-12/verification-campaign/`。recorder 构建身份为当前 clean commit `63161b1`（与 harness 源码 `15707ff` 仅差文档）。至此 G1 所列阻塞全部闭合；Profile 提升与 G1 Gate 仍待生产装配读取 campaign runs 并由正式评审确认。
 
 > 总数由本表的 149 个正式实施项计算。若施工手册新增、删除或改名实施项，必须同 PR 更新本表并由合同检查验证集合一致。
 
@@ -332,7 +333,7 @@ PENDING -> IN_PROGRESS -> IN_REVIEW -> DONE
 | Gate J | PENDING | Dashboard/RSS/Rules/History 用户闭环 | — | — | — |
 | Gate K | PENDING | 历史、删除事实、统计口径、诊断 | — | — | — |
 | Gate L | PENDING | 安全、性能、备份、升级与镜像 | — | — | — |
-| G1 | PENDING | 固定 qui + qB 4.3.8/5.0.4/5.2.2 真实链路 | — | — | 核心与归档 3×6 矩阵 PASS；2026-09-02 在 `a314d42` 完成当前源码重跑 18/18 PASS，并新增三 Profile 外部 kill -9 用例 3/3 PASS（durable marker、UNKNOWN 提升、禁重放、对账确认均有证据）；golden fixtures、固定 harness 与 clean-commit P0×3 verification runs 仍缺 |
+| G1 | PENDING | 固定 qui + qB 4.3.8/5.0.4/5.2.2 真实链路 | — | — | 核心与归档 3×6 矩阵 PASS；2026-09-02 在 `a314d42` 完成当前源码重跑 18/18 PASS，并新增三 Profile 外部 kill -9 用例 3/3 PASS（durable marker、UNKNOWN 提升、禁重放、对账确认均有证据）；golden fixtures 已归档、harness 固化为 pinned 容器镜像、clean-commit P0×3 三连跑全 PASS 并持久化 9 条 VERIFIED runs + activation bindings；G1 阻塞已全部闭合，Gate 待正式评审确认 |
 | G2 | PENDING | 容量与恢复故障验证 | — | — | — |
 | C1 | PENDING | `make verify-contracts` 机器报告 | — | — | — |
 | A24 | PENDING | RC8 第 24 节逐项 PASS | — | — | — |
@@ -439,3 +440,4 @@ PENDING -> IN_PROGRESS -> IN_REVIEW -> DONE
 | 2026-09-02 | `qutransactionprobe` 新增 `external_kill` 故障模式并在三 Profile lab 全 PASS（真实子进程发送后强杀、恢复 UNKNOWN、禁重放、对账 RECONCILED_CONFIRMED）；矩阵汇总扩展为 21 用例 | Codex |
 | 2026-09-02 | `qutransactionprobe` 新增 `fixture_capture` 模式，归档三 Profile 共 12 份 Add/Sync/tracker/transfer-info 金样本并逐文件校验 SHA-256；剩余清单收敛为 harness 固定与 P0×3 | Codex |
 | 2026-09-02 | harness 固化为 `vertex-pro-g1/harness:pinned` 容器镜像（vcs 身份内嵌、non-root 只读根文件系统），21 用例 + 3 fixture 采集容器化全 PASS；剩余清单收敛为 clean-commit P0×3 | Codex |
+| 2026-09-02 | clean-commit P0×3 三连跑全 PASS；9 条 verification runs 持久化（3 Profile × 3 repetition 全 VERIFIED）并产出 activation binding，G1 阻塞全部闭合 | Codex |
