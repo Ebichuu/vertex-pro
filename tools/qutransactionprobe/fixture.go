@@ -51,6 +51,13 @@ func rawToDelta(response map[string]any) (syncmerge.Delta, error) {
 // fixtureCaptureSummary is printed after the four golden fixtures for one
 // profile have been written. Digests cover the exact file bytes so the
 // profile verification run can re-verify them later.
+type fixturePayload struct {
+	Kind     string `json:"kind"`
+	FileName string `json:"file_name"`
+	SHA256   string `json:"sha256"`
+	Base64   string `json:"base64"`
+}
+
 type fixtureCaptureSummary struct {
 	Status   string `json:"status"`
 	Profile  string `json:"profile"`
@@ -60,7 +67,8 @@ type fixtureCaptureSummary struct {
 		Tracker      string `json:"tracker"`
 		TransferInfo string `json:"transfer_info"`
 	} `json:"fixtures"`
-	Safety struct {
+	Payloads []fixturePayload `json:"payloads"`
+	Safety   struct {
 		ExplicitIsolatedLabOptIn bool `json:"explicit_isolated_lab_opt_in"`
 		BaselineEmpty            bool `json:"baseline_empty"`
 		StartInactive            bool `json:"start_inactive"`
@@ -235,11 +243,9 @@ func runFixtureCapture(ctx context.Context, client *proxy.Client, profile qbprof
 	transferRecord.Fields = transfer
 	transferRecord.Redactions = "task transfer field subset; no credentials present"
 
-	if err := os.MkdirAll(fixtureDir, 0o750); err != nil {
-		return err
-	}
 	profileName := strings.ToLower(strings.ReplaceAll(profile.ID, "_", ""))
 	digests := map[string]string{}
+	var payloads []fixturePayload
 	for name, record := range map[string]any{
 		"add": addRecord, "sync": syncRecord, "tracker": trackerRecord, "transfer_info": transferRecord,
 	} {
@@ -248,12 +254,17 @@ func runFixtureCapture(ctx context.Context, client *proxy.Client, profile qbprof
 			return marshalErr
 		}
 		payload = append(payload, '\n')
-		path := filepath.Join(fixtureDir, fmt.Sprintf("fixture-%s-%s.json", profileName, name))
-		if writeErr := os.WriteFile(path, payload, 0o600); writeErr != nil {
-			return writeErr
+		fileName := fmt.Sprintf("fixture-%s-%s.json", profileName, name)
+		if fixtureDir != "" {
+			if err := os.MkdirAll(fixtureDir, 0o750); err != nil {
+				return err
+			}
+			if writeErr := os.WriteFile(filepath.Join(fixtureDir, fileName), payload, 0o600); writeErr != nil {
+				return writeErr
+			}
 		}
-		digest := sha256Hex(payload)
-		digests[name] = digest
+		digests[name] = sha256Hex(payload)
+		payloads = append(payloads, fixturePayload{Kind: name, FileName: fileName, SHA256: digests[name], Base64: base64.StdEncoding.EncodeToString(payload)})
 	}
 
 	deleteStatus, deleteErr := deleteIdentity(ctx, strings.TrimSpace(os.Getenv("VERTEX_PRO_QUI_URL")), strings.TrimSpace(os.Getenv("VERTEX_PRO_QUI_PROXY_KEY")), match.CandidateID)
@@ -298,6 +309,7 @@ func runFixtureCapture(ctx context.Context, client *proxy.Client, profile qbprof
 	summary.Safety.DeleteOnlyAddedIdentity = true
 	summary.Safety.LabReturnedEmpty = finalEmpty
 	summary.Safety.SecretsRedacted = true
+	summary.Payloads = payloads
 	summary.Notes = "captured inactive (" + observedState + ") task via qui proxy; fixture digests are sha256 of the archived file bytes"
 	encoder := json.NewEncoder(os.Stdout)
 	encoder.SetIndent("", "  ")

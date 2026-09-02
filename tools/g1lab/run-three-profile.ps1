@@ -229,10 +229,27 @@ try {
         if ($LASTEXITCODE -ne 0) { throw "fixture capture failed for ${profile}: $fixtureOutput" }
         $fixtureResult = $fixtureOutput | ConvertFrom-Json
         if ($fixtureResult.status -ne 'PASS' -or $fixtureResult.profile -ne $profile) { throw "unexpected fixture capture result for $profile" }
-        foreach ($fixtureKind in @('add', 'sync', 'tracker', 'transfer_info')) {
-            $digestProperty = $fixtureResult.fixtures.PSObject.Properties[$fixtureKind]
-            if ($null -eq $digestProperty -or [string]::IsNullOrWhiteSpace($digestProperty.Value)) {
-                throw "fixture digest missing for $profile/$fixtureKind"
+        $fixtureDir = Join-Path $evidenceRoot 'fixtures'
+        New-Item -ItemType Directory -Force -Path $fixtureDir | Out-Null
+        foreach ($payload in @($fixtureResult.payloads)) {
+            if ([string]::IsNullOrWhiteSpace($payload.sha256) -or [string]::IsNullOrWhiteSpace($payload.base64)) {
+                throw "fixture payload incomplete for $profile/$($payload.kind)"
+            }
+            $bytes = [Convert]::FromBase64String($payload.base64)
+            $sha = [System.Security.Cryptography.SHA256]::Create()
+            $actual = [BitConverter]::ToString($sha.ComputeHash($bytes)).Replace('-','').ToLowerInvariant()
+            if ($actual -ne $payload.sha256) { throw "fixture payload digest mismatch for $profile/$($payload.kind)" }
+            $digestProperty = $fixtureResult.fixtures.PSObject.Properties[$payload.kind]
+            if ($null -eq $digestProperty -or $digestProperty.Value -ne $payload.sha256) {
+                throw "fixture digest mismatch for $profile/$($payload.kind)"
+            }
+            $destination = Join-Path $fixtureDir $payload.file_name
+            $existing = if (Test-Path -LiteralPath $destination) { [IO.File]::ReadAllBytes($destination) } else { $null }
+            $existingDigest = if ($null -ne $existing) { [BitConverter]::ToString($sha.ComputeHash($existing)).Replace('-','').ToLowerInvariant() } else { $null }
+            if ($null -ne $existing -and $existingDigest -ne $payload.sha256) {
+                Set-Content -LiteralPath $destination -Value $bytes -Encoding Byte -NoNewline
+            } elseif ($null -eq $existing) {
+                Set-Content -LiteralPath $destination -Value $bytes -Encoding Byte -NoNewline
             }
         }
         Set-Content -LiteralPath (Join-Path $evidenceRoot "lab-$killProfileName-fixture-capture.json") -Value $fixtureOutput -Encoding utf8
