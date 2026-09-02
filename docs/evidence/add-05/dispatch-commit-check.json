@@ -1,0 +1,60 @@
+{
+  "item": "ADD-05 / ADD-06 / ADD-13",
+  "status": "IN_PROGRESS",
+  "generated_at": "2026-09-02T07:43:00Z",
+  "git": {
+    "implementation_commit": "0de553ca20876ef1532f63c819febd4d4e25a08f",
+    "lab_probe_commit": "ec84241a5539a0f3b5b5b9b01db08046e30ccfe2",
+    "working_tree_clean_when_evidence_generated": false,
+    "qualification": "LOCAL_DEVELOPMENT_ONLY"
+  },
+  "implementation": [
+    "DispatchFlow performs all local multipart and endpoint validation before creating an uncertain chain.",
+    "DispatchCommit.Begin uses BEGIN IMMEDIATE to atomically persist SubmitIntent STARTED, PlacementAttempt ADD_SENT/STARTED/POSSIBLE_EFFECT, RaceJob ADD_SENT and a dispatch-start event before Sender.Send can run.",
+    "DispatchWorker accepts only facts modeling an already durable ADD_SENT/STARTED/POSSIBLE_EFFECT marker and consumes each Attempt at most once in-process.",
+    "DispatchCommit.Record atomically records response_fact_at and advances accepted responses to AWAITING_CONFIRMATION or ambiguous responses to UNKNOWN.",
+    "A known-not-sent result closes the current Attempt and Job as ADD_FAILED/FAILED_NO_EFFECT; it never rewinds the same Attempt to NOT_STARTED and safe retry requires the existing two-phase requeue path with a new Attempt.",
+    "Startup recovery atomically promotes an interrupted ADD_SENT chain to UNKNOWN, keeps or restores its waiter and never exposes it as an automatic redispatch candidate.",
+    "Application startup executes deterministic recovery before exposing HTTP traffic and fails closed on chain invariant violations.",
+    "Production dispatch remains disabled by default and cannot be enabled while a probed qB Profile is EXPECTED."
+  ],
+  "crash_window_tests": {
+    "before_body_send": [
+      "Malformed Add input is rejected before DispatchCommit.Begin and leaves RESERVED/NOT_STARTED unchanged.",
+      "Cancellation before Sender.Send is persisted as ADD_FAILED/FAILED_NO_EFFECT without invoking the sender."
+    ],
+    "after_body_send_before_response_commit": [
+      "The sender callback observes ADD_SENT/STARTED/POSSIBLE_EFFECT and dispatch_started_at before any network side effect.",
+      "A simulated kill after one successful send but before DispatchCommit.Record is recovered as UNKNOWN; a subsequent Run is rejected and sender_calls remains one."
+    ],
+    "after_response_commit": [
+      "DispatchCommit.Record replay is idempotent and does not duplicate result events.",
+      "DispatchCommit.Begin rejects every replay once dispatch_state has reached STARTED."
+    ]
+  },
+  "tests": {
+    "command": "go test ./internal/dispatchcommit ./internal/dispatchflow ./internal/dispatchworker ./internal/startuprecover ./internal/app -count=1",
+    "status": "PASS"
+  },
+  "inputs": [
+    {"path": "internal/dispatchcommit/commit.go", "sha256": "5ef0d26ccce9f54e38c31245f127674197f960e2fe398a2c7d6a7e84214b55bf"},
+    {"path": "internal/dispatchcommit/commit_test.go", "sha256": "6fb3f60fad5f0132226e76195c6bc8c4d127d8d0d89e99323f70d1f5a26f436c"},
+    {"path": "internal/dispatchflow/flow.go", "sha256": "77ff5d03b7d9a0836def67b8c0929deb2a5f7f95b474581d670c84cfdfaa40a5"},
+    {"path": "internal/dispatchflow/flow_test.go", "sha256": "c9791946ce006775b627c251f3754480691ce5e4a827a14d9647f1228699b00d"},
+    {"path": "internal/dispatchworker/worker.go", "sha256": "e626df3949e21b9371c3a9f10b657c0e3cef5190d42a36578219ff82bd69e0a1"},
+    {"path": "internal/dispatchworker/worker_test.go", "sha256": "f000fd0a63f634cda57f81bf2a51c2d9ff0656f4b8c31bd4945cf8b427ebe6cc"},
+    {"path": "internal/startuprecover/recover.go", "sha256": "b8aa93a820d65b10b2cc2f366178cf4905f46c74486e0cd659a7298bbc14b673"},
+    {"path": "internal/startuprecover/recover_test.go", "sha256": "791c42386468beb1ccb0b406bb8333c6507793ac5f113dd3fac8fa0c12ed89eb"},
+    {"path": "internal/app/app.go", "sha256": "f400e0b15fda247c08f0308285242502ea9b59ba0ea67ad15763b0ad79c56db7"},
+    {"path": "internal/app/app_test.go", "sha256": "eb080917d36203cc5cae275887f18b2a10bdcfa9f6faa3558099d890a69c3a45"},
+    {"path": "tools/qutransactionprobe/main.go", "sha256": "1edd023046b911b41e0e93a9b4cd82f26f0bf9d4fbd92c90903b64e2ed4df9f5"},
+    {"path": "tools/g1lab/run-three-profile.ps1", "sha256": "39af927e9ea352a9467fd05587036a3acfd6b7378ddeeedc6a73c0141cf4d04c"},
+    {"path": "tools/g1lab/summarize-three-profile.ps1", "sha256": "d0c6cc0faca8fb60dcaaa024cbfd852dc2e51b9d38755742ef4b20292ffc83a0"}
+  ],
+  "remaining": [
+    "Queue/scheduler-driven production invocation of DispatchFlow.",
+    "External process kill -9 evidence at the post-send/pre-Record boundary.",
+    "Rerun the 18-case three-profile lab against this exact source revision after Docker Desktop is available.",
+    "Clean-commit evidence and immutable report digests before any Gate or Profile promotion."
+  ]
+}

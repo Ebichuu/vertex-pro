@@ -1,7 +1,7 @@
 ﻿# BOOT-01 收口清单
 
-状态：`IN_PROGRESS`
-更新时间：2026-08-24
+状态：`DONE`
+更新时间：2026-09-02
 
 ## 已完成
 
@@ -12,27 +12,28 @@
 - [x] 初始化本地 Git 仓库，当前分支为 `main`。
 - [x] 执行 `tools/contractcheck/check-repository-layout.ps1`。
 - [x] 路径检查通过，证据为 `docs/evidence/boot-01/layout-check.json`。
-- [x] 就绪门禁可重复执行，当前以 `BLOCKED` 退出并指出两个缺失前置条件；证据为 `docs/evidence/boot-01/readiness-check.json`。
+- [x] 创建首个基线 commit `ec684501e57bf7d300dcfc8a368901c47a7b14ab`。
+- [x] 确认 GitHub owner `@Ebichuu` 并写入 `CODEOWNERS`。
+- [x] 在基线 commit 后重新运行路径检查并更新证据 digest。
+- [x] 就绪门禁可重复执行并返回 `PASS`；证据为 `docs/evidence/boot-01/readiness-check.json`。
 
 ## 尚未完成
 
-- [ ] 确定真实 GitHub 用户或团队 owner，并将其写入 `CODEOWNERS`。就绪门禁当前报告：`codeowners_owner_missing`。
-- [ ] 创建首个基线 commit，使实施状态具备真实 `started commit` 和可复验 Git 证据。就绪门禁当前报告：`baseline_commit_missing`。
-- [ ] 在基线 commit 后重新运行路径检查并更新证据 digest。
+无。Gate A 仍需 BOOT-02～BOOT-09 各自完成后独立判定。
 
 ## 完成条件
 
-只有以上未完成项全部完成，且 `IMPLEMENTATION_STATUS_V1.md` 中的 owner、branch、started commit、evidence 和更新时间齐全后，才能将 `BOOT-01` 改为 `DONE`。
+完成提交为 `f741663a5f27820915c8161201acfb3831bd7369`。`IMPLEMENTATION_STATUS_V1.md` 已记录 owner、branch、started commit、completion commit 和证据 digest；BOOT-01 可标记为 `DONE`，但不代表 Gate A 自动通过。
 
 ## 当前 Git 信息
 
 - 分支：`main`
-- 当前 HEAD：尚未存在（空仓库）
-- 本地 Git 用户名：`Ebichuuuu`
-- 本地 Git 邮箱：`chiongsesy@gmail.com`
-- 远程仓库：未配置
-
-本清单不把本地 Git 用户名推断为 GitHub owner，避免生成不可验证的 `CODEOWNERS` 规则。
+- Started commit：`ec684501e57bf7d300dcfc8a368901c47a7b14ab`
+- Completion commit：`f741663a5f27820915c8161201acfb3831bd7369`
+- GitHub owner：`@Ebichuu`
+- 远程仓库：`https://github.com/Ebichuu/vertex-pro.git`
+- Layout evidence：`sha256:588d2fa5a8654dacc796a8d7dc90e8743ea7724b04ac35343af5a7475362c37e`
+- Readiness evidence：`sha256:a431ac74ad91ab93527629d868b9cc8e911262cd17c08563518e381d9cab931a`
 
 
 

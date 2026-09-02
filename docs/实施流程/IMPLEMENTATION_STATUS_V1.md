@@ -1,7 +1,7 @@
 # Vertex Pro V1 实施状态表
 
 文档状态：`ACTIVE / AUTHORITATIVE-TRACKER-BY-RC8`  
-最后修订：2026-08-31  
+最后修订：2026-09-02
 对应施工手册：`docs/实施流程/VERTEX_PRO_V1_CODE_IMPLEMENTATION_PLAYBOOK.md`  
 对应主规范：`docs/产品方案设计/VERTEX_PRO_COMPLETE_REDESIGN_V1_RC8_FINAL.md`  
 对应产品合同：`docs/产品方案设计/VERTEX_PRO_V1_USER_RULES_CONTRACT.md`  
@@ -34,7 +34,7 @@ PENDING -> IN_PROGRESS -> IN_REVIEW -> DONE
 
 | 阶段 | 范围 | 代码状态 | Gate | Gate 状态 |
 |---|---|---|---|---|
-| A | 仓库与骨架 | `0/9 DONE; 9 IN_PROGRESS` | Gate A | `PENDING` |
+| A | 仓库与骨架 | `1/9 DONE; 8 IN_PROGRESS` | Gate A | `PENDING` |
 | B | 合同与生成 | `0/8 DONE; 8 IN_PROGRESS` | Gate B | `PENDING` |
 | C | SQLite 与事务 | `0/11 DONE; 11 IN_PROGRESS` | Gate C | `PENDING` |
 | D | qui、Profile、Sync | `0/12 DONE; 12 IN_PROGRESS` | Gate D / G1 基础 | `PENDING` |
@@ -48,8 +48,8 @@ PENDING -> IN_PROGRESS -> IN_REVIEW -> DONE
 | L | 加固与运维 | `0/12 DONE; 12 PENDING` | Gate L | `PENDING` |
 | M | RC 与冻结 | `0/7 DONE; 7 PENDING` | Gate M / G3 | `PENDING` |
 
-总体状态：`0/149 DONE`；`121 IN_PROGRESS`；`28 PENDING`。  
-正式 Gate：阶段 A `BOOT-01`（Gate A `PENDING`）；功能开发触达：阶段 J `UI-10`（local-only）。
+总体状态：`1/149 DONE`；`120 IN_PROGRESS`；`28 PENDING`。
+正式施工项推进至阶段 A `BOOT-02`（Gate A `PENDING`）；功能开发触达：阶段 J `UI-10`（local-only）。
 
 ### 2026-08-30 状态校准
 
@@ -77,8 +77,18 @@ PENDING -> IN_PROGRESS -> IN_REVIEW -> DONE
 - 状态含义：QB_504 的真实 Control/Profile/Sync、受控 inactive Add→Sync wire protocol和隔离 lab 生产 Go DispatchWorker 已验证；但 lab qui v1.0.0 commit 与冻结 lock 不一致，且完整 Placement/SubmitIntent/首次确认编排与 G1 故障矩阵尚未通过，因此产品 Profile 仍为 `EXPECTED`，实例不得进入 `AVAILABLE`。
 - Go 恢复验证：受 coding harness 非 loopback 出站限制影响，生产 Go 进程通过 loopback-only bridge 访问真实 qui；复用同一数据库和 snapshot root 连续启动两次均 READY/优雅退出，仅观察到 GET，revision 前进且原有任务集合不变。该环境桥接不改变产品网络要求，仍需在非 sandbox 部署环境补一次直接连接证据。
 - Storage/容量只读证据：真实 qB 默认保存路径存在、`free_space_on_disk` 合法且新鲜容量快照校验为 `TRUSTED`；管理员在 qB Linux 主机提供只读 mount/device 证据，managed root 选择 qB 默认保存路径，设备标识一致并通过 `storageverify.Validate`，Storage 证据现为 `VERIFIED`。原始路径与挂载信息仅保存在仓库外受限 ACL 文件；因 QB_504 Profile 仍为 `EXPECTED`，Placement 继续 fail closed、Profile 不得提升。
-- G1 实验室准备：本机 Docker/Compose 可用；使用已存在的精确 qB 5.0.4 镜像和从上游 v1.0.0 源码本地构建的 qui 镜像创建两容器内部网络，部分 QB_504 生命周期已 PASS。已定位 qB 4.3.8/libtorrent 1.2.14 与 qB 5.2.2/libtorrent 2.0.13 的精确静态发行资产，但大文件下载/registry pull 持续超时，尚未形成可运行镜像。
-- 未覆盖范围：QB_438、QB_522、冻结 qui commit 上的完整 G1、生产 Placement/Add/FirstConfirm 编排、响应丢失与生产形态 RaceJob/Attempt/Reservation 恢复故障矩阵、发布级实验室仍未完成。
+- G1 实验室进展：已从冻结 commit `8fcfc4d2beaf5e68ccebe837d7c0d9be965c8896` 构建 qui，并将精确 qB 4.3.8/WebAPI 2.8.2/libtorrent 1.2.14.0、qB 5.0.4/WebAPI 2.11.2/libtorrent 2.0.11.0、qB 5.2.2/WebAPI 2.15.1/libtorrent 2.0.13.0 组成四容器内部网络。三 Profile 的核心生命周期以及归档的 3 Profile × 6 mode 事务/故障矩阵均 PASS；18 次 sender 调用均无自动重投，最终 lab 任务、容器、卷和临时 Secret 均已清理。
+- Dispatch 安全边界：`0de553c` 将投递拆为发送前 `Begin` 与发送后 `Record`。本地请求校验通过后，先在 SQLite immediate transaction 中原子持久化 SubmitIntent `STARTED`、Attempt/Job `ADD_SENT` 和 `POSSIBLE_EFFECT`，再允许唯一一次网络发送；启动恢复把中断的 `ADD_SENT` 提升为 `UNKNOWN` 并禁止重放。明确 not-sent 关闭为 `ADD_FAILED/FAILED_NO_EFFECT`，只能经两阶段重排创建新 Attempt。
+- G1 判定：归档 18 例早于新的 durable-marker 证据字段；当前 Docker Desktop daemon 未运行，尚未在这一源码版本重跑。外部 `kill -9`、`profile_verification_runs` 持久化、固定 harness image 和 clean commit 上 P0 连续三次运行仍缺失；三个 Profile 继续保持 `EXPECTED`，G1 保持 `PENDING`。
+
+### 2026-09-02 状态校准
+
+- `BOOT-01` 已由 `f741663a5f27820915c8161201acfb3831bd7369` 收口；总体进度更新为 `1 DONE / 120 IN_PROGRESS / 28 PENDING`，Gate A 仍等待 BOOT-02～09。
+- Dispatch 崩溃窗口修复提交为 `0de553ca20876ef1532f63c819febd4d4e25a08f`；覆盖发送前校验、发送前 durable marker、发送后但响应提交前崩溃、提交后幂等、并发 Begin 和启动恢复不可重放。
+- 三 Profile lab/归档矩阵提交为 `ec84241`；`g1-three-profile-matrix-summary.json` 汇总 18/18 PASS，同时明确当前源码 revalidation 为 `PENDING_REVALIDATION`，不得据此提升 Profile。
+- 当前工作区完整 preflight 的 11 个目标全部 PASS；Go 全量测试/vet、16 个前端测试文件共 81 项、typecheck、生产构建、代码生成、许可证、实施计划和 compose 静态解析均通过。前端主 JS chunk 约 596 KB 的提示仍为非阻塞体积警告。
+- Windows race 因 `CGO_ENABLED=0` 无法执行；Docker Desktop daemon 未运行，Linux race 和当前源码三 Profile 重跑保持 BLOCKED。
+- 生产 mutation 继续默认关闭；Profile 非 `VERIFIED` 时显式启用仍 fail closed。RSS→规则→Placement→Reservation→Dispatch→FirstConfirm 的生产调度链尚未接通。
 
 > 总数由本表的 149 个正式实施项计算。若施工手册新增、删除或改名实施项，必须同 PR 更新本表并由合同检查验证集合一致。
 
@@ -90,11 +100,11 @@ PENDING -> IN_PROGRESS -> IN_REVIEW -> DONE
 
 | ID | 内容 | Depends on | Status | Owner | PR/Merge | Evidence |
 |---|---|---|---|---|---|---|
-| `BOOT-01` | 单仓库和目录合同 | — | IN_PROGRESS | Codex | main | `docs/evidence/boot-01/layout-check.json` / sha256:c5f93674cf7a7ddb40d664d0410466b05c3f63eb1ad3400c9c81055b79653ab0 |
+| `BOOT-01` | 单仓库和目录合同 | — | DONE | Codex | `f741663a5f27820915c8161201acfb3831bd7369` | `docs/evidence/boot-01/layout-check.json` / sha256:588d2fa5a8654dacc796a8d7dc90e8743ea7724b04ac35343af5a7475362c37e; `docs/evidence/boot-01/readiness-check.json` / sha256:a431ac74ad91ab93527629d868b9cc8e911262cd17c08563518e381d9cab931a |
 | `BOOT-02` | 固定 Go/Node/pnpm 工具链 | BOOT-01 | IN_PROGRESS | Codex | local-only | `go.mod` / sha256:ce30f9a9ff9a9115ba5758b46a31e993a518b3ea260d23448b19e0ac57f16fb2; `pnpm-lock.yaml` / sha256:0d0f142ee439b8faec01d1f40586c27e45e7bc0b6016e034a5c659b3374015ee |
 | `BOOT-03` | GPL 项目文件 | BOOT-01 | IN_PROGRESS | Codex | local-only | `docs/evidence/boot-03/license-check.json` / sha256:96c4df1a3802345a0d78ae69dda400bcf9222d348fa29aab9dffef15b7c95277 |
 | `BOOT-04` | 固定 qui 上游 | BOOT-03 | IN_PROGRESS | Codex | local-only | `docs/evidence/boot-04/qui-lock-check.json` / sha256:b4defb857d0f9ab2a2aa69a1de31240abc21f7cdb3daff110edd05c87cecc3ef |
-| `BOOT-05` | Make 与 CI | BOOT-01..03 | IN_PROGRESS | Codex | local-only | `docs/evidence/boot-05/preflight-check.json` / sha256:101ea98b59ec29a46cbd487b64ba450d400d67c10ad3ff9a7b230a57691c12ec |
+| `BOOT-05` | Make 与 CI | BOOT-01..03 | IN_PROGRESS | Codex | local-only | `docs/evidence/boot-05/preflight-check.json` / sha256:34532b67bf65b991533e4a1ed5ae82fffd89a84de2211f8ed7482a4129c09492 |
 | `BOOT-06` | Go 服务骨架 | BOOT-02,05 | IN_PROGRESS | Codex | local-only | `cmd/vertex-pro/main_test.go` / sha256:a2a5c80284637653eab771d7180c03ba7fd7e4ec1e06fb11fd7196fcafe7344a |
 | `BOOT-07` | React 应用骨架 | BOOT-02,05 | IN_PROGRESS | Codex | local-only | `docs/evidence/boot-07/frontend-check.json` / sha256:d66fbd061c450d571ad6ecd8b8e5f047c8c17ed378e18b2f8c3f8300085d62ea |
 | `BOOT-08` | 单二进制和容器 | BOOT-06,07 | IN_PROGRESS | Codex | local-only | `docs/evidence/boot-08/container-check.json` / sha256:68e43b3d83300185b4c19782f4f80345dff5dda1927f5cec7a8078a8e90b662c |
@@ -136,15 +146,15 @@ PENDING -> IN_PROGRESS -> IN_REVIEW -> DONE
 | `QUI-01` | SecretStore | BOOT-06,09 | IN_PROGRESS | Codex | local-only | `docs/evidence/qui-01/secret-store-check.json` / sha256:34139968f27c22db82f21057e5f66af9caa55ad9c698f663f2dd082528a6f6b8 |
 | `QUI-02` | QuiControlClient | QUI-01, CTR-03 | IN_PROGRESS | Codex | live-read-only | `docs/evidence/qui-02/control-client-check.json` / sha256:ba722d3a9aa7c4cd74c0a6ef883a382ae1cfe4b07862f26608192c3b8515b56a; `docs/evidence/qui-12/live-qb504-integration-summary.json` / sha256:4bd28967aea8907bd619b86fdf1d6e0f3fdf09a5c02cb777a1dd905fc98c9d21 |
 | `QUI-03` | QbProxyClient | QUI-01, CTR-03 | IN_PROGRESS | Codex | live-read-only | `docs/evidence/qui-03/proxy-client-check.json` / sha256:05f91ea29b63a3d1c3c71e7464067d2f9f881c81464e412282b6010962750e3a; `docs/evidence/qui-12/live-qb504-integration-summary.json` / sha256:4bd28967aea8907bd619b86fdf1d6e0f3fdf09a5c02cb777a1dd905fc98c9d21; wire-only Add evidence: `docs/evidence/qui-12/live-qb504-add-summary.json` / sha256:548f4b31a77f4671723df0fb494d8b511faff6835319c498b832d4fba49988d0 |
-| `QUI-04` | Profile 探测 | QUI-02,03 | IN_PROGRESS | Codex | live-read-only | `docs/evidence/qui-04/profile-probe-check.json` / sha256:97ba12e8d1309d6a88c634eb6fc5e97208ba5a595750f7d325289d4548ab5be4; `docs/evidence/qui-12/live-qb504-integration-summary.json` / sha256:4bd28967aea8907bd619b86fdf1d6e0f3fdf09a5c02cb777a1dd905fc98c9d21 |
-| `QUI-05` | AddRequestAdapter | QUI-04, CTR-02 | IN_PROGRESS | Codex | local-only | `docs/evidence/qui-05/add-request-check.json` / sha256:929b9fc6f6fce4cc185d9456c4099f22b80645ee13eee8af733b7f0a838ef09b; wire semantics: `docs/evidence/qui-12/live-qb504-add-summary.json` / sha256:548f4b31a77f4671723df0fb494d8b511faff6835319c498b832d4fba49988d0 |
-| `QUI-06` | AddResponseAdapter | QUI-04, CTR-02,03 | IN_PROGRESS | Codex | local-only | `docs/evidence/qui-06/add-response-check.json` / sha256:3ebe870cb2ade1d2d8260173981c309d4c303ea0ffb96a3ca88e62dd9b9480db; wire semantics: `docs/evidence/qui-12/live-qb504-add-summary.json` / sha256:548f4b31a77f4671723df0fb494d8b511faff6835319c498b832d4fba49988d0 |
+| `QUI-04` | Profile 探测 | QUI-02,03 | IN_PROGRESS | Codex | `ec84241` | `docs/evidence/qui-04/profile-probe-check.json` / sha256:97ba12e8d1309d6a88c634eb6fc5e97208ba5a595750f7d325289d4548ab5be4; exact three-profile facts: `docs/evidence/qui-12/g1-three-profile-summary.json` / sha256:a45e3a5c817acb1e7379e5f53c58dba806f8b74390356815a30affa17413840e |
+| `QUI-05` | AddRequestAdapter | QUI-04, CTR-02 | IN_PROGRESS | Codex | `ec84241` | `docs/evidence/qui-05/add-request-check.json` / sha256:929b9fc6f6fce4cc185d9456c4099f22b80645ee13eee8af733b7f0a838ef09b; paused/stopped live lab semantics: `docs/evidence/qui-12/g1-three-profile-summary.json` / sha256:a45e3a5c817acb1e7379e5f53c58dba806f8b74390356815a30affa17413840e |
+| `QUI-06` | AddResponseAdapter | QUI-04, CTR-02,03 | IN_PROGRESS | Codex | `ec84241` | `docs/evidence/qui-06/add-response-check.json` / sha256:3ebe870cb2ade1d2d8260173981c309d4c303ea0ffb96a3ca88e62dd9b9480db; legacy/json/409 live lab semantics: `docs/evidence/qui-12/g1-three-profile-summary.json` / sha256:a45e3a5c817acb1e7379e5f53c58dba806f8b74390356815a30affa17413840e |
 | `QUI-07` | Sync delta merger | QUI-03,04 | IN_PROGRESS | Codex | live-read-only | `docs/evidence/qui-07/sync-merger-check.json` / sha256:fc2db2dc8cbb5eef288d3f28261ffecad9856644207a88dd014d4d74e5b02e25; `docs/evidence/qui-12/live-qb504-integration-summary.json` / sha256:4bd28967aea8907bd619b86fdf1d6e0f3fdf09a5c02cb777a1dd905fc98c9d21 |
 | `QUI-08` | SnapshotStore | DB-04, QUI-07 | IN_PROGRESS | Codex | live-read-only | `docs/evidence/qui-08/snapshot-store-check.json` / sha256:e1d2f2f2d342233e7733bf5f45fb93622a5687e8652ac62ce5672dc1141eff88; `docs/evidence/qui-12/live-qb504-runtime-check.json` / sha256:7b370b7555043a7eb9c85e18c5c33bebf9847c37da8032b1ce59ae12518480f3 |
 | `QUI-09` | 单实例 SyncWatcher | QUI-07,08, DB-09 | IN_PROGRESS | Codex | live-read-only | `docs/evidence/qui-09/sync-watcher-check.json` / sha256:ae1785fcf4074bd3994ff1fb72fec3b031aad84e97814837297ea47805fa346a; `docs/evidence/qui-12/live-qb504-integration-summary.json` / sha256:4bd28967aea8907bd619b86fdf1d6e0f3fdf09a5c02cb777a1dd905fc98c9d21; `docs/evidence/qui-12/live-qb504-go-recovery-summary.json` / sha256:f96286c471fb44ffce912c8f5dd1fb55b7b9546593eee683453a326592be9bc1 |
 | `QUI-10` | Capability/Health 聚合 | QUI-02,04,09 | IN_PROGRESS | Codex | local-only | `docs/evidence/qui-10/capability-health-check.json` / sha256:8a3cc5966d42c08decd91a1734547af372f86257f60e14aa71f26d9dcb5fa362 |
 | `QUI-11` | 协议探针工具 | QUI-03..07, BOOT-09 | IN_PROGRESS | Codex | live-read-only | `docs/evidence/qui-11/protocol-probe-check.json` / sha256:d54c7853dc377d657b6033a5966c7fdde579e6ac49d8d5a3fb265517f3df70e1; `docs/evidence/qui-12/live-qb504-readonly-probe.json` / sha256:39297223c91e68c3117fc6c6e3f0f6038fc6b6fe004eaf68d0f91851908168c5 |
-| `QUI-12` | G1 实验室基线 | BOOT-04,08, QUI-11 | IN_PROGRESS | Codex | live-partial/lab-partial | `docs/evidence/qui-12/g1-baseline-check.json` / sha256:20850c8d3edfb5c196059c55d4d412e0dcc7ea99e43564c0079300d7d9afe417; `docs/evidence/qui-12/live-qb504-integration-summary.json` / sha256:4bd28967aea8907bd619b86fdf1d6e0f3fdf09a5c02cb777a1dd905fc98c9d21; remote wire: `docs/evidence/qui-12/live-qb504-add-summary.json` / sha256:548f4b31a77f4671723df0fb494d8b511faff6835319c498b832d4fba49988d0; isolated lab: `docs/evidence/qui-12/lab-qb504-summary.json` / sha256:85bbecaefc93ef745551efdb622b03261c12c712499411c20d982103ca5aff73; readiness: `docs/evidence/qui-12/g1-lab-readiness-live.json` / sha256:a7c7f4dbc3a11b9d7e9837c7dc4faaba03971f852ea69e6ca4569446d1eef1aa |
+| `QUI-12` | G1 实验室基线 | BOOT-04,08, QUI-11 | IN_PROGRESS | Codex | `ec84241` / revalidation blocked | `docs/evidence/qui-12/g1-baseline-check.json` / sha256:2d2ef86e795bfe0b7d510cd317bc319cf05732235b936549c338575314753828; three-profile summary: `docs/evidence/qui-12/g1-three-profile-summary.json` / sha256:a45e3a5c817acb1e7379e5f53c58dba806f8b74390356815a30affa17413840e; archived matrix: `docs/evidence/qui-12/g1-three-profile-matrix-summary.json` / sha256:edaa50ab12c53ff4452e250d44f360bb8413dd7d5fdf66e9b43bf78ec6b0bd18; current blocker: `docs/evidence/qui-12/g1-current-revalidation-blocked.json` / sha256:ddee119973fa361b3109a239d3d33e1cbee4b4684619321277875a926e14fab7; readiness: `docs/evidence/qui-12/g1-lab-readiness-live.json` / sha256:727c532359ad9270c8e79a66645a58350343e49e53f144e31f8eec841ef5c70f |
 
 ### E. RSS、Torrent 与并行准备
 
@@ -208,16 +218,16 @@ PENDING -> IN_PROGRESS -> IN_REVIEW -> DONE
 | `ADD-02` | Attempt StateMachine | ADD-01, DB-06,08 | IN_PROGRESS | Codex | local-only | `docs/evidence/add-02/attempt-state-machine-check.json` / sha256:ebd123d9901b3ea5a0d579f1ef71eecb62c757a8455390e0547ca6d12ccfc94c |
 | `ADD-03` | SubmitIntent | ADD-02, CAP-08 | IN_PROGRESS | Codex | local-only | `docs/evidence/add-03/submit-intent-check.json` / sha256:9daf11cb19caabc02e342eb61051cec6c0ad79b7dec7ca65d3244af0bbcb4f0c |
 | `ADD-04` | Sync waiter | ADD-03, QUI-09, DB-04 | IN_PROGRESS | Codex | local-only | `docs/evidence/add-04/sync-waiter-check.json` / sha256:055055d2ab2abd32069ad395d0638fe1233dbd11acec7ef178d82475ba7a0420 |
-| `ADD-05` | Dispatch worker | ADD-03,04, QUI-05 | IN_PROGRESS | Codex | lab-live | `docs/evidence/add-05/dispatch-worker-check.json` / sha256:a80ca917a77416c42ec3c3fe2144d97c30dfb43299bfb55ccdd7710b6dc5a119; isolated QB_504 production Go dispatch: `docs/evidence/qui-12/lab-qb504-summary.json` / sha256:85bbecaefc93ef745551efdb622b03261c12c712499411c20d982103ca5aff73 |
-| `ADD-06` | 响应事实分类 | ADD-05, QUI-06 | IN_PROGRESS | Codex | lab-live | `docs/evidence/add-06/response-facts-check.json` / sha256:eb960b662e736a4398de78994eb66d208070c3467794c72a61dae3b6391114e9; QB_504 legacy/duplicate/invalid response: `docs/evidence/qui-12/lab-qb504-summary.json` / sha256:85bbecaefc93ef745551efdb622b03261c12c712499411c20d982103ca5aff73 |
-| `ADD-07` | IdentityMatcher | TOR-03, QUI-07 | IN_PROGRESS | Codex | lab-live | `docs/evidence/add-07/identity-matcher-check.json` / sha256:329def9fd3bd572ef844450f3e5f2a0f8d91566ef3ae9a11ff9cc8c065e010ca; isolated Add→Sync Identity: `docs/evidence/qui-12/lab-qb504-summary.json` / sha256:85bbecaefc93ef745551efdb622b03261c12c712499411c20d982103ca5aff73 |
+| `ADD-05` | Dispatch worker | ADD-03,04, QUI-05 | IN_PROGRESS | Codex | `0de553c` / `ec84241` | `docs/evidence/add-05/dispatch-worker-check.json` / sha256:a80ca917a77416c42ec3c3fe2144d97c30dfb43299bfb55ccdd7710b6dc5a119; pre-send durable commit: `docs/evidence/add-05/dispatch-commit-check.json` / sha256:ad9e3ab8a18157fb94937e53c323f99ff4026da77e15a452773b696164030304; three-profile archived dispatch: `docs/evidence/qui-12/g1-three-profile-summary.json` / sha256:a45e3a5c817acb1e7379e5f53c58dba806f8b74390356815a30affa17413840e |
+| `ADD-06` | 响应事实分类 | ADD-05, QUI-06 | IN_PROGRESS | Codex | `0de553c` / `ec84241` | `docs/evidence/add-06/response-facts-check.json` / sha256:eb960b662e736a4398de78994eb66d208070c3467794c72a61dae3b6391114e9; archived legacy/json/transport facts: `docs/evidence/qui-12/g1-three-profile-summary.json` / sha256:a45e3a5c817acb1e7379e5f53c58dba806f8b74390356815a30affa17413840e |
+| `ADD-07` | IdentityMatcher | TOR-03, QUI-07 | IN_PROGRESS | Codex | `ec84241` | `docs/evidence/add-07/identity-matcher-check.json` / sha256:329def9fd3bd572ef844450f3e5f2a0f8d91566ef3ae9a11ff9cc8c065e010ca; three-profile Add→Sync Identity: `docs/evidence/qui-12/g1-three-profile-summary.json` / sha256:a45e3a5c817acb1e7379e5f53c58dba806f8b74390356815a30affa17413840e |
 | `ADD-08` | 首次确认原子事务 | ADD-01..07, CAP-05,08 | IN_PROGRESS | Codex | local-only | `docs/evidence/add-08/first-confirm-transaction-check.json` / sha256:049ef9afe9bdcc85bd376465c6f6e0d979bac23c19483c1a78df781ca51561ec |
 | `ADD-09` | Already-present 分支 | ADD-03,07, CAP-05 | IN_PROGRESS | Codex | live-read-only | `docs/evidence/add-09/already-present-check.json` / sha256:c03c153b881df079cb29961f3ceb1f70d717b058a50f62a04cee9b43104728f2; live Identity + ReserveAtomic/AlreadyPresent isolated DB transaction: `docs/evidence/qui-12/live-qb504-go-recovery-summary.json` / sha256:f96286c471fb44ffce912c8f5dd1fb55b7b9546593eee683453a326592be9bc1 |
 | `ADD-10` | UNKNOWN reconciler | ADD-06..08, DB-09 | IN_PROGRESS | Codex | local-only | `docs/evidence/add-10/unknown-reconciler-check.json` / sha256:5858835125d84c0d129f64ab8b9d7233810bb1f03f57ae5134a24e3a4153d8b5 |
 | `ADD-11` | EXPIRED_UNKNOWN 命令 | ADD-08, ADD-10, CTR-01, CTR-03 | IN_PROGRESS | Codex | local-only | `docs/evidence/add-11/expired-unknown-commands-check.json` / sha256:85b67014361f1119ee91549432a40b96a1d6879d949e0db2ac4de359d351e6ea |
 | `ADD-12` | 两阶段安全重试 | ADD-01,02,10, CAP-09 | IN_PROGRESS | Codex | local-only | `docs/evidence/add-12/safe-retry-check.json` / sha256:51f13958f5e414e2b090b711504deb3c7d15b7cafd45165e99208f86ed7b1704 |
-| `ADD-13` | 启动恢复 | ADD-03..12, CAP-13 | IN_PROGRESS | Codex | live-read-only | `docs/evidence/add-13/startup-recovery-check.json` / sha256:62ff4bd32c1f2303a33d0856db134a7036d5cee7b7a90baa2796cd895ce58703; live runtime restart plus isolated Already-present replay (interrupted job recovery not invoked): `docs/evidence/qui-12/live-qb504-go-recovery-summary.json` / sha256:f96286c471fb44ffce912c8f5dd1fb55b7b9546593eee683453a326592be9bc1 |
-| `ADD-14` | 故障矩阵 | ADD-01..13, CAP-14 | IN_PROGRESS | Codex | local-only | `docs/evidence/add-14/fault-matrix-check.json` / sha256:6e29e4c62025219d244fb5f1f304f99666bbe3f46b9e1ac9231e78c390660765 |
+| `ADD-13` | 启动恢复 | ADD-03..12, CAP-13 | IN_PROGRESS | Codex | `0de553c` / `ec84241` | `docs/evidence/add-13/startup-recovery-check.json` / sha256:62ff4bd32c1f2303a33d0856db134a7036d5cee7b7a90baa2796cd895ce58703; interrupted ADD_SENT→UNKNOWN/no replay: `docs/evidence/add-05/dispatch-commit-check.json` / sha256:ad9e3ab8a18157fb94937e53c323f99ff4026da77e15a452773b696164030304; pinned qui restart/already-present: `docs/evidence/qui-12/g1-three-profile-summary.json` / sha256:a45e3a5c817acb1e7379e5f53c58dba806f8b74390356815a30affa17413840e |
+| `ADD-14` | 故障矩阵 | ADD-01..13, CAP-14 | IN_PROGRESS | Codex | `ec84241` / current rerun blocked | local matrix: `docs/evidence/add-14/fault-matrix-check.json` / sha256:6e29e4c62025219d244fb5f1f304f99666bbe3f46b9e1ac9231e78c390660765; archived 3×6 matrix: `docs/evidence/qui-12/g1-three-profile-matrix-summary.json` / sha256:edaa50ab12c53ff4452e250d44f360bb8413dd7d5fdf66e9b43bf78ec6b0bd18; current blocker: `docs/evidence/qui-12/g1-current-revalidation-blocked.json` / sha256:ddee119973fa361b3109a239d3d33e1cbee4b4684619321277875a926e14fab7 |
 
 ### I. API、认证、命令与 SSE
 
@@ -316,13 +326,55 @@ PENDING -> IN_PROGRESS -> IN_REVIEW -> DONE
 | Gate J | PENDING | Dashboard/RSS/Rules/History 用户闭环 | — | — | — |
 | Gate K | PENDING | 历史、删除事实、统计口径、诊断 | — | — | — |
 | Gate L | PENDING | 安全、性能、备份、升级与镜像 | — | — | — |
-| G1 | PENDING | 固定 qui + qB 4.3.8/5.0.4/5.2.2 真实链路 | — | — | — |
+| G1 | PENDING | 固定 qui + qB 4.3.8/5.0.4/5.2.2 真实链路 | — | — | 核心与归档 3×6 矩阵 PASS；当前 durable-marker 版本重跑、kill -9、verification runs、固定 harness 与 P0×3 仍缺 |
 | G2 | PENDING | 容量与恢复故障验证 | — | — | — |
 | C1 | PENDING | `make verify-contracts` 机器报告 | — | — | — |
 | A24 | PENDING | RC8 第 24 节逐项 PASS | — | — | — |
 | G3 | PENDING | 前四项 PASS 后单一规范切换 | — | — | — |
 
 ## 5. 单项详细记录模板
+
+### BOOT-01 单仓库和目录合同
+
+- Status: `DONE`
+- Owner: Codex
+- Branch: `main`
+- Started commit: `ec684501e57bf7d300dcfc8a368901c47a7b14ab`
+- Merge commit: `f741663a5f27820915c8161201acfb3831bd7369`
+- Depends on: —
+- Test commands:
+  - `powershell -NoProfile -ExecutionPolicy Bypass -File tools/contractcheck/check-repository-layout.ps1`
+  - `powershell -NoProfile -ExecutionPolicy Bypass -File tools/contractcheck/check-boot-01-readiness.ps1`
+- Evidence:
+  - `docs/evidence/boot-01/layout-check.json` / `sha256:588d2fa5a8654dacc796a8d7dc90e8743ea7724b04ac35343af5a7475362c37e`
+  - `docs/evidence/boot-01/readiness-check.json` / `sha256:a431ac74ad91ab93527629d868b9cc8e911262cd17c08563518e381d9cab931a`
+- Updated at: `2026-09-02T07:02:59Z`
+
+### ADD-05 / ADD-13 Dispatch durable boundary 与启动恢复
+
+- Status: `IN_PROGRESS`
+- Owner: Codex
+- Branch: `main`
+- Implementation commit: `0de553ca20876ef1532f63c819febd4d4e25a08f`
+- Lab probe commit: `ec84241a5539a0f3b5b5b9b01db08046e30ccfe2`
+- Depends on: `ADD-03,04`, `QUI-05`, `CAP-13`
+- Transaction boundary:
+  - 发送前：本地校验完成后，`dispatchcommit.Begin` 在 SQLite immediate transaction 中写入 Intent `STARTED`、Attempt/Job `ADD_SENT`、`POSSIBLE_EFFECT` 和唯一启动事件。
+  - 网络：`DispatchWorker` 只接受已建 durable marker 的事实，单进程内每个 Attempt 最多调用一次 sender。
+  - 发送后：`dispatchcommit.Record` 独立原子写入 `response_fact_at`，进入 `AWAITING_CONFIRMATION`、`UNKNOWN` 或 `ADD_FAILED`。
+- Failure/idempotency behavior:
+  - 发送前校验失败不创建不确定链。
+  - 发送后、Record 前崩溃由启动恢复提升 `ADD_SENT -> UNKNOWN`，禁止同一 Attempt 自动重放。
+  - 明确 not-sent 关闭为 `ADD_FAILED/FAILED_NO_EFFECT`；若要重试必须两阶段关闭旧链并创建新 Attempt。
+  - Begin 并发竞争只有一个调用方成功；Record 重放不重复事件。
+- Test commands:
+  - `go test ./internal/dispatchcommit ./internal/dispatchflow ./internal/dispatchworker ./internal/startuprecover ./internal/app -count=1`
+  - `powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/preflight.ps1`
+- Evidence:
+  - `docs/evidence/add-05/dispatch-commit-check.json` / `sha256:ad9e3ab8a18157fb94937e53c323f99ff4026da77e15a452773b696164030304`
+  - `docs/evidence/qui-12/g1-current-revalidation-blocked.json` / `sha256:ddee119973fa361b3109a239d3d33e1cbee4b4684619321277875a926e14fab7`
+- Blockers: 当前源码三 Profile 重跑、外部 `kill -9`、生产调度入口与 clean-commit 正式证据尚未完成。
+- Updated at: `2026-09-02T08:06:00Z`
 
 复杂实施项在本节追加记录，不覆盖清单行：
 
@@ -372,3 +424,8 @@ PENDING -> IN_PROGRESS -> IN_REVIEW -> DONE
 | 2026-09-01 | 盘点本机 G1 实验室：Docker/Compose 可用，精确 qB 5.0.4 镜像已存在；registry/release 大文件下载受阻，先记录实验室准备阻塞 | Codex |
 | 2026-09-01 | 从上游 v1.0.0 源码本地构建 qui 隔离镜像，与精确 qB 5.0.4 组成内部网络；生产 Go DispatchWorker Add→stoppedDL 通过，并完成 duplicate/invalid/Tracker/transfer-info/增量删除生命周期后清空 lab。因 qui commit 非冻结 lock 且故障矩阵未全，Profile 保持 EXPECTED | Codex |
 | 2026-09-01 | 将 Makefile/preflight 的 integration、e2e、protocol、fault 主动失败占位入口替换为实际 Go 测试套件；完整 preflight 含 11 个目标全部 PASS，发布级外部 G1 仍单独受控 | Codex |
+| 2026-09-01 | 获取并校验精确 qB 4.3.8 与 5.2.2 静态发行二进制，从冻结 commit 构建 qui；三 Profile 完成生产 Go inactive Add、核心协议生命周期、增量删除与 qui 重启 Already-present，最终 lab 清空并移除。剩余故障/事务用例未全，Profile 保持 EXPECTED | Codex |
+| 2026-09-01 | 新增 dispatchcommit/dispatchflow 与 startuprecover 装配；后续由 `0de553c` 修正为发送前 durable marker、发送后响应事实提交、ADD_SENT 崩溃提升 UNKNOWN，旧 Attempt 永不回退重放 | Codex |
+| 2026-09-02 | 配置真实 GitHub CODEOWNER，基于 `ec68450` 刷新目录与 readiness 证据并由 `f741663` 收口 BOOT-01；Gate A 仍等待 BOOT-02～09 独立完成 | Codex |
+| 2026-09-02 | `0de553c` 修复 Dispatch 发送前未持久化 STARTED 的崩溃窗口，并补齐并发、发送前/后、提交后与启动恢复不可重放测试 | Codex |
+| 2026-09-02 | `ec84241` 固化三 Profile compose/探针并归档 18/18 事务故障报告；因当前代码重跑被 Docker daemon 阻塞及发布控制未齐，Profile 继续 EXPECTED、G1 继续 PENDING | Codex |

@@ -4,7 +4,11 @@ Vertex Pro V1 是面向多 qBittorrent 实例的 RSS 自动投递、状态确认
 
 ## 当前阶段
 
-正式 Gate 仍停在阶段 A 的 `BOOT-01`，Gate A 尚未通过。功能开发已在 local-only 范围内触达阶段 J 的 `UI-10`，并补齐 UI-03 Sites & RSS、UI-04 Rules 列表、UI-05 Rule Editor、UI-06 Dry-run/聚合预览、UI-07 History、UI-08 History Detail 和 UI-09 Downloader Detail；当前 149 个实施项中 121 项为 `IN_PROGRESS`、28 项为 `PENDING`，没有任何项标记为 `DONE`。本轮已接通并验证 Go 启动装配、SQLite migration/一致性检查、认证资源 API、SSE 边界、前端构建和 Docker Desktop 容器边界；另已通过真实 qui Client Proxy 接通一台 qB 5.0.4 的只读 Control、Profile、Transfer、Capabilities 和连续 Sync 链路，运行期间未调用任务写端点且任务集合保持不变。当前生产式 qui Proxy 对 RID follow-up 仍返回 `full_update=true`，因此只宣称完整快照 reset 安全，不宣称该链路的真实增量 delta 已验证。另已在用户明确授权下，由隔离协议 harness 通过 qui Proxy 新增并保留一个无 Tracker、1 字节、`stopped=true` 的测试任务，验证 qB 5.0.4 的 legacy Add wire response 与后续 Sync Identity 可见；随后生产 Go 客户端复用该任务完成 Already-present 不 dispatch、`ReserveAtomic`、原子释放 Reservation、幂等重放以及双启动只读恢复验证，原有任务均未修改或删除。额外的完全隔离 Docker lab 已让生产 Go `DispatchWorker` 经 qui Client Proxy 对空 qB 5.0.4 完成 Add→`stoppedDL`，并验证 duplicate/invalid/Tracker/transfer-info/增量删除后清空 lab；但 lab qui commit 尚未匹配冻结 lock，完整 Placement/SubmitIntent/首次确认、故障矩阵、其余冻结 qB Profile 和发布级集成证据仍未完成。
+`BOOT-01` 已由提交 `f741663` 正式收口，当前施工入口推进到阶段 A 的 `BOOT-02`；Gate A 仍为 `PENDING`。149 个正式实施项中现有 `1 DONE / 120 IN_PROGRESS / 28 PENDING`。功能开发在 local-only 范围触达阶段 J 的 `UI-10`，但依赖、正式 Gate 和发布证据尚未闭合。
+
+隔离 G1 实验室已从冻结 commit 构建 qui，并覆盖精确 qB 4.3.8、5.0.4、5.2.2。三 Profile 的核心生命周期以及归档的 `3 Profile × 6 mode` 事务/故障矩阵均为 PASS，18 次投递均只有一次 sender 调用、没有自动重投，且每次实验室最终为空。当前 Dispatch 实现又进一步修复了崩溃窗口：本地校验通过后，先在 SQLite `BEGIN IMMEDIATE` 事务中原子持久化 `ADD_SENT / STARTED / POSSIBLE_EFFECT`，再进行唯一一次网络发送，最后单独记录响应事实；若进程在发送前后中断，启动恢复会把遗留 `ADD_SENT` 提升为 `UNKNOWN` 并禁止重放同一 Attempt。明确未发送的结果关闭为 `ADD_FAILED / FAILED_NO_EFFECT`，安全重试只能走两阶段重排并创建新 Attempt，不能把旧 Attempt 退回 `NOT_STARTED`。
+
+上述归档矩阵早于新的“发送前 durable marker”证据字段，当前 Docker Desktop daemon 又未运行，因此尚未在这一源码版本上重跑；外部进程 `kill -9`、`profile_verification_runs` 持久化、固定 harness image、clean commit 上 P0 连续三次稳定运行也仍缺失。三个 Profile 继续保持 `EXPECTED`，G1 保持 `PENDING`，生产 mutation 默认关闭；即使显式设置 `VERTEX_PRO_ENABLE_DISPATCH=true`，Profile 非 `VERIFIED` 时仍 fail closed。RSS→规则→Placement→Reservation→Dispatch→FirstConfirm 的生产调度链也尚未接通。
 
 产品边界、状态机和安全不变量以 `docs/产品方案设计/VERTEX_PRO_COMPLETE_REDESIGN_V1_RC8_FINAL.md` 为准；施工顺序以 `docs/实施流程/VERTEX_PRO_V1_CODE_IMPLEMENTATION_PLAYBOOK.md` 为准；具体进度以 `docs/实施流程/IMPLEMENTATION_STATUS_V1.md` 为准。
 
@@ -37,7 +41,7 @@ Vertex Pro V1 是面向多 qBittorrent 实例的 RSS 自动投递、状态确认
 go run ./cmd/vertex-pro serve
 ```
 
-启用已验证的 qui runtime 时，从 `.env.example` 复制所需环境变量并在进程环境中注入 Secret；不要把真实 Key 写入仓库。该 runtime 当前只自动执行 Control/Profile/Transfer/Capabilities 和 Sync 读取，不会自动启动 Add Worker：
+启用 qui runtime 时，从 `.env.example` 复制所需环境变量并在进程环境中注入 Secret；不要把真实 Key 写入仓库。该 runtime 当前只自动执行 Control/Profile/Transfer/Capabilities 和 Sync 读取，不会自动启动 Add 调度链：
 
 ```powershell
 $env:VERTEX_PRO_QUI_URL = "http://qui.example:7476"
@@ -60,4 +64,4 @@ $env:VERTEX_PRO_STORAGE_EVIDENCE_FILE = "$env:LOCALAPPDATA\VertexPro\live-storag
 go run ./tools/qustorageprobe
 ```
 
-完成 `BOOT-01` 后，按进度表继续执行 `BOOT-02`，固定 Go、Node、pnpm 工具链。
+`BOOT-01` 已完成；下一项按进度表执行 `BOOT-02`，固定 Go、Node、pnpm 工具链。
