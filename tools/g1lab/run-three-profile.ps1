@@ -246,10 +246,8 @@ try {
             $destination = Join-Path $fixtureDir $payload.file_name
             $existing = if (Test-Path -LiteralPath $destination) { [IO.File]::ReadAllBytes($destination) } else { $null }
             $existingDigest = if ($null -ne $existing) { [BitConverter]::ToString($sha.ComputeHash($existing)).Replace('-','').ToLowerInvariant() } else { $null }
-            if ($null -ne $existing -and $existingDigest -ne $payload.sha256) {
-                Set-Content -LiteralPath $destination -Value $bytes -Encoding Byte -NoNewline
-            } elseif ($null -eq $existing) {
-                Set-Content -LiteralPath $destination -Value $bytes -Encoding Byte -NoNewline
+            if ($null -eq $existing -or $existingDigest -ne $payload.sha256) {
+                [IO.File]::WriteAllBytes($destination, $bytes)
             }
         }
         Set-Content -LiteralPath (Join-Path $evidenceRoot "lab-$killProfileName-fixture-capture.json") -Value $fixtureOutput -Encoding utf8

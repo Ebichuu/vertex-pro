@@ -1,6 +1,6 @@
 {
   "image": "vertex-pro-g1/harness:pinned",
-  "image_id": "sha256:cf14d6834f222bb126c51f5c4ebe5a306efbff67496f1e78abbea520097e2be7",
-  "source_commit": "2bd34c495ca13ead019989f5f642734df5cdb38b",
-  "built_at": "2026-09-02T15:39:08Z"
+  "image_id": "sha256:95c38aa9b65e34f34a3d802d9141a1a36ad07a12e7490a8c4fc3e7a06a479091",
+  "source_commit": "9d87c03b6c43b455b6ee84f00f1c741708036c6b",
+  "built_at": "2026-09-02T15:52:53Z"
 }

@@ -1,0 +1,22 @@
+{
+  "kind": "vertex-pro-g1-transfer-info-fixture",
+  "profile_id": "QB_438",
+  "captured_at": "2026-09-02T15:53:07Z",
+  "source": "QBITTORRENT_SYNC_MAINDATA_TASK_FIELDS (the qB proxy allowlist does not expose torrents/transferInfo; amount_left and transfer facts come from the task's sync fields)",
+  "torrent_id": "16c85feb7eda20c13c6d2a4f85f54e56ee927f0c",
+  "transfer_fields": {
+    "amount_left": 1,
+    "completed": 0,
+    "dl_limit": -1,
+    "dlspeed": 0,
+    "num_complete": 0,
+    "num_incomplete": 0,
+    "progress": 0,
+    "size": 1,
+    "state": "pausedDL",
+    "total_size": 1,
+    "up_limit": -1,
+    "upspeed": 0
+  },
+  "redactions": "task transfer field subset; no credentials present"
+}
