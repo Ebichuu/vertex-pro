@@ -60,7 +60,7 @@ func runChainToAwaitingConfirmation(t *testing.T, database *sql.DB) dispatchorch
 	result, err := dispatchorchestrator.Run(context.Background(), database, dispatchorchestrator.Request{
 		Placement: placement.DecisionInput{
 			IdentityKey: identityKey, TargetMode: placement.TargetFixedInstance, TargetInstanceID: "instance-1", RequiredBytes: 1,
-			Weights: placement.DecisionWeights{InstanceWeight: 1, FreeRatioWeight: 1, InflightPenaltyWeight: 1, CurrentDownloadLoadPenaltyWeight: 1, RecentAddLatencyPenaltyWeight: 1},
+			Weights:    placement.DecisionWeights{InstanceWeight: 1, FreeRatioWeight: 1, InflightPenaltyWeight: 1, CurrentDownloadLoadPenaltyWeight: 1, RecentAddLatencyPenaltyWeight: 1},
 			Candidates: []placement.DecisionCandidate{{InstanceID: "instance-1", StorageTargetID: "target-1", CanPlace: true, HealthState: "AVAILABLE", ProfileState: "VERIFIED", StorageState: "VERIFIED", CapacityState: "TRUSTED", InstanceWeight: 1, FreeRatioPPM: 1_000_000, EffectiveFreeBytes: 1 << 30, MaxInflight: 1}},
 		},
 		Reservation: reservation.Request{

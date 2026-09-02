@@ -1,8 +1,8 @@
 package schedulercycle
 
 import (
-	"context"
 	"bytes"
+	"context"
 	"crypto/sha1"
 	"database/sql"
 	"encoding/json"
