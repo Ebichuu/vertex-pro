@@ -1,3 +1,9 @@
 ﻿# Vertex Pro 目录合同使用 CODEOWNERS。
-# 当前仓库尚未确定 GitHub 组织/团队 owner；在设置真实 owner 前，不启用默认审查者规则。
-# BOOT-01 完成前必须将本文件中的占位说明替换为真实 GitHub owner。
+# 默认审查者：@Ebichuu
+
+* @Ebichuu
+
+# 关键合同文件
+/contracts/ @Ebichuu
+/docs/产品方案设计/ @Ebichuu
+/docs/实施流程/ @Ebichuu

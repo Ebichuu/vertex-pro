@@ -1,13 +1,10 @@
 {
-    "check":  "BOOT-01 readiness",
-    "repository_root":  "D:\\Projects\\Vertex-pro",
-    "layout_check":  "PASS",
-    "git_directory":  "PASS",
-    "baseline_commit":  "MISSING",
-    "codeowners":  "MISSING_OWNER",
-    "status":  "BLOCKED",
-    "blocking_reasons":  [
-                             "baseline_commit_missing",
-                             "codeowners_owner_missing"
-                         ]
+  "check": "BOOT-01 readiness",
+  "repository_root": "D:\\Projects\\Vertex-pro",
+  "layout_check": "PASS",
+  "git_directory": "PASS",
+  "baseline_commit": "ec684501e57bf7d300dcfc8a368901c47a7b14ab",
+  "codeowners": "PASS",
+  "status": "PASS",
+  "blocking_reasons": []
 }

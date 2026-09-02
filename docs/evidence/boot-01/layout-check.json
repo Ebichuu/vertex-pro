@@ -1,9 +1,7 @@
 {
-    "check":  "BOOT-01 repository layout",
-    "repository_root":  "D:\\Projects\\Vertex-pro",
-    "required_path_count":  52,
-    "missing_paths":  [
-
-                      ],
-    "status":  "PASS"
+  "check": "BOOT-01 repository layout",
+  "repository_root": "D:\\Projects\\Vertex-pro",
+  "required_path_count": 52,
+  "missing_paths": [],
+  "status": "PASS"
 }
