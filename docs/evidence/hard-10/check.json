@@ -1,0 +1,20 @@
+{
+  "item": "HARD-10",
+  "title": "运维命令",
+  "status": "PASS",
+  "branch": "main",
+  "source_commit": "e30507c",
+  "implementation": [
+    "doctor: OBS-04 diagnostics bundle (redacted config summary, build identity, status checks)",
+    "verify: offline installation check - migration version, startup consistency, foreign key integrity; exit 1 on failure",
+    "readiness: the same check set printed as named readiness reasons for monitors",
+    "support-bundle: OBS-04 report plus table row counts and retention summary, written 0600 with a covering digest"
+  ],
+  "checks": {
+    "unit": "PASS: TestVerifyChecksPassOnMigratedDatabaseAndReportReasons, TestCountsAndSupportBundle",
+    "honest_failure": "PASS: unmigrated empty database reports schema reason instead of a fabricated pass; missing database file errors instead of being created",
+    "runtime": "PASS: serve created a database, then verify reported PASS (database_ping/schema_migrations/startup_consistency/foreign_key_check all ok) and support-bundle wrote a digest-stamped 0600 file with table counts",
+    "offline": "PASS: all commands run without qui/qB or network access"
+  },
+  "scope_note": "Commands are additive to serve/doctor/version; the readiness check set is intentionally shared with verify so monitors and operators see identical reasons."
+}
