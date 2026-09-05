@@ -62,12 +62,12 @@ PENDING -> IN_PROGRESS -> IN_REVIEW -> DONE
 | H | Add、确认与恢复 | `14/14 DONE` | Gate H | `PASS` |
 | I | API、认证与 SSE | `12/12 DONE` | Gate I | `PASS` |
 | J | 前端页面 | `10/13 DONE; 3 PENDING` | Gate J | `PENDING` |
-| K | 历史、统计与观测 | `0/12 DONE; 7 IN_PROGRESS; 5 PENDING` | Gate K | `PENDING` |
+| K | 历史、统计与观测 | `6/12 DONE; 1 IN_PROGRESS; 5 PENDING` | Gate K | `PENDING` |
 | L | 加固与运维 | `0/12 DONE; 12 PENDING` | Gate L | `PENDING` |
 | M | RC 与冻结 | `0/7 DONE; 7 PENDING` | Gate M / G3 | `PENDING` |
 
-总体状态：`115/149 DONE`；`7 IN_PROGRESS`；`27 PENDING`。
-Gate A–I 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 12/12、E 13/13、F 12/12、G 14/14、H 14/14、I 12/12）；阶段 J 的 UI-01..10 已收口，其余为待实现新功能（UI-11 Settings、UI-12 可访问性/性能、UI-13 主流程 E2E）；功能开发触达：阶段 J（local-only）。
+总体状态：`121/149 DONE`；`1 IN_PROGRESS`；`27 PENDING`。
+Gate A–I 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 12/12、E 13/13、F 12/12、G 14/14、H 14/14、I 12/12）；阶段 J 已收口 UI-01..10，阶段 K 已收口 HIS-01..02 与 STAT-01..04。剩余 28 项均为待实现新功能或 RC 冻结工作：J 的 UI-11/12/13、K 的 HIS-03/STAT-05/OBS-01..04（含 OBS-02 地基已提交）、L 全部 12 项加固、M 全部 7 项 RC 冻结。
 
 ### 2026-08-30 状态校准
 
@@ -313,13 +313,13 @@ Gate A–I 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 1
 
 | ID | 内容 | Depends on | Status | Owner | PR/Merge | Evidence |
 |---|---|---|---|---|---|---|
-| `HIS-01` | History projection | ADD-01,02, CTR-05 | IN_PROGRESS | Codex | local-only | `docs/evidence/his-01/history-projection-check.json` / sha256:06df026d3a6af73d1a3941949385b91fd3b3abdd1b75c94520d0e6488892639a |
-| `HIS-02` | 删除事实持久化 | HIS-01, CAP-12 | IN_PROGRESS | Codex | local-only | `docs/evidence/his-02/history-deletion-check.json` / sha256:a1d8386bf22721f9c74d5c90d99fe5e657045bf8a4fbb31f48bd9be8e7d61642 |
+| `HIS-01` | History projection | ADD-01,02, CTR-05 | DONE | Codex | `ac79dac` | `docs/evidence/his-01/history-projection-check.json` / sha256:85407d5b0cd92d5904c17ba231b058c5494f7fe5b752c71233b2dbcba37fbe28 |
+| `HIS-02` | 删除事实持久化 | HIS-01, CAP-12 | DONE | Codex | `ac79dac` | `docs/evidence/his-02/history-deletion-check.json` / sha256:ef614e091d44ea50663fdd5a388bdb4ac11abeacc2214d4dabc224692d36b04e |
 | `HIS-03` | 详情时间线 | HIS-01, API-08 | PENDING | — | — | — |
-| `STAT-01` | StatsSampler | QUI-02,07,09 | IN_PROGRESS | Codex | local-only | `docs/evidence/stat-01/check.json` / sha256:2f14738aa29f8b95eb9f806fd9078148a8781a4f514c5e837d127cad176bebdb |
-| `STAT-02` | Counter delta | STAT-01 | IN_PROGRESS | Codex | local-only | `docs/evidence/stat-02/check.json` / sha256:917169788a1033e07b6224d51ff1634707e41826b93a1317f246e3039e0a9607 |
-| `STAT-03` | 小时桶 | STAT-02, DB-07 | IN_PROGRESS | Codex | local-only | `docs/evidence/stat-03/check.json` / sha256:faeef2b06c6a0c4bfcc52102a7486998575cfaec00480d1510d9616d9a0804d7 |
-| `STAT-04` | 汇总查询 | STAT-03, DB-09, CTR-01 | IN_PROGRESS | Codex | local-only | `docs/evidence/stat-04/check.json` / sha256:fca79b77b0ec46218930f9654fdfe980d00754b2971959a050d96a4c56ba6a97 |
+| `STAT-01` | StatsSampler | QUI-02,07,09 | DONE | Codex | `ac79dac` | `docs/evidence/stat-01/check.json` / sha256:301ce18520b3004a3e8c387ed8dd03b15eaa163b4b2d79712a259f1699af7302 |
+| `STAT-02` | Counter delta | STAT-01 | DONE | Codex | `ac79dac` | `docs/evidence/stat-02/check.json` / sha256:1354e8b726cbe36785c8710fbcbec59a4659cdb9b324fd2bea9c85c4abc64089 |
+| `STAT-03` | 小时桶 | STAT-02, DB-07 | DONE | Codex | `ac79dac` | `docs/evidence/stat-03/check.json` / sha256:bebae93852b07ce64fe5c601ffc6edc1eaa920b02b9844b9433a44f93dc33a3c |
+| `STAT-04` | 汇总查询 | STAT-03, DB-09, CTR-01 | DONE | Codex | `ac79dac` | `docs/evidence/stat-04/check.json` / sha256:743e0abec1028d705421c36a5ed3a0179425d9510d5521209838cea2dfc5848f |
 | `STAT-05` | 实时卡片样本 | STAT-01, CTR-01 | PENDING | — | — | — |
 | `OBS-01` | 结构化日志 | BOOT-09 | PENDING | — | — | — |
 | `OBS-02` | Metrics/health | QUI-10, CAP-07, ADD-10 | IN_PROGRESS | Codex | `a6ab72c` groundwork | `internal/metrics/metrics.go` / sha256:c167c9433dbe63679d96886ed7ea3922ee25f928967ea088a30dcf0afe063c43; counter registry only — endpoint wiring, subsystem counters, and label cardinality checks open |
@@ -505,3 +505,4 @@ Gate A–I 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 1
 | 2026-09-05 | ADD-01..14 在当前源码重验并刷新证据（`f295c0c`），阶段 H 14/14 收口 DONE，Gate H 评审 PASS，总览推进至 93/149 | Codex |
 | 2026-09-05 | API-01..12 在当前源码重验并刷新证据（`d8537fc`），阶段 I 12/12 收口 DONE，Gate I 评审 PASS，总览推进至 105/149 | Codex |
 | 2026-09-05 | UI-01..10 在当前源码重验并刷新证据（`f189e71`），阶段 J 部分收口 10/13 DONE（UI-11..13 保持 PENDING），总览推进至 115/149 并修正 K 阶段计数 | Codex |
+| 2026-09-05 | HIS-01..02 与 STAT-01..04 在当前源码重验并刷新证据（`ac79dac`），阶段 K 部分收口 6/12 DONE，总览推进至 121/149；剩余 28 项为待实现新功能（UI-11..13、HIS-03、STAT-05、OBS-01..04）与 L/M 加固冻结工作 | Codex |
