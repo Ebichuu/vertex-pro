@@ -1,7 +1,12 @@
 {
     "item":  "QUI-05",
-    "status":  "IN_PROGRESS",
-    "branch":  "local-only",
+    "status":  "PASS",
+    "branch":  "main",
+    "revalidation_2026-09-05":  {
+        "source_commit":  "ac0ff927254e670e689dee0e12cbadbf916ce449",
+        "command":  "go test internal/qbadd -count=1 (also PASS inside the 2026-09-05 preflight)",
+        "result":  "PASS"
+    },
     "implementation":  [
                            "single Torrent multipart request builder",
                            "profile-specific paused/stopped false field",
