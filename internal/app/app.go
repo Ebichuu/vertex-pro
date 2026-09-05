@@ -18,6 +18,7 @@ import (
 	"github.com/vertex-pro/vertex-pro/internal/dispatchstage"
 	"github.com/vertex-pro/vertex-pro/internal/httpapi"
 	"github.com/vertex-pro/vertex-pro/internal/matchpipeline"
+	"github.com/vertex-pro/vertex-pro/internal/metrics"
 	"github.com/vertex-pro/vertex-pro/internal/profileverify"
 	"github.com/vertex-pro/vertex-pro/internal/qbprofile"
 	"github.com/vertex-pro/vertex-pro/internal/qui/control"
@@ -102,6 +103,7 @@ type Runtime struct {
 	Database      *sql.DB
 	Auth          *adminauth.Service
 	Handler       http.Handler
+	Metrics       *metrics.Registry
 	Profile       *qbprofile.Profile
 	Dispatch      *dispatchflow.Runner
 	Recovery      startuprecover.Result
@@ -207,7 +209,7 @@ func New(ctx context.Context, config Config) (*Runtime, error) {
 	mux := http.NewServeMux()
 	mux.Handle("/api/v1/", api)
 	mux.Handle("/", webembed.Handler())
-	runtime := &Runtime{Database: database, Auth: auth, Handler: mux, Recovery: recovery, hub: hub}
+	runtime := &Runtime{Database: database, Auth: auth, Handler: mux, Metrics: metrics.New(), Recovery: recovery, hub: hub}
 	if config.Qui != nil {
 		if err := runtime.startQui(ctx, *config.Qui, config.Scheduler, config.Qui.DispatchStage, now); err != nil {
 			return nil, err
@@ -328,6 +330,16 @@ func (runtime *Runtime) startQui(ctx context.Context, config QuiConfig, schedule
 			runtime.dispatchStage = stage
 		}
 	}
+	if config.ProfileVerificationBinding != nil {
+		// The profile decision is a startup fact; count it so /metrics shows
+		// whether the deployed build consumed a verification campaign and
+		// with what fail-closed outcome. Labels stay in fixed sets.
+		decision := profile.ProfileVerificationState
+		if profile.ProfileVerificationState != "VERIFIED" {
+			decision = "NOT_VERIFIED"
+		}
+		runtime.Metrics.Inc("vertex_profile_verifications_total", map[string]string{"profile": profile.ID, "decision": decision})
+	}
 	store, err := snapshot.New(runtime.Database, config.SnapshotRoot)
 	if err != nil {
 		return err
@@ -369,7 +381,16 @@ func (runtime *Runtime) startQui(ctx context.Context, config QuiConfig, schedule
 				case <-workerContext.Done():
 					return
 				case <-ticker.C:
-					_, _, _ = runtime.dispatchStage.Run(workerContext)
+					results, failures, err := runtime.dispatchStage.Run(workerContext)
+					if err != nil {
+						runtime.Metrics.Inc("vertex_dispatch_jobs_total", map[string]string{"result": "error"})
+						continue
+					}
+					for _, result := range results {
+						runtime.Metrics.Inc("vertex_dispatch_jobs_total", map[string]string{"result": "dispatched"})
+						runtime.Metrics.Inc("vertex_capacity_reservations_total", map[string]string{"state": result.ReservationState})
+					}
+					runtime.Metrics.Add("vertex_dispatch_jobs_total", map[string]string{"result": "failed"}, uint64(len(failures)))
 				}
 			}
 		}()
@@ -433,8 +454,26 @@ func (runtime *Runtime) RunSchedulerCycle(ctx context.Context) error {
 	}
 	var firstErr error
 	for _, feed := range feeds {
-		if _, err := runtime.scheduler.Run(ctx, feed); err != nil && firstErr == nil {
-			firstErr = err
+		result, err := runtime.scheduler.Run(ctx, feed)
+		if err != nil {
+			runtime.Metrics.Inc("vertex_rss_feeds_total", map[string]string{"result": "error"})
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		runtime.Metrics.Inc("vertex_rss_feeds_total", map[string]string{"result": "ok"})
+		for outcome, count := range map[string]uint64{
+			"new":       uint64(result.New),
+			"updated":   uint64(result.Updated),
+			"duplicate": uint64(result.Duplicates),
+			"matched":   uint64(result.Matched),
+			"skipped":   uint64(result.Skipped),
+			"failed":    uint64(result.Failed),
+		} {
+			if count > 0 {
+				runtime.Metrics.Add("vertex_rss_items_total", map[string]string{"outcome": outcome}, count)
+			}
 		}
 	}
 	return firstErr
@@ -559,18 +598,27 @@ func (runtime *Runtime) tickSync(ctx context.Context, now func() time.Time) {
 		if errors.Is(err, context.Canceled) {
 			return
 		}
+		runtime.Metrics.Inc("vertex_sync_ticks_total", map[string]string{"result": "stale"})
 		_ = updateSyncState(ctx, runtime.Database, event.InstanceID, "STALE", now())
 		return
 	}
 	// The confirmation coordinator only touches chains created by the
 	// dispatcher; a failed cycle is retried on the next tick because every
 	// operation it performs is idempotent.
-	_, _ = runtime.confirmations.OnSyncEvent(ctx, confirmcoordinator.Event{
+	outcomes, confirmErr := runtime.confirmations.OnSyncEvent(ctx, confirmcoordinator.Event{
 		InstanceID: event.InstanceID,
 		Generation: event.Generation,
 		Revision:   event.Revision,
 		Snapshot:   event.Snapshot,
 	}, now())
+	if confirmErr != nil {
+		runtime.Metrics.Inc("vertex_sync_ticks_total", map[string]string{"result": "error"})
+	} else {
+		for _, outcome := range outcomes {
+			runtime.Metrics.Inc("vertex_unknown_confirmations_total", map[string]string{"action": outcome.Action})
+		}
+		runtime.Metrics.Inc("vertex_sync_ticks_total", map[string]string{"result": "ok"})
+	}
 	_ = updateSyncState(ctx, runtime.Database, event.InstanceID, state, now())
 }
 

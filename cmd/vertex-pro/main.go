@@ -117,6 +117,13 @@ func runServe(logger *slog.Logger, arguments []string) error {
 		response.WriteHeader(http.StatusOK)
 		_, _ = response.Write([]byte("ready\n"))
 	})))
+	mux.Handle("/metrics", requestLogger(logger, http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
+		// Operational counters only (bounded label sets, no secrets), exposed
+		// like healthz/readyz for local scraper access.
+		response.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		response.WriteHeader(http.StatusOK)
+		_, _ = io.WriteString(response, runtime.Metrics.Render())
+	})))
 
 	server := &http.Server{Addr: *address, Handler: mux, ReadHeaderTimeout: 5 * time.Second}
 	signalContext, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

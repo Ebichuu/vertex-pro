@@ -345,6 +345,10 @@ func TestNewEnablesDispatchOnlyFromExactStableVerificationCampaign(t *testing.T)
 	if runtime.Profile.VerificationReportDigest != latest.VerificationReportDigest || runtime.Profile.VerifiedQBArtifactDigest != latest.QBArtifactDigest || runtime.Profile.VerifiedQuiVersion != latest.QuiVersion || runtime.Profile.VerifiedQuiImageDigest != latest.QuiImageDigest || runtime.Profile.VerifiedHarnessImageDigest != latest.HarnessImageDigest || runtime.Profile.ProfileVerifiedAt == nil {
 		t.Fatalf("verified profile metadata=%+v", runtime.Profile)
 	}
+	rendered := runtime.Metrics.Render()
+	if !strings.Contains(rendered, `vertex_profile_verifications_total{decision="VERIFIED",profile="QB_504"} 1`) {
+		t.Fatalf("profile verification counter missing from metrics:\n%s", rendered)
+	}
 }
 
 func TestNewFailsClosedOnRecoveryInvariantViolation(t *testing.T) {
@@ -691,5 +695,152 @@ func TestDispatchStageSendsAddForPreparedJob(t *testing.T) {
 	}
 	if attemptState != "AWAITING_CONFIRMATION" || jobState != "AWAITING_CONFIRMATION" {
 		t.Fatalf("attempt=%s job=%s", attemptState, jobState)
+	}
+}
+
+func TestMetricsFamiliesStayBounded(t *testing.T) {
+	fixtureTorrent := func(name string) []byte {
+		piece := sha1.Sum([]byte{0})
+		var buffer bytes.Buffer
+		buffer.WriteString("d4:infod6:lengthi1e4:name")
+		fmt.Fprintf(&buffer, "%d:", len(name))
+		buffer.WriteString(name)
+		buffer.WriteString("12:piece lengthi16384e6:pieces20:")
+		buffer.Write(piece[:])
+		buffer.WriteString("ee")
+		return buffer.Bytes()
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		response.Header().Set("Content-Type", "application/json")
+		switch request.URL.Path {
+		case "/api/instances":
+			_, _ = response.Write([]byte(`[{"id":13,"connectionStatus":"connected","isActive":true}]`))
+		case "/api/instances/13/transfer-info":
+			_, _ = response.Write([]byte(`{"dl_info_speed":0,"up_info_speed":0,"dl_info_data":0,"up_info_data":0}`))
+		case "/api/instances/13/capabilities":
+			_, _ = response.Write([]byte(`{"webAPIVersion":"2.11.2"}`))
+		case "/proxy/proxy-key/api/v2/app/version":
+			_, _ = response.Write([]byte(`v5.0.4`))
+		case "/proxy/proxy-key/api/v2/app/webapiVersion":
+			_, _ = response.Write([]byte(`2.11.2`))
+		case "/proxy/proxy-key/api/v2/app/buildInfo":
+			_, _ = response.Write([]byte(`{"libtorrent":"2.0.11.0"}`))
+		case "/proxy/proxy-key/api/v2/app/processInfo":
+			http.NotFound(response, request)
+		case "/proxy/proxy-key/api/v2/sync/maindata":
+			_, _ = response.Write([]byte(`{"rid":1,"full_update":true,"torrents":{}}`))
+		case "/feed.xml":
+			_, _ = response.Write([]byte(fmt.Sprintf(`<?xml version="1.0"?><rss version="2.0"><channel><title>S</title><item><guid>guid-1</guid><title>Ubuntu Linux 24.04</title><link>%s/ubuntu.torrent</link></item></channel></rss>`, "http://"+request.Host)))
+		case "/ubuntu.torrent":
+			response.Header().Set("Content-Type", "application/x-bittorrent")
+			_, _ = response.Write(fixtureTorrent("Ubuntu Linux 24.04"))
+		default:
+			http.NotFound(response, request)
+		}
+	}))
+	defer server.Close()
+	t.Setenv("TEST_QUI_API_KEY", "control-key")
+	t.Setenv("TEST_QUI_PROXY_KEY", "proxy-key")
+
+	databasePath := filepath.Join(t.TempDir(), "vertex-pro.db")
+	database, err := db.Open(context.Background(), db.Config{Path: databasePath})
+	if err != nil {
+		t.Fatal(err)
+	}
+	runner, err := db.DefaultRunner()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := runner.Apply(context.Background(), database); err != nil {
+		t.Fatal(err)
+	}
+	nowText := time.Now().UTC().Format(time.RFC3339Nano)
+	if _, err := database.Exec(`INSERT INTO sites(site_id, name, base_url, enabled, created_at, updated_at) VALUES ('site-1','Site','https://site.example',1,?,?)`, nowText, nowText); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := database.Exec(`INSERT INTO feeds(feed_id, site_id, name, feed_url, enabled, created_at, updated_at) VALUES ('feed-1','site-1','Main',?,1,?,?)`, server.URL+"/feed.xml", nowText, nowText); err != nil {
+		t.Fatal(err)
+	}
+	definition := map[string]any{"version": 1, "root": map[string]any{"kind": "leaf", "field": "title", "operator": "contains", "value": map[string]any{"type": "string", "string": "Linux"}}}
+	payload, _ := json.Marshal(definition)
+	if _, err := database.Exec(`INSERT INTO rules(rule_id, site_id, name, enabled, priority, revision, state, definition_json, created_at, updated_at) VALUES ('rule-1','site-1','linux',1,10,1,'PENDING',?, ?, ?)`, payload, nowText, nowText); err != nil {
+		t.Fatal(err)
+	}
+	if err := database.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	runtime, err := New(context.Background(), Config{
+		Database: db.Config{Path: databasePath},
+		Hosts:    []string{"vertex.local"},
+		Qui: &QuiConfig{
+			BaseURL: server.URL, InstanceID: "13",
+			APIKey:       secrets.SecretRef{Provider: "env", Key: "TEST_QUI_API_KEY"},
+			ProxyKey:     secrets.SecretRef{Provider: "env", Key: "TEST_QUI_PROXY_KEY"},
+			Store:        secrets.EnvStore{},
+			SnapshotRoot: filepath.Join(t.TempDir(), "snapshots"),
+			SyncInterval: time.Hour,
+		},
+		Scheduler: &SchedulerConfig{
+			Enabled:              true,
+			PollInterval:         time.Hour,
+			AllowedArtifactHosts: []string{strings.TrimPrefix(server.URL, "http://")},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer runtime.Close()
+	if err := runtime.RunSchedulerCycle(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if err := runtime.RunSchedulerCycle(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if err := runtime.TickSync(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	rendered := runtime.Metrics.Render()
+	for _, want := range []string{
+		"vertex_rss_feeds_total{result=\"ok\"} 2",
+		"vertex_rss_items_total{outcome=\"new\"} 1",
+		"vertex_rss_items_total{outcome=\"duplicate\"} 1",
+		"vertex_sync_ticks_total{result=\"ok\"} 1",
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("metrics missing %q:\n%s", want, rendered)
+		}
+	}
+	allowedKeys := map[string]bool{"result": true, "outcome": true, "action": true, "state": true, "decision": true, "profile": true}
+	labelsets := map[string]map[string]bool{}
+	for _, line := range strings.Split(rendered, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		name := line
+		labels := ""
+		if index := strings.Index(line, "{"); index >= 0 {
+			name = line[:index]
+			labels = strings.TrimSuffix(strings.TrimPrefix(line[index:], "{"), "}")
+		}
+		if labelsets[name] == nil {
+			labelsets[name] = map[string]bool{}
+		}
+		labelsets[name][labels] = true
+		for _, pair := range strings.Split(labels, ",") {
+			if pair == "" {
+				continue
+			}
+			key := strings.SplitN(pair, "=", 2)[0]
+			if !allowedKeys[key] {
+				t.Fatalf("unbounded label key %q in metric %s\n%s", key, name, rendered)
+			}
+		}
+	}
+	for name, sets := range labelsets {
+		if len(sets) > 8 {
+			t.Fatalf("metric family %s has %d labelsets, exceeding the bounded set\n%s", name, len(sets), rendered)
+		}
 	}
 }
