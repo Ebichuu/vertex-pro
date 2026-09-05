@@ -1,7 +1,12 @@
 {
     "item":  "ADD-08",
     "title":  "首次确认原子事务",
-    "status":  "IN_PROGRESS",
+    "status":  "PASS",
+    "revalidation_2026-09-05":  {
+        "source_commit":  "ac0ff927254e670e689dee0e12cbadbf916ce449",
+        "command":  "go test internal/firstconfirm -count=1 (also PASS inside the 2026-09-05 preflight)",
+        "result":  "PASS"
+    },
     "local_status":  "COMPLETE",
     "branch":  "local-only",
     "implementation":  [
