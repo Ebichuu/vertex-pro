@@ -56,7 +56,7 @@ PENDING -> IN_PROGRESS -> IN_REVIEW -> DONE
 | B | 合同与生成 | `8/8 DONE` | Gate B | `PASS` |
 | C | SQLite 与事务 | `11/11 DONE` | Gate C | `PASS` |
 | D | qui、Profile、Sync | `12/12 DONE` | Gate D / G1 基础 | `PASS`（G1 Gate 评审另行进行） |
-| E | RSS、Torrent、并行准备 | `0/13 DONE; 13 IN_PROGRESS` | Gate E | `PENDING` |
+| E | RSS、Torrent、并行准备 | `13/13 DONE` | Gate E | `PASS` |
 | F | 规则与 Query Builder | `0/12 DONE; 12 IN_PROGRESS` | Gate F | `PENDING` |
 | G | Placement 与容量 | `0/14 DONE; 14 IN_PROGRESS` | Gate G / G2 基础 | `PENDING` |
 | H | Add、确认与恢复 | `0/14 DONE; 14 IN_PROGRESS` | Gate H | `PENDING` |
@@ -66,8 +66,8 @@ PENDING -> IN_PROGRESS -> IN_REVIEW -> DONE
 | L | 加固与运维 | `0/12 DONE; 12 PENDING` | Gate L | `PENDING` |
 | M | RC 与冻结 | `0/7 DONE; 7 PENDING` | Gate M / G3 | `PENDING` |
 
-总体状态：`40/149 DONE`；`81 IN_PROGRESS`；`28 PENDING`。
-Gate A、B、C、D 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 12/12）；正式施工项推进至阶段 E `RSS-01`；功能开发触达：阶段 J `UI-10`（local-only）。
+总体状态：`53/149 DONE`；`68 IN_PROGRESS`；`28 PENDING`。
+Gate A–E 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 12/12、E 13/13）；正式施工项推进至阶段 F `RULE-01`；功能开发触达：阶段 J `UI-10`（local-only）。
 
 ### 2026-08-30 状态校准
 
@@ -128,6 +128,7 @@ Gate A、B、C、D 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/
 - 阶段 C 收口：DB-01..11 全部在 `ac0ff92` 源码重验（`e239cf9`）——internal/db 的 28 项测试逐一映射各项判据（每连接 PRAGMA、迁移顺序/checksum/中途失败回滚、各表约束与负向 SQL、TxRunner 提交与回滚、启动一致性损坏 fixture fail-closed、旧 schema 升级失败保留原库与备份恢复）全 PASS；Gate C 六项 C1 检查以新报告 run 20260905T130000Z（sha256:36d1ef99…）再次确认全 PASS。Gate C 评审通过（PASS），阶段 C 11/11 完成，施工前沿推进至阶段 D `QUI-01`。
 - 阶段 D 收口：QUI-01..11 在 `ac0ff92` 源码重验（`bc177b6`）——secrets、qui/control、qui/proxy、qbprofile、qbadd、qbresponse、syncmerge、snapshot、syncwatcher、quihealth、quprobe 包测试全 PASS，各证据文件补充当日重验记录；QUI-12 行内“publish controls open”为 2026-09-02 时点备注，此后 harness 固化为 pinned 镜像、clean-commit P0×3 战役全 PASS、9 条 VERIFIED runs 与三份 activation bindings 已归档（campaign manifest sha256:cc96c39d… 补入行证据），该开口就此闭合，QUI-12 转 DONE。注意：各 G1 历史证据文件内部的瞬时 status 字段记录的是其生成时点状态，以 campaign 汇总与本表为准。
 - Gate D 评审通过（PASS，见第 4 节 Gate 记录）：三 Profile fixture 确定性 Sync 与未验证 fail closed 两条判据均有当前证据支撑。G1 Gate 的正式评审与生产运行时的 Profile 激活消费另行进行（对应 REL-01 及用户卡点清单第 3 项），不阻塞 Gate D。施工前沿推进至阶段 E `RSS-01`。
+- 阶段 E 收口：RSS-01..06、TOR-01..04、RACE-01..03 共 13 项在 `ac0ff92` 源码重验（`bb64fe4`）——rssservice/rssfetch/rsscheduler/rssbaseline/rsssource/rsspreview/torrentdownload/torrentparse/torrentidentity/torrentlink/racejobstore/raceprep/racegate 包测试全 PASS；RACE-02 的 supervisor 实现位于 `internal/raceprep`（`internal/race` 为空目录，git 不跟踪）。Gate E 评审通过（PASS），阶段 E 13/13 完成，施工前沿推进至阶段 F `RULE-01`。
 
 > 总数由本表的 149 个正式实施项计算。若施工手册新增、删除或改名实施项，必须同 PR 更新本表并由合同检查验证集合一致。
 
@@ -199,19 +200,19 @@ Gate A、B、C、D 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/
 
 | ID | 内容 | Depends on | Status | Owner | PR/Merge | Evidence |
 |---|---|---|---|---|---|---|
-| `RSS-01` | Site/Feed 应用服务 | DB-03, CTR-01 | IN_PROGRESS | Codex | local-only | `docs/evidence/rss-01/site-feed-service-check.json` / sha256:ab19d16ac0fc873358f30b98a11c59fc3306f3908e0e03801c4a0bab2678ba50 |
-| `RSS-02` | Feed 测试命令 | RSS-01, DB-07 | IN_PROGRESS | Codex | local-only | `docs/evidence/rss-02/feed-preview-check.json` / sha256:47cd55337f32b120ce1d6ad689073f045e69c88cf44df77da084b12bee3fe3f4 |
-| `RSS-03` | HTTP Fetcher | RSS-01, QUI-01 | IN_PROGRESS | Codex | local-only | `docs/evidence/rss-03/http-fetcher-check.json` / sha256:2e039ced9c13aa72156ffe67af7e783803ba820fdc282b5840461be75e23a63b |
-| `RSS-04` | Scheduler | RSS-03, DB-09 | IN_PROGRESS | Codex | local-only | `docs/evidence/rss-04/scheduler-check.json` / sha256:175d8b5d41a8ce683b85d90510f79d2ed481c79971ab1cfadecda90372664c1d |
-| `RSS-05` | 首次 Baseline | RSS-03,04 | IN_PROGRESS | Codex | local-only | `docs/evidence/rss-05/baseline-check.json` / sha256:7627bf756fe72846b845767de32ed0d2ae6818ba137eec0b72643d65c1222ea0 |
-| `RSS-06` | Source 去重 | RSS-03, DB-03 | IN_PROGRESS | Codex | local-only | `docs/evidence/rss-06/source-dedupe-check.json` / sha256:6ea89d650f2646fce1bebdaf85b7ce3a05e87a6f287376e128a358a94c2baf34 |
-| `TOR-01` | Artifact downloader | RSS-03 | IN_PROGRESS | Codex | local-only | `docs/evidence/tor-01/artifact-downloader-check.json` / sha256:f70fdc73a66d194c4d798e8b127a9461670a34e28593c43495b2f2eea5c43cb6 |
-| `TOR-02` | bencode 安全解析 | TOR-01 | IN_PROGRESS | Codex | local-only | `docs/evidence/tor-02/bencode-parser-check.json` / sha256:95725efdd79816adfc7386fc9c9242fe77a83f8cf8423a6d3557826ea02fe5a1 |
-| `TOR-03` | Identity 计算 | TOR-02 | IN_PROGRESS | Codex | local-only | `docs/evidence/tor-03/identity-check.json` / sha256:7853264771ce04af09491a7f9987fb8abb82cc5eed96762f629c15a4bf587347 |
-| `TOR-04` | Source/Identity 关联 | TOR-03, DB-03 | IN_PROGRESS | Codex | local-only | `docs/evidence/tor-04/source-identity-link-check.json` / sha256:2a598d0c903150a9c31337647dba2976f3e3a74ace3507e36dbf8c5b174650b8 |
-| `RACE-01` | RaceJob 创建 | RSS-06, DB-06 | IN_PROGRESS | Codex | local-only | `docs/evidence/race-01/racejob-create-check.json` / sha256:78cefca344854ef981e1716420eab0c4c8fdab4c9b832c6cf9a895ec12727b4e |
-| `RACE-02` | 并行准备 Supervisor | RACE-01, TOR-01, RULE-03, RULE-05 | IN_PROGRESS | Codex | local-only | `docs/evidence/race-02/supervisor-check.json` / sha256:3e6d4751a85a3715518ea7b6512daf9a0d901714a81b6089830004db9fdb39a2 |
-| `RACE-03` | 聚合门槛 | RACE-02, CTR-02 | IN_PROGRESS | Codex | local-only | `docs/evidence/race-03/aggregation-gate-check.json` / sha256:f56296f55f052b0b4c1d2a5ec04ac557047c0a8d7785cbfcabd8bcc0d8874c32 |
+| `RSS-01` | Site/Feed 应用服务 | DB-03, CTR-01 | DONE | Codex | `bb64fe4` | `docs/evidence/rss-01/site-feed-service-check.json` / sha256:c64ea859a0cfd0fbf2d53a29c1549fcdac3e347061750fdfb494c30a0c27a720 |
+| `RSS-02` | Feed 测试命令 | RSS-01, DB-07 | DONE | Codex | `bb64fe4` | `docs/evidence/rss-02/feed-preview-check.json` / sha256:b70140849d6b6bc88ce1f704ed714dc3b2f33368fe8c0d8961fa2a6d6e04280e |
+| `RSS-03` | HTTP Fetcher | RSS-01, QUI-01 | DONE | Codex | `bb64fe4` | `docs/evidence/rss-03/http-fetcher-check.json` / sha256:0dcd2cecc1ce02d056dc1a33184754a0aec3924f36b4ad38ec310108e4cf2524 |
+| `RSS-04` | Scheduler | RSS-03, DB-09 | DONE | Codex | `bb64fe4` | `docs/evidence/rss-04/scheduler-check.json` / sha256:1df93ff5fc8f0f5c088f2aacc22dd7a189120160db654cc533f5fadebb7d6973 |
+| `RSS-05` | 首次 Baseline | RSS-03,04 | DONE | Codex | `bb64fe4` | `docs/evidence/rss-05/baseline-check.json` / sha256:0e7e54e94b45bc4945d6b3221a0a7bd1116422a7463ef3b3ba7eb969a7da0944 |
+| `RSS-06` | Source 去重 | RSS-03, DB-03 | DONE | Codex | `bb64fe4` | `docs/evidence/rss-06/source-dedupe-check.json` / sha256:05003f9a9a7ead642e44ed19faaa5100c9a89740e3f46540b7f226c619404fa2 |
+| `TOR-01` | Artifact downloader | RSS-03 | DONE | Codex | `bb64fe4` | `docs/evidence/tor-01/artifact-downloader-check.json` / sha256:ec2704142aac576151efd1b7327e9f03e956f59e656c8700a407f2b46a75aafa |
+| `TOR-02` | bencode 安全解析 | TOR-01 | DONE | Codex | `bb64fe4` | `docs/evidence/tor-02/bencode-parser-check.json` / sha256:9f6213a4bf8b235c1d3ef6b6b0ff613f928a1bbba52903440af52143f2f17a24 |
+| `TOR-03` | Identity 计算 | TOR-02 | DONE | Codex | `bb64fe4` | `docs/evidence/tor-03/identity-check.json` / sha256:61814c2d999d744a1a64452627f171f98e71b6dda09ffe06d6037fa52343bac7 |
+| `TOR-04` | Source/Identity 关联 | TOR-03, DB-03 | DONE | Codex | `bb64fe4` | `docs/evidence/tor-04/source-identity-link-check.json` / sha256:5fb6c83d5b225d5dc5d8e9fee3c44c8770b97cc0141a16c1c452ceb297c091f8 |
+| `RACE-01` | RaceJob 创建 | RSS-06, DB-06 | DONE | Codex | `bb64fe4` | `docs/evidence/race-01/racejob-create-check.json` / sha256:7a8067f337307e226b742e062eeffcde236b2dea67f2d9e2fefb5b7ce864ccd1 |
+| `RACE-02` | 并行准备 Supervisor | RACE-01, TOR-01, RULE-03, RULE-05 | DONE | Codex | `bb64fe4` | `docs/evidence/race-02/supervisor-check.json` / sha256:6694149144eb13e426dc5b80bc0f2d97a243157cbe8083013bbafc3bd44cef23 |
+| `RACE-03` | 聚合门槛 | RACE-02, CTR-02 | DONE | Codex | `bb64fe4` | `docs/evidence/race-03/aggregation-gate-check.json` / sha256:99117a2a41415bb8658d849d8a5e07b959185bfd2a9ae897b573f06437b12e44 |
 
 ### F. 规则引擎与 Query Builder
 
@@ -359,7 +360,7 @@ Gate A、B、C、D 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/
 | Gate B | PASS | 合同源、生成链、C1 不伪 PASS | `2f64190` | Codex（记录人；仓库所有者复核待 owner 确认） | 2026-09-05 逐项核验：无手写重复枚举（C1-STATE-ENUMS PASS，枚举 source-derived）；API 示例过 schema 校验（C1-OPENAPI PASS）；生成后 Git diff 为空（generate-check PASS）；C1 全部 11 项 PASS 且 `eligible_for_g3=false` 不伪 PASS（CTR-07 证据，报告 sha256:253219a4…） |
 | Gate C | PASS | fresh/upgrade schema、触发器和事务负测 | `e239cf9` | Codex（记录人；仓库所有者复核待 owner 确认） | 2026-09-05 逐项核验：C1 六项（SCHEMA-FRESH/UPGRADE、FOREIGN-KEYS、ATTEMPT-IMMUTABLE、SUBMIT-INTENT-ONE-TO-ONE、RESERVATION-OWNER）真实实现全 PASS（报告 run 20260905T130000Z，sha256:36d1ef99…）；internal/db 负测覆盖迁移中途失败回滚、checksum 不符、跨表漂移与不可变更新拒绝、循环外键插入顺序、启动一致性 fail-closed、升级失败保留原库与备份恢复 |
 | Gate D | PASS | 三 Profile fixture 确定性 Sync；未验证 fail closed | `bc177b6` | Codex（记录人；仓库所有者复核待 owner 确认） | 2026-09-05 逐项核验：三 Profile 12 份金色 fixture 已归档且逐文件 SHA-256 校验（qui-12/fixtures），SyncWatcher/syncmerge 对 fixture 确定性重建全 PASS（含 live qB 5.0.4 与三 Profile lab 战役）；业务代码 fail closed——quihealth 判定真值表测试、Profile 非 VERIFIED 时 dispatchorchestrator 拒绝派发（0 网络调用）、生产写操作默认关闭 |
-| Gate E | PENDING | RSS/Identity/并行准备乱序与恢复 | — | — | — |
+| Gate E | PASS | RSS/Identity/并行准备乱序与恢复 | `bb64fe4` | Codex（记录人；仓库所有者复核待 owner 确认） | 2026-09-05 逐项核验：rsscheduler jitter/退避/停用/重启恢复（FakeClock 确定性）、rsssource 同站重复与字段变化去重、rssbaseline 首轮不竞速、raceprep 并行准备 supervisor 并发与取消、torrentparse 安全解析与大小上限、racegate 聚合门槛与 racejobstore 重启存续全部 PASS；schedulercycle 端到端测试覆盖乱序容忍与重复轮询去重（internal/app） |
 | Gate F | PENDING | 简单/高级规则、dry-run、许可追踪 | — | — | — |
 | Gate G | PENDING | 并发容量、Reflection、G2 oracle | — | — | — |
 | Gate H | PENDING | Add/UNKNOWN/首次绑定/恢复故障矩阵 | — | — | — |
@@ -493,3 +494,4 @@ Gate A、B、C、D 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/
 | 2026-09-05 | CTR-01..08 在当前源码重验并刷新证据（`2f64190`），阶段 B 8/8 收口 DONE，Gate B 评审 PASS，总览推进至 17/149 | Codex |
 | 2026-09-05 | DB-01..11 在当前源码重验并刷新证据（`e239cf9`），阶段 C 11/11 收口 DONE，Gate C 评审 PASS，总览推进至 28/149 | Codex |
 | 2026-09-05 | QUI-01..11 在当前源码重验并刷新证据（`bc177b6`）；QUI-12 的 publish controls 开口经核实已由 P0×3 战役与 activation bindings 闭合，转 DONE；阶段 D 12/12 收口 DONE，Gate D 评审 PASS，总览推进至 40/149 | Codex |
+| 2026-09-05 | RSS/TOR/RACE 共 13 项在当前源码重验并刷新证据（`bb64fe4`），阶段 E 13/13 收口 DONE，Gate E 评审 PASS，总览推进至 53/149 | Codex |
