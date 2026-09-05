@@ -9,7 +9,7 @@ try {
     $node = Get-Command node -ErrorAction SilentlyContinue
     $pnpm = Get-Command pnpm -ErrorAction SilentlyContinue
     $checks = @(
-        [ordered]@{ name = 'go'; expected = '1.26.3'; actual = if ($go) { (& $go.Source version) } else { 'NOT_FOUND' } },
+        [ordered]@{ name = 'go'; expected = '1.26.6'; actual = if ($go) { (& $go.Source version) } else { 'NOT_FOUND' } },
         [ordered]@{ name = 'node'; expected = '24.14.0'; actual = if ($node) { (& $node.Source --version) } else { 'NOT_FOUND' } },
         [ordered]@{ name = 'pnpm'; expected = '10.33.0'; actual = if ($pnpm) { (& $pnpm.Source --version) } else { 'NOT_FOUND' } }
     )

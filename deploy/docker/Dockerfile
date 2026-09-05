@@ -9,7 +9,7 @@ RUN pnpm install --frozen-lockfile --ignore-scripts
 COPY web web
 RUN pnpm --dir web build
 
-FROM golang:1.26.3-bookworm@sha256:386d475a660466863d9f8c766fec64d7fdad3edac2c6a05020c09534d71edb4b AS go-build
+FROM golang:1.26.6-bookworm@sha256:116d58cbd88c1297624acc6e967a060012422bacf9930927e23fb719189c6f36 AS go-build
 ARG GOPROXY=https://goproxy.cn,direct
 ENV GOPROXY=$GOPROXY
 WORKDIR /src

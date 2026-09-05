@@ -1,6 +1,6 @@
 module github.com/vertex-pro/vertex-pro
 
-go 1.26.3
+go 1.26.6
 
 require (
 	golang.org/x/sys v0.30.0
