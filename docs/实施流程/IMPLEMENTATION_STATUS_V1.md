@@ -62,11 +62,11 @@ PENDING -> IN_PROGRESS -> IN_REVIEW -> DONE
 | H | Add、确认与恢复 | `14/14 DONE` | Gate H | `PASS` |
 | I | API、认证与 SSE | `12/12 DONE` | Gate I | `PASS` |
 | J | 前端页面 | `10/13 DONE; 3 PENDING` | Gate J | `PENDING` |
-| K | 历史、统计与观测 | `6/12 DONE; 1 IN_PROGRESS; 5 PENDING` | Gate K | `PENDING` |
+| K | 历史、统计与观测 | `7/12 DONE; 5 PENDING` | Gate K | `PENDING` |
 | L | 加固与运维 | `0/12 DONE; 12 PENDING` | Gate L | `PENDING` |
 | M | RC 与冻结 | `0/7 DONE; 7 PENDING` | Gate M / G3 | `PENDING` |
 
-总体状态：`121/149 DONE`；`1 IN_PROGRESS`；`27 PENDING`。
+总体状态：`122/149 DONE`；`27 PENDING`。
 Gate A–I 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 12/12、E 13/13、F 12/12、G 14/14、H 14/14、I 12/12）；G1 Gate 于 2026-09-06 评审通过。阶段 J 已收口 UI-01..10，阶段 K 已收口 HIS-01..02 与 STAT-01..04。剩余 28 项均为待实现新功能或 RC 冻结工作：J 的 UI-11/12/13、K 的 HIS-03/STAT-05/OBS-01..04（含 OBS-02 地基已提交）、L 全部 12 项加固、M 全部 7 项 RC 冻结。
 
 ### 2026-09-06 状态校准
@@ -327,7 +327,7 @@ Gate A–I 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 1
 | `STAT-04` | 汇总查询 | STAT-03, DB-09, CTR-01 | DONE | Codex | `ac79dac` | `docs/evidence/stat-04/check.json` / sha256:743e0abec1028d705421c36a5ed3a0179425d9510d5521209838cea2dfc5848f |
 | `STAT-05` | 实时卡片样本 | STAT-01, CTR-01 | PENDING | — | — | — |
 | `OBS-01` | 结构化日志 | BOOT-09 | PENDING | — | — | — |
-| `OBS-02` | Metrics/health | QUI-10, CAP-07, ADD-10 | IN_PROGRESS | Codex | `a6ab72c` groundwork | `internal/metrics/metrics.go` / sha256:c167c9433dbe63679d96886ed7ea3922ee25f928967ea088a30dcf0afe063c43; counter registry only — endpoint wiring, subsystem counters, and label cardinality checks open |
+| `OBS-02` | Metrics/health | QUI-10, CAP-07, ADD-10 | DONE | Codex | `8c1e9ea` | `docs/evidence/obs-02/metrics-check.json` / sha256:dd2f5c4088ec127872edd582bdeaec1c598bc649617b2b7a0aa9ee0bcb18dd62 |
 | `OBS-03` | 保留与清理 | DB-07, QUI-08, STAT-03 | PENDING | — | — | — |
 | `OBS-04` | 诊断包 | OBS-01..03, QUI-11 | PENDING | — | — | — |
 
@@ -512,3 +512,4 @@ Gate A–I 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 1
 | 2026-09-05 | UI-01..10 在当前源码重验并刷新证据（`f189e71`），阶段 J 部分收口 10/13 DONE（UI-11..13 保持 PENDING），总览推进至 115/149 并修正 K 阶段计数 | Codex |
 | 2026-09-05 | HIS-01..02 与 STAT-01..04 在当前源码重验并刷新证据（`ac79dac`），阶段 K 部分收口 6/12 DONE，总览推进至 121/149；剩余 28 项为待实现新功能（UI-11..13、HIS-03、STAT-05、OBS-01..04）与 L/M 加固冻结工作 | Codex |
 | 2026-09-06 | G1 Gate 正式评审 PASS：campaign 归档证据链逐文件核验，9 条 VERIFIED runs 与 3 份 activation bindings 绑定 `63161b1`；Profile 激活为构建绑定动作，运行时须构建自绑定 commit 或重跑战役生成新绑定（见第 2 节校准） | Codex |
+| 2026-09-06 | OBS-02 完成：7 个有界标签计数器族接入运行时各接缝，/metrics 端点上线，cardinality 测试与运行时端点验证 PASS（`8c1e9ea`），阶段 K 推进至 7/12，总览推进至 122/149 | Codex |

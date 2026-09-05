@@ -1,0 +1,30 @@
+{
+  "item": "OBS-02",
+  "title": "Metrics/health",
+  "status": "PASS",
+  "branch": "main",
+  "source_commit": "8c1e9ea567ebdbeca2169dc978fa9d2ade02355f",
+  "implementation": [
+    "internal/metrics: labeled monotonic counter registry rendering the Prometheus text exposition, no third-party dependencies",
+    "internal/app: counters wired at the runtime seams - RSS cycle (per-feed result and per-item outcomes), sync ticks, UNKNOWN confirmation actions, dispatch stage job outcomes and capacity reservation states, startup profile verification decision",
+    "cmd/vertex-pro: GET /metrics serves the registry text alongside healthz/readyz; operational counters only, no secrets"
+  ],
+  "counter_families": [
+    "vertex_rss_feeds_total{result=ok|error}",
+    "vertex_rss_items_total{outcome=new|updated|duplicate|matched|skipped|failed}",
+    "vertex_sync_ticks_total{result=ok|stale|error}",
+    "vertex_unknown_confirmations_total{action=CONFIRMED|NO_IDENTITY_MATCH|NOTIFY_IGNORED}",
+    "vertex_dispatch_jobs_total{result=dispatched|failed|error}",
+    "vertex_capacity_reservations_total{state=<reservation state enum>}",
+    "vertex_profile_verifications_total{profile=QB_438|QB_504|QB_522, decision=VERIFIED|NOT_VERIFIED}"
+  ],
+  "checks": {
+    "unit": "PASS: go test ./internal/app ./internal/metrics ./cmd/vertex-pro -count=1",
+    "bounded_labels": "PASS: TestMetricsFamiliesStayBounded runs two scheduler cycles plus a sync tick, pins the expected families/values, and asserts every label key stays within {result,outcome,action,state,decision,profile} with at most 8 labelsets per family",
+    "profile_decision": "PASS: TestNewEnablesDispatchOnlyFromExactStableVerificationCampaign asserts vertex_profile_verifications_total{decision=\"VERIFIED\",profile=\"QB_504\"} 1 after a full stable campaign",
+    "runtime_endpoint": "PASS: serve on 127.0.0.1:18091 returned 200 /healthz, 200 /metrics, 401 unauthenticated /api/v1/instances; empty registry renders an empty document before any cycle",
+    "full_suite": "PASS: go test ./... run twice on 2026-09-06, 96 packages ok, 0 failures"
+  },
+  "label_cardinality": "All label values are fixed sets (outcome enums, reservation state enum, the three known profile IDs, two decision values); instance IDs, feed URLs, and job IDs are deliberately not labels",
+  "scope_note": "Counters cover the runtime seams named by the playbook (RSS/Add/Sync/capacity/UNKNOWN/Profile). Retention, dashboards, alerting, and diagnostic bundles are OBS-01/03/04 and stage L/M scope."
+}
