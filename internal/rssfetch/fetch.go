@@ -9,6 +9,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/vertex-pro/vertex-pro/internal/outbound"
 )
 
 const (
@@ -30,10 +32,37 @@ type Response struct {
 	ContentType  string
 }
 
+// Boundary 是 HARD-04 出站边界：可选的主机白名单、私网/环回目标拒绝与
+// DNS 解析校验。未设置（nil）时保持历史行为，供本地开发与测试使用。
+type Boundary struct {
+	AllowedHosts     map[string]struct{}
+	RejectPrivateIPs bool
+	Resolver         outbound.Resolver
+}
+
 type Fetcher struct {
 	client       *http.Client
 	maxBodyBytes int64
 	userAgent    string
+	boundary     *Boundary
+}
+
+// WithBoundary 返回启用出站边界的 Fetcher 副本：每个重定向跳都会用同一
+// 边界重新校验（scheme、userinfo、可选白名单、可选私网拒绝）。
+func (fetcher Fetcher) WithBoundary(boundary Boundary) Fetcher {
+	client := *fetcher.client
+	client.CheckRedirect = func(request *http.Request, via []*http.Request) error {
+		parsed, err := url.Parse(request.URL.String())
+		if err != nil {
+			return fmt.Errorf("parse redirect target: %w", err)
+		}
+		if err := outbound.ValidateURL(request.Context(), parsed, boundary.Resolver, boundary.AllowedHosts, boundary.RejectPrivateIPs); err != nil {
+			return fmt.Errorf("redirect target rejected: %w", err)
+		}
+		return nil
+	}
+	hardened := boundary
+	return Fetcher{client: &client, maxBodyBytes: fetcher.maxBodyBytes, userAgent: fetcher.userAgent, boundary: &hardened}
 }
 
 func New(client *http.Client, maxBodyBytes int64) (Fetcher, error) {
@@ -56,6 +85,11 @@ func (fetcher Fetcher) Fetch(ctx context.Context, input Request) (Response, erro
 	parsed, err := validateURL(input.URL)
 	if err != nil {
 		return Response{}, err
+	}
+	if fetcher.boundary != nil {
+		if err := outbound.ValidateURL(ctx, parsed, fetcher.boundary.Resolver, fetcher.boundary.AllowedHosts, fetcher.boundary.RejectPrivateIPs); err != nil {
+			return Response{}, err
+		}
 	}
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, parsed.String(), nil)
 	if err != nil {

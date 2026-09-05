@@ -119,10 +119,11 @@ func runServe(logger *slog.Logger, arguments []string) error {
 	}
 
 	config := app.Config{
-		Database:  db.Config{Path: *databasePath},
-		Hosts:     splitList(*allowedHosts),
-		Origins:   splitList(*allowedOrigins),
-		Retention: &app.RetentionConfig{Interval: time.Hour, SnapshotRoot: *snapshotRoot, Policy: retention.DefaultPolicy()},
+		Database:         db.Config{Path: *databasePath},
+		Hosts:            splitList(*allowedHosts),
+		Origins:          splitList(*allowedOrigins),
+		Retention:        &app.RetentionConfig{Interval: time.Hour, SnapshotRoot: *snapshotRoot, Policy: retention.DefaultPolicy()},
+		HardenedOutbound: true,
 	}
 	if strings.TrimSpace(*quiURL) != "" {
 		build := buildidentity.Current()

@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -140,4 +142,52 @@ func TestNewRejectsMissingAllowlist(t *testing.T) {
 	if _, err := New(Config{}); err == nil {
 		t.Fatal("expected allowlist error")
 	}
+}
+
+// HARD-04 DNS 绕过负测：白名单内主机解析到私网段时，加固模式的下载与
+// 重定向都必须拒绝。
+func TestDownloaderRejectsPrivateIPResolutionsWhenHardened(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		if request.URL.Path == "/redirect" {
+			http.Redirect(response, request, "/artifact", http.StatusFound)
+			return
+		}
+		response.Header().Set("Content-Type", "application/x-bittorrent")
+		_, _ = response.Write([]byte("d4:infod4:name4:testee"))
+	}))
+	defer server.Close()
+
+	parsed, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	host := parsed.Hostname()
+	privateResolver := fakeDNSResolver{answers: map[string][]net.IPAddr{host: {{IP: net.ParseIP("10.0.0.9")}}}}
+	downloader, err := New(Config{
+		AllowedHosts:     []string{parsed.Host},
+		MaxBytes:         1 << 20,
+		RejectPrivateIPs: true,
+		Resolver:         privateResolver,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := downloader.Download(context.Background(), Request{URL: server.URL + "/artifact"}); err == nil {
+		t.Fatal("hardened download must reject a host resolving into a private range")
+	}
+	if _, err := downloader.Download(context.Background(), Request{URL: server.URL + "/redirect"}); err == nil {
+		t.Fatal("hardened redirect hop must reject a private resolution")
+	}
+
+}
+
+type fakeDNSResolver struct {
+	answers map[string][]net.IPAddr
+}
+
+func (resolver fakeDNSResolver) LookupIPAddr(ctx context.Context, host string) ([]net.IPAddr, error) {
+	if answer, ok := resolver.answers[host]; ok {
+		return answer, nil
+	}
+	return nil, &net.DNSError{Err: "no such host", Name: host}
 }

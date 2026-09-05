@@ -59,6 +59,9 @@ type Config struct {
 	Scheduler                    *SchedulerConfig
 	DispatchStage                *DispatchStageConfig
 	Retention                    *RetentionConfig
+	// HardenedOutbound 启用 HARD-04 出站边界：外发请求拒绝私网/环回/链路
+	// 本地目标并做 DNS 解析校验。本地开发与测试保持关闭。
+	HardenedOutbound bool
 }
 
 // RetentionConfig enables the OBS-03 cleanup worker. An empty snapshot root
@@ -111,20 +114,21 @@ type QuiConfig struct {
 
 // Runtime owns resources initialized during service startup.
 type Runtime struct {
-	Database      *sql.DB
-	Auth          *adminauth.Service
-	Handler       http.Handler
-	Metrics       *metrics.Registry
-	Profile       *qbprofile.Profile
-	Dispatch      *dispatchflow.Runner
-	Recovery      startuprecover.Result
-	hub           *sseserver.Hub
-	watcher       *syncwatcher.Watcher
-	confirmations *confirmcoordinator.Coordinator
-	scheduler     *schedulercycle.Cycle
-	dispatchStage *dispatchstage.Stage
-	snapshotRoot  string
-	cancel        context.CancelFunc
+	Database         *sql.DB
+	Auth             *adminauth.Service
+	Handler          http.Handler
+	Metrics          *metrics.Registry
+	Profile          *qbprofile.Profile
+	Dispatch         *dispatchflow.Runner
+	Recovery         startuprecover.Result
+	hub              *sseserver.Hub
+	watcher          *syncwatcher.Watcher
+	confirmations    *confirmcoordinator.Coordinator
+	scheduler        *schedulercycle.Cycle
+	dispatchStage    *dispatchstage.Stage
+	snapshotRoot     string
+	hardenedOutbound bool
+	cancel           context.CancelFunc
 	// retentionCancel 停止保留策略 worker；与 qui 的 cancel 独立，
 	// 因为保留清理不依赖 qui 集成是否启用。
 	retentionCancel context.CancelFunc
@@ -189,10 +193,12 @@ func New(ctx context.Context, config Config) (*Runtime, error) {
 	if err != nil {
 		return nil, err
 	}
+	boundary := rssfetch.Boundary{RejectPrivateIPs: config.HardenedOutbound}
 	feedFetcher, err := rssfetch.New(nil, rssfetch.DefaultMaxBodyBytes)
 	if err != nil {
 		return nil, err
 	}
+	feedFetcher = feedFetcher.WithBoundary(boundary)
 
 	rule, err := ruleservice.New(database, ruleservice.ClockFunc(now))
 	if err != nil {
@@ -228,7 +234,7 @@ func New(ctx context.Context, config Config) (*Runtime, error) {
 	if config.Retention != nil {
 		snapshotRoot = config.Retention.SnapshotRoot
 	}
-	runtime := &Runtime{Database: database, Auth: auth, Handler: mux, Metrics: metrics.New(), Recovery: recovery, hub: hub, snapshotRoot: snapshotRoot}
+	runtime := &Runtime{Database: database, Auth: auth, Handler: mux, Metrics: metrics.New(), Recovery: recovery, hub: hub, snapshotRoot: snapshotRoot, hardenedOutbound: config.HardenedOutbound}
 	if config.Qui != nil {
 		if err := runtime.startQui(ctx, *config.Qui, config.Scheduler, config.Qui.DispatchStage, now); err != nil {
 			return nil, err
@@ -405,7 +411,7 @@ func (runtime *Runtime) startQui(ctx context.Context, config QuiConfig, schedule
 		}
 		runtime.Dispatch = dispatch
 		if dispatchStageConfig != nil && dispatchStageConfig.Enabled {
-			stage, err := newDispatchStage(runtime.Database, dispatchStageConfig, proxyClient, profile, now)
+			stage, err := newDispatchStage(runtime.Database, dispatchStageConfig, proxyClient, profile, now, runtime.hardenedOutbound)
 			if err != nil {
 				return fmt.Errorf("initialize dispatch stage: %w", err)
 			}
@@ -478,7 +484,7 @@ func (runtime *Runtime) startQui(ctx context.Context, config QuiConfig, schedule
 		}()
 	}
 	if schedulerConfig != nil && schedulerConfig.Enabled {
-		scheduler, err := newSchedulerCycle(runtime.Database, schedulerConfig, config.InstanceID)
+		scheduler, err := newSchedulerCycle(runtime.Database, schedulerConfig, config.InstanceID, runtime.hardenedOutbound)
 		if err != nil {
 			return fmt.Errorf("initialize scheduler: %w", err)
 		}
@@ -578,8 +584,8 @@ func (runtime *Runtime) databaseEnabledFeeds(ctx context.Context) ([]schedulercy
 	return feeds, rows.Err()
 }
 
-func newDispatchStage(database *sql.DB, config *DispatchStageConfig, proxyClient *proxy.Client, profile qbprofile.Profile, now func() time.Time) (*dispatchstage.Stage, error) {
-	downloader, err := torrentdownload.New(torrentdownload.Config{AllowedHosts: config.AllowedArtifactHosts})
+func newDispatchStage(database *sql.DB, config *DispatchStageConfig, proxyClient *proxy.Client, profile qbprofile.Profile, now func() time.Time, hardened bool) (*dispatchstage.Stage, error) {
+	downloader, err := torrentdownload.New(torrentdownload.Config{AllowedHosts: config.AllowedArtifactHosts, RejectPrivateIPs: hardened})
 	if err != nil {
 		return nil, err
 	}
@@ -592,11 +598,12 @@ func newDispatchStage(database *sql.DB, config *DispatchStageConfig, proxyClient
 	})
 }
 
-func newSchedulerCycle(database *sql.DB, config *SchedulerConfig, instanceID string) (*schedulercycle.Cycle, error) {
+func newSchedulerCycle(database *sql.DB, config *SchedulerConfig, instanceID string, hardened bool) (*schedulercycle.Cycle, error) {
 	fetcher, err := rssfetch.New(nil, 1<<20)
 	if err != nil {
 		return nil, err
 	}
+	fetcher = fetcher.WithBoundary(rssfetch.Boundary{RejectPrivateIPs: hardened})
 	downloader, err := torrentdownload.New(torrentdownload.Config{AllowedHosts: config.AllowedArtifactHosts})
 	if err != nil {
 		return nil, err
