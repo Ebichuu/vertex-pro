@@ -2,7 +2,7 @@
 
 文档状态：`DESIGN-RC8 / FROZEN-CANDIDATE`  
 编制日期：2026-08-24  
-最后修订：2026-08-25  
+最后修订：2026-09-05  
 目标版本：Vertex Pro V1  
 qBittorrent 支持矩阵：`4.3.8`、`5.0.4`、`5.2.2`  
 qui 定位：唯一 qBittorrent 接入层与生命周期管理平台
@@ -50,6 +50,8 @@ RC8 修订摘要：
 配套实现合同：`docs/产品方案设计/CONTRACT_CONSISTENCY_V1.md`。该文件只规定实现验证与证据格式，不增加产品能力或改变第 26 节不变量。
 - 配套代码实施手册：`docs/实施流程/VERTEX_PRO_V1_CODE_IMPLEMENTATION_PLAYBOOK.md`；它只规定施工顺序、模块边界、测试、Gate 和发布流程，不改变本文业务语义。
 - 配套实施进度表：`docs/实施流程/IMPLEMENTATION_STATUS_V1.md`；它只记录实施项状态和证据，不重新定义产品或状态机。
+
+阅读说明（非规范性内容）：Vertex Pro 是部署在用户本机/内网的个人下载管理器（定位类似 Radarr、Sonarr），只与用户自行配置的 RSS/Atom 订阅源和用户自己的 qBittorrent 实例交互，不面向任何第三方系统。本文中的“kill -9”均指对 Vertex Pro 自身进程的 SIGKILL 崩溃模拟，用于验证启动恢复；“真实实例”指用户自有或实验室自部署的 qB/qui（与 mock 相对）；“Add/投递”指经 qui Proxy 向用户自有 qB 添加一个下载任务；安全设计章节（凭据、Secret、SSRF 防护）均为防御性设计。详细术语对照见 `docs/实施流程/IMPLEMENTATION_STATUS_V1.md` 第 0 节。
 
 ---
 
@@ -3605,7 +3607,7 @@ C1 的规范输出固定为 `artifacts/contract-consistency/{git_commit}/report.
 ### 阶段 0B：容量与恢复故障验证
 
 - 对 V1 唯一的 `CONSERVATIVE_TERMINAL` 执行可重复故障矩阵：qB 预分配、两个及以上 Reservation 并发写盘、外部程序写盘、字段缺失/非法、qui 权威删除、删除时磁盘回收延迟。
-- 在 `RESERVED/ADD_SENT/AWAITING_CONFIRMATION/UNKNOWN/HASH_SEEN/REFLECTING/EXPIRED_UNKNOWN` 各关键点注入 qB 重启、qui 重启、Vertex kill -9、SQLite busy/事务回滚和 SnapshotStore 损坏。
+- 在 `RESERVED/ADD_SENT/AWAITING_CONFIRMATION/UNKNOWN/HASH_SEEN/REFLECTING/EXPIRED_UNKNOWN` 各关键点注入 qB 重启、qui 重启、Vertex Pro 自身进程 kill -9（崩溃模拟）、SQLite busy/事务回滚和 SnapshotStore 损坏。
 - 验证首次 Hash binding、UNKNOWN->KNOWN、完成转 UNMANAGED、权威删除、两阶段重试和 EXPIRED_UNKNOWN 两条人工闭环；每个用例必须检查 Reservation、binding、容量投影、epoch/revision 和事件流的数据库 oracle。
 - 所有场景都必须满足：不逻辑超卖、不自动重放 POSSIBLE_EFFECT、不提前释放、不重复负债、重启后可确定性恢复；无法对账时保持 `CAPACITY_UNCERTAIN/RECONCILING`。
 - 测试报告记录初始数据、故障点、操作序列、最终 SQL 断言、日志/事件 digest 和重跑结果。G2 只有在全部 P0 用例稳定通过后才完成。

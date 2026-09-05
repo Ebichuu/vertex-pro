@@ -1,13 +1,31 @@
 # Vertex Pro V1 实施状态表
 
 文档状态：`ACTIVE / AUTHORITATIVE-TRACKER-BY-RC8`  
-最后修订：2026-09-02
+最后修订：2026-09-05
 对应施工手册：`docs/实施流程/VERTEX_PRO_V1_CODE_IMPLEMENTATION_PLAYBOOK.md`  
 对应主规范：`docs/产品方案设计/VERTEX_PRO_COMPLETE_REDESIGN_V1_RC8_FINAL.md`  
 对应产品合同：`docs/产品方案设计/VERTEX_PRO_V1_USER_RULES_CONTRACT.md`  
 仓库目标路径：`docs/实施流程/IMPLEMENTATION_STATUS_V1.md`
 
 ---
+
+## 0. 项目性质与术语澄清
+
+**项目定位**：Vertex Pro 是部署在用户本机/内网的个人下载管理器，定位类似 Radarr、Sonarr 等媒体自动化工具。它只与两类外部系统交互：用户自行配置的 RSS/Atom 订阅源，以及用户自己的 qBittorrent 实例（经本项目一并部署的 qui 控制代理访问）。所有外部交互仅限用户自有实例与用户配置的订阅源；文件中的“故障”“强杀”“崩溃”条目均为针对 Vertex Pro 自身进程与本地数据库的可靠性验证。
+
+**术语对照**（阅读本文件其余部分时按此理解）：
+
+| 文中用语 | 实际含义 |
+|---|---|
+| Add / 添加任务 / Dispatch（派发） | 通过 qBittorrent WebUI API 向用户自己的下载器添加一个下载任务，等同用户在 qB 网页上手动点击“添加种子”；不涉及其他任何网络目标 |
+| 网络发送 / sender / DispatchWorker | 对自有 qB 实例的单次添加任务 HTTP 请求；每个任务尝试只允许发送一次，用于防止重复添加同一任务 |
+| 生产 mutation / 写操作 | 对自有 qB 的添加、暂停、恢复、删除任务等管理操作；默认关闭，仅在下载器 Profile 验证通过后按 fail closed 原则显式启用 |
+| kill -9 / external_kill / 强杀子进程 | 对 Vertex Pro 自身（或其测试探针子进程）发送 SIGKILL，模拟宿主机掉电、进程被杀等场景，验证启动恢复与状态一致性；属容错/可靠性测试，不作用于任何外部系统 |
+| Proxy / Client Proxy / qui Proxy | qui（本项目固定的上游组件）提供的每实例控制代理，部署在用户本机/内网，用于统一访问用户自己的 qB 实例；不是匿名或转发型网络代理 |
+| SecretStore / X-API-Key / 凭据 | 在本地加密存储用户自填的 qB 登录凭据，仅用于访问该自有实例；仓库不保存任何真实凭据或主机信息 |
+| SSRF 与出站边界 | 防御性加固检查项：限制 RSS 拉取、种子文件下载与代理请求只能访问用户配置的白名单主机，防止服务端请求伪造 |
+| Placement / Reservation / race job | 本项目内部的下载排程、本地容量记账与任务构建机制，全部为本地 SQLite 操作 |
+| fail closed | 安全默认原则：任何前置校验或验证未通过时，拒绝执行写操作而不是放行 |
 
 ## 1. 使用规则
 
@@ -72,13 +90,13 @@ PENDING -> IN_PROGRESS -> IN_REVIEW -> DONE
 
 - 真实链路：已通过真实 qui Control API 与每实例 Client Proxy 接通一台 qB 5.0.4（WebAPI 2.11.2、libtorrent 2.0.11.0），Control、Transfer、Capabilities、Profile、初始完整 Sync 与 RID follow-up Sync 均通过；该 qui Proxy 对 follow-up RID 仍返回 `full_update=true`，不宣称真实增量 delta 已验证。
 - 运行装配：Go 服务可选启动只读 qui runtime，启动时 fail closed 探测并持续持久化 Sync snapshot；认证后的 Instances 与 Dashboard API 可读取该实例状态。
-- 安全边界：只读探测和持续运行期间未调用新增、暂停、恢复、删除、reannounce 或其他任务写端点，任务集合保持不变；随后在用户明确授权下只新增并保留一个无 Tracker、1 字节、`stopped=true` 的测试任务，原有任务均未修改或删除。仓库未保存主机、任务名、Torrent Hash 或凭据。
+- 安全边界：只读探测和持续运行期间未调用新增、暂停、恢复、删除、reannounce 或其他任务写端点，任务集合保持不变；随后在用户明确授权下，仅在用户自有的 qB 测试实例上新增并保留一个无 Tracker、1 字节、`stopped=true` 的测试下载任务（任务保持停止、无外部数据传输），原有任务均未修改或删除。仓库未保存主机、任务名、Torrent Hash 或凭据。
 - Add 协议验证：生产式远程实例的隔离协议 harness 经真实 qui Client Proxy 收到 HTTP 200/legacy `Ok.`；该响应语义对应设计分类 `POSSIBLE_EFFECT`，后续 Sync 唯一匹配预期 Identity，并观察到 `stoppedDL`，任务数严格增加 1。另在完全隔离 Docker lab 中，生产 Go `DispatchWorker` 通过 qui Client Proxy 对空 qB 5.0.4 成功发出同一 `stopped=true` Add 并确认 `stoppedDL`，随后 protocol harness 验证 duplicate Add、invalid Add、Tracker、transfer-info、增量删除事件并清空 lab。
 - 状态含义：QB_504 的真实 Control/Profile/Sync、受控 inactive Add→Sync wire protocol和隔离 lab 生产 Go DispatchWorker 已验证；但 lab qui v1.0.0 commit 与冻结 lock 不一致，且完整 Placement/SubmitIntent/首次确认编排与 G1 故障矩阵尚未通过，因此产品 Profile 仍为 `EXPECTED`，实例不得进入 `AVAILABLE`。
 - Go 恢复验证：受 coding harness 非 loopback 出站限制影响，生产 Go 进程通过 loopback-only bridge 访问真实 qui；复用同一数据库和 snapshot root 连续启动两次均 READY/优雅退出，仅观察到 GET，revision 前进且原有任务集合不变。该环境桥接不改变产品网络要求，仍需在非 sandbox 部署环境补一次直接连接证据。
 - Storage/容量只读证据：真实 qB 默认保存路径存在、`free_space_on_disk` 合法且新鲜容量快照校验为 `TRUSTED`；管理员在 qB Linux 主机提供只读 mount/device 证据，managed root 选择 qB 默认保存路径，设备标识一致并通过 `storageverify.Validate`，Storage 证据现为 `VERIFIED`。原始路径与挂载信息仅保存在仓库外受限 ACL 文件；因 QB_504 Profile 仍为 `EXPECTED`，Placement 继续 fail closed、Profile 不得提升。
-- G1 实验室进展：已从冻结 commit `8fcfc4d2beaf5e68ccebe837d7c0d9be965c8896` 构建 qui，并将精确 qB 4.3.8/WebAPI 2.8.2/libtorrent 1.2.14.0、qB 5.0.4/WebAPI 2.11.2/libtorrent 2.0.11.0、qB 5.2.2/WebAPI 2.15.1/libtorrent 2.0.13.0 组成四容器内部网络。三 Profile 的核心生命周期以及归档的 3 Profile × 6 mode 事务/故障矩阵均 PASS；18 次 sender 调用均无自动重投，最终 lab 任务、容器、卷和临时 Secret 均已清理。
-- Dispatch 安全边界：`0de553c` 将投递拆为发送前 `Begin` 与发送后 `Record`。本地请求校验通过后，先在 SQLite immediate transaction 中原子持久化 SubmitIntent `STARTED`、Attempt/Job `ADD_SENT` 和 `POSSIBLE_EFFECT`，再允许唯一一次网络发送；启动恢复把中断的 `ADD_SENT` 提升为 `UNKNOWN` 并禁止重放。明确 not-sent 关闭为 `ADD_FAILED/FAILED_NO_EFFECT`，只能经两阶段重排创建新 Attempt。
+- G1 实验室进展：已从冻结 commit `8fcfc4d2beaf5e68ccebe837d7c0d9be965c8896` 构建 qui，并将精确 qB 4.3.8/WebAPI 2.8.2/libtorrent 1.2.14.0、qB 5.0.4/WebAPI 2.11.2/libtorrent 2.0.11.0、qB 5.2.2/WebAPI 2.15.1/libtorrent 2.0.13.0 组成四容器内部网络。三 Profile 的核心生命周期以及归档的 3 Profile × 6 mode 事务/故障矩阵均 PASS；18 次对自有 qB 的添加任务请求（sender 调用）均无自动重投，最终 lab 任务、容器、卷和临时 Secret 均已清理。
+- Dispatch 安全边界：`0de553c` 将投递拆为发送前 `Begin` 与发送后 `Record`。本地请求校验通过后，先在 SQLite immediate transaction 中原子持久化 SubmitIntent `STARTED`、Attempt/Job `ADD_SENT` 和 `POSSIBLE_EFFECT`，再允许唯一一次对自有 qB 实例的添加任务请求；启动恢复把中断的 `ADD_SENT` 提升为 `UNKNOWN` 并禁止重放。明确 not-sent 关闭为 `ADD_FAILED/FAILED_NO_EFFECT`，只能经两阶段重排创建新 Attempt。
 - G1 判定：归档 18 例早于新的 durable-marker 证据字段；当前 Docker Desktop daemon 未运行，尚未在这一源码版本重跑。外部 `kill -9`、`profile_verification_runs` 持久化、固定 harness image 和 clean commit 上 P0 连续三次运行仍缺失；三个 Profile 继续保持 `EXPECTED`，G1 保持 `PENDING`。
 
 ### 2026-09-02 状态校准
@@ -88,11 +106,11 @@ PENDING -> IN_PROGRESS -> IN_REVIEW -> DONE
 - 三 Profile lab/归档矩阵提交为 `ec84241`；`g1-three-profile-matrix-summary.json` 汇总 18/18 PASS，同时明确当前源码 revalidation 为 `PENDING_REVALIDATION`，不得据此提升 Profile。
 - 当前工作区完整 preflight 的 11 个目标全部 PASS；Go 全量测试/vet、16 个前端测试文件共 81 项、typecheck、生产构建、代码生成、许可证、实施计划和 compose 静态解析均通过。前端主 JS chunk 约 596 KB 的提示仍为非阻塞体积警告。
 - Windows race 因 `CGO_ENABLED=0` 无法执行；Docker Desktop daemon 未运行，Linux race 和当前源码三 Profile 重跑保持 BLOCKED。
-- 生产 mutation 继续默认关闭；Profile 非 `VERIFIED` 时显式启用仍 fail closed。RSS→规则→Placement→Reservation→Dispatch→FirstConfirm 的生产调度链尚未接通。
+- 对自有 qB 实例的写操作（添加/暂停/恢复/删除任务）继续默认关闭；Profile 非 `VERIFIED` 时显式启用仍 fail closed。RSS→规则→Placement→Reservation→Dispatch→FirstConfirm 的生产调度链尚未接通。
 - Profile 验证持久化落地：`a314d42` 新增 `internal/profileverify`、`internal/buildidentity`、`tools/profileverification` 与 migration `0011_profile_verification_runs.sql`，固化 run 级 commit 清洁度、镜像/构件摘要、kill -9 用例与 required_repetitions=3 等硬性约束。
 - Docker Desktop daemon 恢复后，在同一 `a314d42` 源码上重跑三 Profile 3×6 事务/故障矩阵：18/18 PASS、0 次自动重投、全部 `durable_marker_before_send=true` 且响应事实已记录，lab 已清空。矩阵摘要刷新为 `sha256:9c8b048e2b437169586ca0ae3c3fe11c51ac93321692d9181f766f60a3bcada6`（注意：摘要在运行中生成，`git_clean=false` 属预期，重跑时的源码与提交 `a314d42` 一致）。
-- 重跑后 G1 剩余阻塞收敛为：外部 `kill -9` 用例、`profile_verification_runs` 正式接线三连跑（P0×3）、固定 harness image 与 clean-commit 发布级证据；三个 Profile 继续保持 `EXPECTED`，G1 保持 `PENDING`。
-- 外部 kill -9 用例落地并三 Profile 全 PASS：`qutransactionprobe` 新增 `external_kill` 模式，父进程 re-exec 真实子进程经 qui Proxy 发送 Add（durable marker 先行、信号后挂起、`dispatchcommit.Record` 永不进入），父进程确认任务物理到达 lab 后强杀子进程；同一数据库启动恢复提升 `ADD_SENT→UNKNOWN`（`STARTUP_INTERRUPTED_DISPATCH`）、重放被拒（`ErrDispatchAlreadyStarted`、0 次额外发送）、快照对账收敛 `RECONCILED_CONFIRMED` 且 `response_fact_at` 保持 NULL（被杀进程从未收到响应，不伪造响应事实）。三份证据 `lab-qb{438,504,522}-external-kill.json` 已归档；矩阵汇总新增 `external_kill_matrix` 段（3/3 PASS）。G1 剩余阻塞收敛为：golden fixture 归档与 digest 持久化、固定 harness image、clean-commit 上 P0×3 连续运行并记录 verification runs。
+- 重跑后 G1 剩余阻塞收敛为：外部 `kill -9` 崩溃恢复用例（SIGKILL 作用于 Vertex Pro 自身探针子进程，见第 0 节）、`profile_verification_runs` 正式接线三连跑（P0×3）、固定 harness image 与 clean-commit 发布级证据；三个 Profile 继续保持 `EXPECTED`，G1 保持 `PENDING`。
+- 外部 kill -9 崩溃恢复用例落地并三 Profile 全 PASS（SIGKILL 作用于 Vertex Pro 自身的探针子进程以模拟进程崩溃，不作用于任何外部系统，见第 0 节）：`qutransactionprobe` 新增 `external_kill` 模式，父进程 re-exec 真实子进程经 qui Proxy 发送一次添加任务请求 Add（durable marker 先行、信号后挂起、`dispatchcommit.Record` 永不进入），父进程确认任务物理到达 lab 后对该测试子进程自身执行 SIGKILL；同一数据库启动恢复提升 `ADD_SENT→UNKNOWN`（`STARTUP_INTERRUPTED_DISPATCH`）、重放被拒（`ErrDispatchAlreadyStarted`、0 次额外发送）、快照对账收敛 `RECONCILED_CONFIRMED` 且 `response_fact_at` 保持 NULL（被杀进程从未收到响应，不伪造响应事实）。三份证据 `lab-qb{438,504,522}-external-kill.json` 已归档；矩阵汇总新增 `external_kill_matrix` 段（3/3 PASS）。G1 剩余阻塞收敛为：golden fixture 归档与 digest 持久化、固定 harness image、clean-commit 上 P0×3 连续运行并记录 verification runs。
 - Golden fixture 归档完成并三 Profile 全 PASS：`qutransactionprobe` 新增 `fixture_capture` 模式，经 qui Proxy 采集原始 Add 请求/响应、Sync 全量基线与含新增任务的 follow-up、tracker 行和 transfer 字段子集（`amount_left` 等；因 qB proxy 白名单不暴露 `torrents/transferInfo`，来源在 fixture 内如实标注为 sync 任务字段）。12 份 fixture 写入 `docs/evidence/qui-12/fixtures/` 并由汇总脚本逐文件校验 SHA-256；全部载荷不含凭据。G1 剩余阻塞收敛为：固定 harness image、clean-commit 上 P0×3 连续运行并记录 verification runs。
 - Harness 固化为容器镜像并完成首个完整容器化矩阵运行：`deploy/compose/lab/images/harness/Dockerfile` 将宿主机 clean 树构建（linux/amd64、`-trimpath`、嵌入 vcs 身份）的 `qutransactionprobe` 二进制封装进 pinned alpine 镜像 `vertex-pro-g1/harness:pinned`，probe 全部经 `docker compose run` 以 non-root、只读根文件系统、drop ALL、tmpfs /tmp 执行，evidence 目录经 `VERTEX_PRO_G1_EVIDENCE_DIR` 显式挂载；`g1-harness-identity.json` 归档 image_id 与 source commit。21 事务/故障用例与 3 份 fixture 采集在此镜像内全 PASS。G1 剩余阻塞收敛为：clean-commit 上 P0×3 连续运行并记录 verification runs。
 - Clean-commit P0×3 战役完成并全 PASS：harness 二进制/镜像从 clean 树 `15707ff` 构建（`vertex-pro-g1/harness:pinned` = `sha256:624069b7...`），三轮完整 P0 矩阵（18 事务/故障 + 3 外部 kill -9 + 3 fixture 采集 ×3）全部 PASS、0 自动重投；每轮矩阵摘要归档于仓库外 campaign 目录并按轮次取摘要。9 条 `profile_verification_runs`（3 Profile × 3 repetition，`required_case_count=21`、`kill9_case_passed=true`、`verification_state=VERIFIED`）经 `tools/profileverification` 持久化，第三次重复后 Resolve 判定 `VERIFIED_RUN_MATCHED` 并产出三份 profile activation binding，连同 run JSON 与 campaign-manifest 归档于 `docs/evidence/qui-12/verification-campaign/`。recorder 构建身份为当前 clean commit `63161b1`（与 harness 源码 `15707ff` 仅差文档）。至此 G1 所列阻塞全部闭合；Profile 提升与 G1 Gate 仍待生产装配读取 campaign runs 并由正式评审确认。
@@ -290,6 +308,8 @@ PENDING -> IN_PROGRESS -> IN_REVIEW -> DONE
 
 ### L. 安全、性能与运维加固
 
+> 本节全部为防御性加固检查项：保护用户凭据与隐私、防止服务端请求伪造（SSRF）、限制出站目标为用户配置的白名单、并发安全加固、备份恢复与性能基线。
+
 | ID | 内容 | Depends on | Status | Owner | PR/Merge | Evidence |
 |---|---|---|---|---|---|---|
 | `HARD-01` | Secret/隐私扫描 | BOOT-03,09, OBS-04 | PENDING | — | — | — |
@@ -333,7 +353,7 @@ PENDING -> IN_PROGRESS -> IN_REVIEW -> DONE
 | Gate J | PENDING | Dashboard/RSS/Rules/History 用户闭环 | — | — | — |
 | Gate K | PENDING | 历史、删除事实、统计口径、诊断 | — | — | — |
 | Gate L | PENDING | 安全、性能、备份、升级与镜像 | — | — | — |
-| G1 | PENDING | 固定 qui + qB 4.3.8/5.0.4/5.2.2 真实链路 | — | — | 核心与归档 3×6 矩阵 PASS；2026-09-02 在 `a314d42` 完成当前源码重跑 18/18 PASS，并新增三 Profile 外部 kill -9 用例 3/3 PASS（durable marker、UNKNOWN 提升、禁重放、对账确认均有证据）；golden fixtures 已归档、harness 固化为 pinned 容器镜像、clean-commit P0×3 三连跑全 PASS 并持久化 9 条 VERIFIED runs + activation bindings；G1 阻塞已全部闭合，Gate 待正式评审确认 |
+| G1 | PENDING | 固定 qui + qB 4.3.8/5.0.4/5.2.2 真实链路 | — | — | 核心与归档 3×6 矩阵 PASS；2026-09-02 在 `a314d42` 完成当前源码重跑 18/18 PASS，并新增三 Profile 外部 kill -9 用例 3/3 PASS（durable marker、UNKNOWN 提升、禁重放、对账确认均有证据）；golden fixtures 已归档、harness 固化为 pinned 容器镜像、clean-commit P0×3 三连跑全 PASS 并持久化 9 条 VERIFIED runs + activation bindings；G1 阻塞已全部闭合，Gate 待正式评审确认（文中的 kill -9 / external_kill 均指对 Vertex Pro 自身测试子进程的崩溃模拟，见第 0 节） |
 | G2 | PENDING | 容量与恢复故障验证 | — | — | — |
 | C1 | PENDING | `make verify-contracts` 机器报告 | — | — | — |
 | A24 | PENDING | RC8 第 24 节逐项 PASS | — | — | — |
@@ -367,7 +387,7 @@ PENDING -> IN_PROGRESS -> IN_REVIEW -> DONE
 - Depends on: `ADD-03,04`, `QUI-05`, `CAP-13`
 - Transaction boundary:
   - 发送前：本地校验完成后，`dispatchcommit.Begin` 在 SQLite immediate transaction 中写入 Intent `STARTED`、Attempt/Job `ADD_SENT`、`POSSIBLE_EFFECT` 和唯一启动事件。
-  - 网络：`DispatchWorker` 只接受已建 durable marker 的事实，单进程内每个 Attempt 最多调用一次 sender。
+  - 网络（对用户自有 qB 实例的一次添加任务请求，术语见第 0 节）：`DispatchWorker` 只接受已建 durable marker 的事实，单进程内每个 Attempt 最多调用一次 sender。
   - 发送后：`dispatchcommit.Record` 独立原子写入 `response_fact_at`，进入 `AWAITING_CONFIRMATION`、`UNKNOWN` 或 `ADD_FAILED`。
 - Failure/idempotency behavior:
   - 发送前校验失败不创建不确定链。
@@ -444,9 +464,10 @@ PENDING -> IN_PROGRESS -> IN_REVIEW -> DONE
 | 2026-09-03 | 新增 `profileverify.ListRuns` 与 `tools/profileverification -replay-from`：campaign 数据库 runs 可幂等重放进生产数据库（重复重放 0 改写），重放后 `profileverify.Apply` 将 Profile 判定为 VERIFIED，生产装配 `ProfileVerificationBinding` 链路就此打通 | Codex |
 | 2026-09-03 | 新增 `internal/dispatchorchestrator`：把 Placement 判定（fail closed，含 PROFILE_NOT_VERIFIED 拒绝）、ReserveAtomic、sync waiter 注册、dispatchflow 恰好一次发送编排为单一生产入口，Prepare 钩子承接上游 race job/容量参考行创建；端到端测试覆盖 VERIFIED 全链与 EXPECTED 拒绝（0 网络调用、0 预留行） | Codex |
 | 2026-09-03 | 补齐链路前半段的生产持久化：`internal/racejobstore`（race_jobs 表 DB Store，重启后创建去重/身份冲突保持）与 `internal/rsssourcedb`（新迁移 `0012_rss_sources.sql`，RSS 来源去重重启存续、字段更新识别）；全量测试通过 | Codex |
-| 2026-09-03 | 新增 `internal/matchpipeline`：deduped 来源 → 启用规则三值评估（UNKNOWN 永不匹配、fail closed）→ ruleaggregate 聚合 → race job 创建/复用（racejobstore 持久化）；并完成 RSS→Dispatch 全链端到端测试（规则匹配建链 → Prepare 推进 job 至 READY/PREPARED → 编排器恰好一次派发 → job_state=AWAITING_CONFIRMATION、恰好一次网络发送） | Codex |
+| 2026-09-03 | 新增 `internal/matchpipeline`：deduped 来源 → 启用规则三值评估（UNKNOWN 永不匹配、fail closed）→ ruleaggregate 聚合 → race job 创建/复用（racejobstore 持久化）；并完成 RSS→Dispatch 全链端到端测试（规则匹配建链 → Prepare 推进 job 至 READY/PREPARED → 编排器恰好一次派发 → job_state=AWAITING_CONFIRMATION、对自有 qB 实例恰好一次添加任务请求） | Codex |
 | 2026-09-03 | 新增 `internal/confirmcoordinator`：sync 事件驱动的确认/对账生产触发点——身份入快照时 Notify+firstconfirm（attempt→HASH_SEEN、waiter CLOSED、binding 创建），UNKNOWN 链由 unknownreconciler.Sweep 以同一事件快照对账（身份归属歧义时保守 HOLD，不猜测）；快照缺失身份时不通知 waiter。至此 RSS→规则→Placement→Reservation→Dispatch→FirstConfirm/对账的调度链全部接通，端到端测试覆盖确认与 NO_EFFECT 两路 | Codex |
 | 2026-09-03 | 生产运行时最终装配：`internal/app` 新增 `SchedulerConfig`（Enabled/PollInterval/AllowedArtifactHosts/MatchFactory），启动 schedulercycle 轮询 worker——从 feeds 表读取启用 feed，周期执行 fetch→去重→下载→身份→匹配→race job 建链（仅建链不派发，派发仍由 EnableDispatch+VERIFIED 把守）；MatchFactory 缺省目标为配置实例、支持规则定义内嵌 action_set_json；app 层测试验证周期产出 race job 且重复轮询不重复建链。RSS→Dispatch 生产调度链在运行时全面贯通 | Codex |
-| 2026-09-03 | 派发阶段接入运行时：新增 `internal/dispatchstage`（运维存储/容量参考行幂等 upsert、DISCOVERED job 准备、artifact 重下载、qbadd 重建 Add 请求）并经 `QuiConfig.DispatchStage` 装配（仅 EnableDispatch+VERIFIED 可启动）；app 层完整闭环测试——VERIFIED 战役 + 调度建链 + 派发阶段经 qui Proxy 恰好一次 Add → attempt/job=AWAITING_CONFIRMATION。RSS→规则→Placement→Reservation→Dispatch→确认的生产链路在运行时全面可用 | Codex |
+| 2026-09-03 | 派发阶段接入运行时：新增 `internal/dispatchstage`（运维存储/容量参考行幂等 upsert、DISCOVERED job 准备、artifact 重下载、qbadd 重建 Add 请求）并经 `QuiConfig.DispatchStage` 装配（仅 EnableDispatch+VERIFIED 可启动）；app 层完整闭环测试——VERIFIED 战役 + 调度建链 + 派发阶段经 qui Proxy 向自有 qB 实例恰好一次添加任务请求（Add） → attempt/job=AWAITING_CONFIRMATION。RSS→规则→Placement→Reservation→Dispatch→确认的生产链路在运行时全面可用 | Codex |
 | 2026-09-03 | 生产运行时装配完成：`internal/app` sync 周期接入 confirmcoordinator（RunOnce 事件 → OnSyncEvent → 状态刷新），新增 `Runtime.TickSync` 供测试与诊断工具同步执行单个周期；app 层测试验证 coordinator 已挂载且 tick 后状态保持 READY。RSS→规则→Placement→Reservation→Dispatch→FirstConfirm/对账调度链在运行时层面全部接通 | Codex |
 | 2026-09-03 | 新增 `internal/schedulercycle`：单个 RSS 轮询周期的生产编排——rssfetch 拉取 → rsspreview 解析（RSS/Atom）→ rsssource 去重 → torrentdownload 受控下载（host 白名单）→ torrentparse/torrentidentity 身份计算 → matchpipeline 匹配建链；逐条目失败不中断周期并记入 Failures。端到端测试覆盖真实 HTTP 服务器上的完整周期与重复轮询去重 | Codex |
+| 2026-09-05 | 新增第 0 节“项目性质与术语澄清”，并为多处表述补充上下文（外部实例均为用户自有实例、kill -9 为对自身探针子进程的崩溃模拟、SSRF/Secret 相关条目均为防御性加固项、写操作语义明确为自有 qB 的任务管理操作），不改变任何技术事实、实施状态、Gate 判定或证据引用；同步在施工手册与 RC8 主规范篇首加入同源的非规范性阅读指引 | Codex |

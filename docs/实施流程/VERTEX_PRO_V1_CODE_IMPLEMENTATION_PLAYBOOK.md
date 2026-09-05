@@ -1,11 +1,13 @@
 # Vertex Pro V1 代码实施手册
 
 文档状态：`IMPLEMENTATION-PLAYBOOK-V1 / MANDATORY-BY-RC8`  
-最后修订：2026-08-25  
+最后修订：2026-09-05  
 对应主规范：`docs/产品方案设计/VERTEX_PRO_COMPLETE_REDESIGN_V1_RC8_FINAL.md`  
 对应产品合同：`docs/产品方案设计/VERTEX_PRO_V1_USER_RULES_CONTRACT.md`  
 对应一致性合同：`docs/产品方案设计/CONTRACT_CONSISTENCY_V1.md`  
 仓库目标路径：`docs/实施流程/VERTEX_PRO_V1_CODE_IMPLEMENTATION_PLAYBOOK.md`
+
+**项目性质与阅读指引（非规范性说明）**：Vertex Pro 是部署在用户本机/内网的个人下载管理器（定位类似 Radarr、Sonarr），只与用户自行配置的 RSS/Atom 订阅源和用户自己的 qBittorrent 实例交互，不面向任何第三方系统。手册中的“kill -9”均指对 Vertex Pro 自身进程的 SIGKILL 崩溃模拟，用于验证启动恢复；“真实 qB/qui”指用户自有或实验室自部署实例（与本地 Mock 相对）；“Add/派发”指经 qui Proxy 向用户自有 qB 添加一个下载任务；“SSRF/Secret”相关条目均为防御性加固检查项。详细术语对照见 `docs/实施流程/IMPLEMENTATION_STATUS_V1.md` 第 0 节。
 
 ---
 
@@ -349,6 +351,8 @@ source_digest: sha256:<digest>
 | `make ci` | CI 全部非实验室检查 | 否 |
 | `make build` | Go 单二进制与前端嵌入构建 | 否 |
 | `make image` | 构建不可变容器镜像 | 否 |
+
+表中“真实 qB/qui”指用户自有或实验室自部署实例，与本地 Mock 相对；全部访问均为对自有实例的管理操作。
 
 `make preflight` 至少等价于：
 
@@ -826,7 +830,7 @@ sequenceDiagram
 ### Gate H
 
 - 所有 ResponseAdapter 分支均无法单独产生 HASH_SEEN。
-- 响应丢失、qui/qB 重启和进程 kill -9 不会重复 Add。
+- 响应丢失、qui/qB 重启和 Vertex Pro 自身进程 kill -9（崩溃模拟）不会重复 Add。
 - Identity 首次确认不存在 binding 零负债窗口。
 - UNKNOWN 和 EXPIRED_UNKNOWN 的所有路径保留或安全释放 Reservation。
 - `ADD-14` 的 P0 故障用例连续运行三次均得到相同数据库终态。
@@ -1387,7 +1391,7 @@ make preflight
 
 - 从空库启动并执行一遍主用户流程。
 - 从最近支持的旧 schema 升级。
-- 执行一次 kill -9 恢复 smoke。
+- 执行一次自身进程 kill -9 恢复 smoke（对 Vertex Pro 进程的崩溃模拟，见篇首阅读指引）。
 - 检查 G1/G2 实验室漂移和镜像 digest。
 - 检查依赖/许可证/SBOM，但不自动合并升级。
 - 检查未关闭 UNKNOWN、CAPACITY_UNCERTAIN 和 BLOCKED 实施项。
