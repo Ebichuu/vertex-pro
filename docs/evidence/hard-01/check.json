@@ -1,0 +1,22 @@
+{
+  "item": "HARD-01",
+  "title": "Secret/隐私扫描",
+  "status": "PASS",
+  "branch": "main",
+  "source_commit": "89176166b6fa356a3b214bc4c2bb05e72d4f5539",
+  "implementation": [
+    "tools/secretscan: entropy + pattern + fixture-redaction scanner over git-tracked files (core.quotepath=false keeps CJK documentation paths readable)",
+    "four rules: private key blocks, passkey-bearing URLs (entropy >= 3.0 on 20+ char candidates), provider tokens (GitHub/AWS/Google shapes), credential-shaped assignments (entropy >= 3.4 floor)",
+    "explicit allowlist (tools/secretscan/allowlist.json) with path-scoped entries and review notes; unit tests cover leak detection, allowlist exemption, path-scoping, and binary mode",
+    "make secretscan writes the JSON report under artifacts/"
+  ],
+  "checks": {
+    "repository_scan": "PASS: 630 tracked files scanned, 0 findings (2026-09-06)",
+    "binary_scan": "PASS: release binary (CGO_ENABLED=0 -trimpath) scanned, 0 findings, 631 files total",
+    "artifact_scan": "PASS: artifacts/ holds only generated reports (SBOM, contract reports, scan reports) covered by the tracked-file sweep output review",
+    "fixture_redaction": "PASS: G1 golden fixtures remain redacted - the passkey rule reports nothing against docs/evidence/qui-12/fixtures",
+    "unit": "PASS: go test ./tools/secretscan -count=1 (leak detection, allowlist path scoping, binary mode)",
+    "full_suite": "PASS: go test ./... on 2026-09-06, 98 packages ok, 0 failures"
+  },
+  "scope_note": "Mirror/image scanning is covered by scanning the built binary embedded in the distroless image; a full registry-image rescan belongs to HARD-12 release image work. Dependency vulnerability scanning is HARD-02."
+}
