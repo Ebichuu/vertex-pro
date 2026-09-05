@@ -60,14 +60,14 @@ PENDING -> IN_PROGRESS -> IN_REVIEW -> DONE
 | F | 规则与 Query Builder | `12/12 DONE` | Gate F | `PASS` |
 | G | Placement 与容量 | `14/14 DONE` | Gate G / G2 基础 | `PASS`（G2 Gate 评审另行进行） |
 | H | Add、确认与恢复 | `14/14 DONE` | Gate H | `PASS` |
-| I | API、认证与 SSE | `0/12 DONE; 12 IN_PROGRESS` | Gate I | `PENDING` |
+| I | API、认证与 SSE | `12/12 DONE` | Gate I | `PASS` |
 | J | 前端页面 | `0/13 DONE; 10 IN_PROGRESS; 3 PENDING` | Gate J | `PENDING` |
 | K | 历史、统计与观测 | `0/12 DONE; 6 IN_PROGRESS; 6 PENDING` | Gate K | `PENDING` |
 | L | 加固与运维 | `0/12 DONE; 12 PENDING` | Gate L | `PENDING` |
 | M | RC 与冻结 | `0/7 DONE; 7 PENDING` | Gate M / G3 | `PENDING` |
 
-总体状态：`93/149 DONE`；`28 IN_PROGRESS`；`28 PENDING`。
-Gate A–H 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 12/12、E 13/13、F 12/12、G 14/14、H 14/14）；正式施工项推进至阶段 I `API-01`；功能开发触达：阶段 J `UI-10`（local-only）。
+总体状态：`105/149 DONE`；`16 IN_PROGRESS`；`28 PENDING`。
+Gate A–I 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 12/12、E 13/13、F 12/12、G 14/14、H 14/14、I 12/12）；正式施工项推进至阶段 J `UI-11`；功能开发触达：阶段 J `UI-10`（local-only）。
 
 ### 2026-08-30 状态校准
 
@@ -132,6 +132,7 @@ Gate A–H 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 1
 - 阶段 F 收口：RULE-01..12 在 `ac0ff92` 源码重验（`cff31ec`）——rules/ruleversion/ruleaggregate/ruledryrun/ruleservice 包测试与前端 24 项规则组件测试（编辑器 8、列表 6、预览 2、dry-run 4、编辑页 4）全 PASS，全套 vitest 81/81；RULE-12 上游差异记录与 verify-license 一致。Gate F 评审通过（PASS），阶段 F 12/12 完成，施工前沿推进至阶段 G `CAP-01`。
 - 阶段 G 收口：CAP-01..14 在 `ac0ff92` 源码重验（`8a24a85`）——storageverify/capacitysnapshot/capacityprojection/capacityreconciler/placement/reservation/candidatefilter/availability/amountleft/taskbinding/terminalrelease/authoritativeremoval/finalrecheck/g2oracle 包测试全 PASS；CAP-01/02/04/08 的 live qB 只读证据引用保持不变。Gate G 评审通过（PASS），阶段 G 14/14 完成；G2 Gate（容量与恢复故障验证）属于阶段 0B 实验室执行范围，随 REL-02 进行。施工前沿推进至阶段 H `ADD-01`。
 - 阶段 H 收口：ADD-01..14 在 `ac0ff92` 源码重验（`f295c0c`）——racejob/attemptstate/submitintent/syncwaiter/dispatchworker/dispatchflow/dispatchcommit/identitymatcher/firstconfirm/alreadypresent/unknownreconciler/expiredunknown/saferetry/startuprecover/addfaultmatrix 包测试全 PASS；ADD-05/06/07/13/14 的三 Profile lab 战役证据与外部 kill -9 崩溃模拟证据引用保持不变。Gate H 评审通过（PASS），阶段 H 14/14 完成，施工前沿推进至阶段 I `API-01`。
+- 阶段 I 收口：API-01..12 在 `ac0ff92` 源码重验（`d8537fc`）——httpapi/adminauth/resourcesapi/apiidempotency/apipaging/domainevents/sseserver/realtimecards 包测试与 codegen -check 全 PASS；API-07 异步命令的实现在 resourcesapi 命令端点（`internal/commands` 为空目录，git 不跟踪）。Gate I 评审通过（PASS），阶段 I 12/12 完成，施工前沿推进至阶段 J `UI-11`。
 
 > 总数由本表的 149 个正式实施项计算。若施工手册新增、删除或改名实施项，必须同 PR 更新本表并由合同检查验证集合一致。
 
@@ -276,18 +277,18 @@ Gate A–H 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 1
 
 | ID | 内容 | Depends on | Status | Owner | PR/Merge | Evidence |
 |---|---|---|---|---|---|---|
-| `API-01` | HTTP 基础中间件 | BOOT-06, CTR-01,03 | IN_PROGRESS | Codex | local-only | `docs/evidence/api-01/http-middleware-check.json` / sha256:80ba62f623ffd635aa920c6bf8d684b0d106770f7bef2fab0528d5b77a892ec3 |
-| `API-02` | 单管理员认证 | API-01, DB-09 | IN_PROGRESS | Codex | local-only | `docs/evidence/api-02/admin-auth-check.json` / sha256:8e2b8be8c7a9557de4f563cdf70ccc2f22ac277ffc90cc629031a54fa47042ac |
-| `API-03` | Web 防护 | API-01,02 | IN_PROGRESS | Codex | local-only | `docs/evidence/api-03/web-protection-check.json` / sha256:4dbdfa6e64364f41b0b2d0ea387193debe73f3d76f7b8fbe4f5ff383a45a68a5 |
-| `API-04` | 资源 API | API-01..03, QUI-10, RSS-01, RULE-04, ADD-11, HIS-01, STAT-04 | IN_PROGRESS | Codex | local-only | `docs/evidence/api-04/resources-api-check.json` / sha256:dcfdd06d59ef25537eb72207ef6e007e69cf43e1fbe99d4ac801d70014c7d0e3 |
-| `API-05` | Revision 与 cursor | API-04, DB-09 | IN_PROGRESS | Codex | local-only | `docs/evidence/api-05/paging-revision-check.json` / sha256:704557ff549804738cbe6f18e5caaa2e85e6d5794fdba710cc444668f3413306 |
-| `API-06` | POST 幂等 | API-04, DB-07,09 | IN_PROGRESS | Codex | local-only | `docs/evidence/api-06/idempotency-check.json` / sha256:211f9f8af513ed9b88e9e0557ea4d7ddc38f05ae7182340f9da82e0e47d3047d |
-| `API-07` | 异步命令 | API-04,06, DB-07 | IN_PROGRESS | Codex | local-only | `docs/evidence/api-06/idempotency-check.json` / sha256:211f9f8af513ed9b88e9e0557ea4d7ddc38f05ae7182340f9da82e0e47d3047d |
-| `API-08` | 领域事件原子写入 | DB-07,09, CTR-04 | IN_PROGRESS | Codex | local-only | `docs/evidence/api-08/domain-events-check.json` / sha256:1c510a55f4b8cd4df0409b7a71917b47d4bf1129b5d8adcb66febd5b386061b9 |
-| `API-09` | SSE 服务 | API-08, CTR-04 | IN_PROGRESS | Codex | local-only | `docs/evidence/api-09/sse-server-check.json` / sha256:b7703cc3ed0bd3e198a8873b229d930941632bc81dd637b4fc214a72fa729e61 |
-| `API-10` | 实时瞬时数据 | API-09, STAT-05 | IN_PROGRESS | Codex | local-only | `docs/evidence/api-10/realtime-cards-check.json` / sha256:cbfd77f2c8941dcedc734bbf4d518863ca1d42315e9b85b0b9f7688fe2867498 |
-| `API-11` | Data quality API | API-04, QUI-10, CAP-07 | IN_PROGRESS | Codex | local-only | `docs/evidence/api-11/data-quality-check.json` / sha256:78696350fa5b57629a38fe098f68264ae2234dc4388b7dd03c57c083fc2e6cf0 |
-| `API-12` | 生成 TS Client | CTR-06, API-04..11 | IN_PROGRESS | Codex | local-only | `docs/evidence/api-12/ts-client-check.json` / sha256:2d1de2d02183f3a9355f607a0362c7688f94c2232ce281e3eadfa3b654d5df4c |
+| `API-01` | HTTP 基础中间件 | BOOT-06, CTR-01,03 | DONE | Codex | `d8537fc` | `docs/evidence/api-01/http-middleware-check.json` / sha256:bcbdb1deadf277af699ca8bfbca46d87893b7fa8b1b6916bde51c8c2b93d6f88 |
+| `API-02` | 单管理员认证 | API-01, DB-09 | DONE | Codex | `d8537fc` | `docs/evidence/api-02/admin-auth-check.json` / sha256:0d40d981b5642c2f60a30c9f481ab27d14ca406971c82627bd75a74a7202334a |
+| `API-03` | Web 防护 | API-01,02 | DONE | Codex | `d8537fc` | `docs/evidence/api-03/web-protection-check.json` / sha256:b4025efd8595253f86c6567c45b20051d532e749e6d063cd6b5d4b021123feb0 |
+| `API-04` | 资源 API | API-01..03, QUI-10, RSS-01, RULE-04, ADD-11, HIS-01, STAT-04 | DONE | Codex | `d8537fc` | `docs/evidence/api-04/resources-api-check.json` / sha256:9e3139aad5f2ce55f2d54f5b090f06366930a22c68bc6a1ac1201e234a8ad12b |
+| `API-05` | Revision 与 cursor | API-04, DB-09 | DONE | Codex | `d8537fc` | `docs/evidence/api-05/paging-revision-check.json` / sha256:c05d31b2b0cb833f988f05f12c0e214be4ca5a54877fa79d57e6c067ce6549bf |
+| `API-06` | POST 幂等 | API-04, DB-07,09 | DONE | Codex | `d8537fc` | `docs/evidence/api-06/idempotency-check.json` / sha256:49409e88d88cf359454903b4d096b6e2cd38694667f379a0ecfbdd68b710df9b |
+| `API-07` | 异步命令 | API-04,06, DB-07 | DONE | Codex | `d8537fc` | `docs/evidence/api-06/idempotency-check.json` / sha256:49409e88d88cf359454903b4d096b6e2cd38694667f379a0ecfbdd68b710df9b |
+| `API-08` | 领域事件原子写入 | DB-07,09, CTR-04 | DONE | Codex | `d8537fc` | `docs/evidence/api-08/domain-events-check.json` / sha256:83e081efccc074f96462f4f9ddd0285e516112ac832a4e11f2c4f46d64f8e935 |
+| `API-09` | SSE 服务 | API-08, CTR-04 | DONE | Codex | `d8537fc` | `docs/evidence/api-09/sse-server-check.json` / sha256:88e60884cd93209d2f159e53906cca2d0f14f70b7b005ef39b46fd4e4a2ddb46 |
+| `API-10` | 实时瞬时数据 | API-09, STAT-05 | DONE | Codex | `d8537fc` | `docs/evidence/api-10/realtime-cards-check.json` / sha256:33461b6b5b8c9a163c983d8b6f7147f4c5468cac80d25054a5c9e8e3e3da90a4 |
+| `API-11` | Data quality API | API-04, QUI-10, CAP-07 | DONE | Codex | `d8537fc` | `docs/evidence/api-11/data-quality-check.json` / sha256:72e33496d3ac96f8f84a3905635a28b4a26423a3beaba540600c1e519bd622cd |
+| `API-12` | 生成 TS Client | CTR-06, API-04..11 | DONE | Codex | `d8537fc` | `docs/evidence/api-12/ts-client-check.json` / sha256:85b13637dfbef1a078826107db1d524f8d31859255f22577bbb47d1b4bc23ceb |
 
 ### J. 首版前端页面
 
@@ -367,7 +368,7 @@ Gate A–H 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 1
 | Gate F | PASS | 简单/高级规则、dry-run、许可追踪 | `cff31ec` | Codex（记录人；仓库所有者复核待 owner 确认） | 2026-09-05 逐项核验：三值 Evaluator（UNKNOWN 永不匹配、fail closed）与多规则确定性聚合包测试 PASS；RuleVersion 不可变与 dry-run API PASS；前端 qui-style 编辑器（简单/高级模式、字段适配）24 项组件测试 PASS；上游差异记录经 verify-license 与 UPSTREAM_LOCK 校验 PASS |
 | Gate G | PASS | 并发容量、Reflection、G2 oracle | `8a24a85` | Codex（记录人；仓库所有者复核待 owner 确认） | 2026-09-05 逐项核验：Reservation 并发事务（live Identity ReserveAtomic→AlreadyPresent 既有证据 + 包测试）、容量 epoch/owner 正反例、CandidateFilter/AVAILABLE fail-closed 真值表、终态 Reflection 释放与权威删除、capacity reconciler 与 G2 oracle 工具全部 PASS；Profile 未 VERIFIED 时 Placement 拒绝（dispatchorchestrator 测试） |
 | Gate H | PASS | Add/UNKNOWN/首次绑定/恢复故障矩阵 | `f295c0c` | Codex（记录人；仓库所有者复核待 owner 确认） | 2026-09-05 逐项核验：ResponseAdapter 分支无法单独产生 HASH_SEEN、durable marker 先行与崩溃后 UNKNOWN 提升禁重放（dispatchcommit/dispatchflow/startuprecover 测试，含对自身子进程的 kill -9 崩溃模拟）、Identity 首次确认原子事务无零负债窗口、UNKNOWN/EXPIRED_UNKNOWN 全路径保留或安全释放 Reservation（unknownreconciler/expiredunknown 测试）、P0 故障用例三连跑同终态（09-02 clean-commit 战役 3×3 全 PASS，activation bindings 归档） |
-| Gate I | PENDING | OpenAPI、幂等、SSE 与安全 | — | — | — |
+| Gate I | PASS | OpenAPI、幂等、SSE 与安全 | `d8537fc` | Codex（记录人；仓库所有者复核待 owner 确认） | 2026-09-05 逐项核验：C1-OPENAPI 合同校验 PASS、无手写重复枚举、生成 diff 为空；幂等键复用与 If-Match revision 冲突负测 PASS（apiidempotency/apipaging）；单管理员认证、CSRF/安全头部与未认证 401 边界 PASS（adminauth/httpapi，含容器边界证据）；SSE Last-Event-ID 重放与 reset_required、心跳不占事件 ID PASS（sseserver）；领域事件与命令同事务原子写入 PASS（domainevents） |
 | Gate J | PENDING | Dashboard/RSS/Rules/History 用户闭环 | — | — | — |
 | Gate K | PENDING | 历史、删除事实、统计口径、诊断 | — | — | — |
 | Gate L | PENDING | 安全、性能、备份、升级与镜像 | — | — | — |
@@ -501,3 +502,4 @@ Gate A–H 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 1
 | 2026-09-05 | RULE-01..12 在当前源码重验并刷新证据（`cff31ec`），阶段 F 12/12 收口 DONE，Gate F 评审 PASS，总览推进至 65/149 | Codex |
 | 2026-09-05 | CAP-01..14 在当前源码重验并刷新证据（`8a24a85`），阶段 G 14/14 收口 DONE，Gate G 评审 PASS（G2 Gate 随 REL-02），总览推进至 79/149 | Codex |
 | 2026-09-05 | ADD-01..14 在当前源码重验并刷新证据（`f295c0c`），阶段 H 14/14 收口 DONE，Gate H 评审 PASS，总览推进至 93/149 | Codex |
+| 2026-09-05 | API-01..12 在当前源码重验并刷新证据（`d8537fc`），阶段 I 12/12 收口 DONE，Gate I 评审 PASS，总览推进至 105/149 | Codex |
