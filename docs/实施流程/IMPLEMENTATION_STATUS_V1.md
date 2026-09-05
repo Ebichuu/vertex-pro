@@ -53,7 +53,7 @@ PENDING -> IN_PROGRESS -> IN_REVIEW -> DONE
 | 阶段 | 范围 | 代码状态 | Gate | Gate 状态 |
 |---|---|---|---|---|
 | A | 仓库与骨架 | `9/9 DONE` | Gate A | `PASS` |
-| B | 合同与生成 | `0/8 DONE; 8 IN_PROGRESS` | Gate B | `PENDING` |
+| B | 合同与生成 | `8/8 DONE` | Gate B | `PASS` |
 | C | SQLite 与事务 | `0/11 DONE; 11 IN_PROGRESS` | Gate C | `PENDING` |
 | D | qui、Profile、Sync | `0/12 DONE; 12 IN_PROGRESS` | Gate D / G1 基础 | `PENDING` |
 | E | RSS、Torrent、并行准备 | `0/13 DONE; 13 IN_PROGRESS` | Gate E | `PENDING` |
@@ -66,8 +66,8 @@ PENDING -> IN_PROGRESS -> IN_REVIEW -> DONE
 | L | 加固与运维 | `0/12 DONE; 12 PENDING` | Gate L | `PENDING` |
 | M | RC 与冻结 | `0/7 DONE; 7 PENDING` | Gate M / G3 | `PENDING` |
 
-总体状态：`9/149 DONE`；`112 IN_PROGRESS`；`28 PENDING`。
-Gate A 已于 2026-09-05 评审通过（全部 9 项 DONE，证据见 Gate 记录）；正式施工项推进至阶段 B `CTR-01`；功能开发触达：阶段 J `UI-10`（local-only）。
+总体状态：`17/149 DONE`；`104 IN_PROGRESS`；`28 PENDING`。
+Gate A、Gate B 已于 2026-09-05 评审通过（阶段 A 9/9、阶段 B 8/8）；正式施工项推进至阶段 C `DB-01`；功能开发触达：阶段 J `UI-10`（local-only）。
 
 ### 2026-08-30 状态校准
 
@@ -124,6 +124,7 @@ Gate A 已于 2026-09-05 评审通过（全部 9 项 DONE，证据见 Gate 记�
 - 权威文档（状态表、施工手册、RC8）已加入项目性质与术语锚点（`bac042f`），不改变任何技术语义。
 - BOOT-08 收口：新增 `tools/sbom`（`debug/buildinfo` 读取发布二进制模块清单 + 前端声明依赖 + 基础镜像，内容确定性输出，含测试）与 `make sbom` 目标，SBOM 归档于 `docs/evidence/boot-08/sbom.json`；compose 实验室全链路重验 PASS（config parse、build、up、HTTP 边界 200/401、down 清理）。BOOT-08 转 DONE（`5ca8c09`），阶段 A 9/9 完成。
 - Gate A 评审通过（PASS，见第 4 节 Gate 记录）：逐项核验可重建骨架、工具链锁定、许可证、单镜像与容器加固。备注：distroless 基础镜像当前为 tag 引用，冻结前建议改为 digest 引用（不阻塞 Gate A，纳入 HARD-12 发布镜像范围）。
+- 阶段 B 收口：CTR-01..08 全部在 `ac0ff92` 源码重验（`2f64190`）——contractcheck 11 项 C1 检查全 PASS（报告 sha256:253219a4…，`eligible_for_g3=false` 保持不伪 PASS）、generate-check diff 为空、前端 81/81、用户状态映射与 MSW 合同测试全过；ctr-06 记录的两条 Windows 环境阻塞（链接器 panic、make 缺失）已消除，各证据中的过时边界说明一并修正。Gate B 评审通过（PASS），阶段 B 8/8 完成，施工前沿推进至阶段 C `DB-01`。
 
 > 总数由本表的 149 个正式实施项计算。若施工手册新增、删除或改名实施项，必须同 PR 更新本表并由合同检查验证集合一致。
 
@@ -149,14 +150,14 @@ Gate A 已于 2026-09-05 评审通过（全部 9 项 DONE，证据见 Gate 记�
 
 | ID | 内容 | Depends on | Status | Owner | PR/Merge | Evidence |
 |---|---|---|---|---|---|---|
-| `CTR-01` | OpenAPI 3.1 基础 | BOOT-05,06 | IN_PROGRESS | Codex | local-only | `docs/evidence/ctr-01/openapi-check.json` / sha256:4f9d2048f060a79fe070435763fc129fb6297c278417a3566c80cd77fd8ebfc7 |
-| `CTR-02` | 状态枚举清单 | BOOT-05 | IN_PROGRESS | Codex | local-only | `docs/evidence/ctr-02/state-enums-check.json` / sha256:1bdf29824286dd72828a8657050ca3ffb1e6e11b99cbd567e0ece9a03729028e |
-| `CTR-03` | 错误码清单 | CTR-01 | IN_PROGRESS | Codex | local-only | `docs/evidence/ctr-03/error-codes-check.json` / sha256:a4725d5402f71b2e503aeec6066721e23bb7cf4ab758281c94a82fc275c8959e |
-| `CTR-04` | 事件类型清单 | CTR-01,02 | IN_PROGRESS | Codex | local-only | `docs/evidence/ctr-04/event-types-check.json` / sha256:016e231696b962f3b70f9cbc028b3255c9ac6d0bdf363c13c9c0888c120d72df |
-| `CTR-05` | 用户状态映射 | CTR-02 | IN_PROGRESS | Codex | local-only | `docs/evidence/ctr-05/user-status-mapping-check.json` / sha256:a7b6e4c7d65d9773c5be774fc26bcf5ff2c51e33613eb8a8d8fd47764934ec85 |
-| `CTR-06` | Go/TS 代码生成 | CTR-01..05, BOOT-07 | IN_PROGRESS | Codex | local-only | `docs/evidence/ctr-06/codegen-check.json` / sha256:3ad271c683c63c385430532f3e3a4f42583f48bc50fc58985151137647c690c1 |
-| `CTR-07` | C1 工具骨架 | CTR-01..06 | IN_PROGRESS | Codex | local-only | `docs/evidence/ctr-07/c1-check.json` / sha256:7bee9d984f78bfccfbaa93678bbe5afad544abd63022ef4a6148e63cbc0b27cd |
-| `CTR-08` | Mock API 与 MSW | CTR-01,06, BOOT-07 | IN_PROGRESS | Codex | local-only | `docs/evidence/ctr-08/msw-check.json` / sha256:acbb0cd4241ada659ff351d38a6ce4e041ec7137f676e4777272d3c2d474dcbf |
+| `CTR-01` | OpenAPI 3.1 基础 | BOOT-05,06 | DONE | Codex | `2f64190` | `docs/evidence/ctr-01/openapi-check.json` / sha256:8de860b40ad3fddffe33e26884e4ec34ff13ec54c258520c020b1a0fd4166143 |
+| `CTR-02` | 状态枚举清单 | BOOT-05 | DONE | Codex | `2f64190` | `docs/evidence/ctr-02/state-enums-check.json` / sha256:1d2ef7d3135a7789c205dbf92c2972d486e43bdf8242c0ca0d2749874f3ed9b7 |
+| `CTR-03` | 错误码清单 | CTR-01 | DONE | Codex | `2f64190` | `docs/evidence/ctr-03/error-codes-check.json` / sha256:39b22c2a0a7adb366801ba893aa331de9e3dc9ffa869781df0eac15f0e369d0f |
+| `CTR-04` | 事件类型清单 | CTR-01,02 | DONE | Codex | `2f64190` | `docs/evidence/ctr-04/event-types-check.json` / sha256:78bcbd88bff12b0bff9ae1488734a503d92c8b28328219e25b2fec606f69a19c |
+| `CTR-05` | 用户状态映射 | CTR-02 | DONE | Codex | `2f64190` | `docs/evidence/ctr-05/user-status-mapping-check.json` / sha256:adb5ad636b97fc303e89af62e9d1ebe45715b40a302f1f597c855725a9609a8c |
+| `CTR-06` | Go/TS 代码生成 | CTR-01..05, BOOT-07 | DONE | Codex | `2f64190` | `docs/evidence/ctr-06/codegen-check.json` / sha256:49e2c3faafa2dad5bde766ca922803d86b851a40e16d00948465ea648c10efbb |
+| `CTR-07` | C1 工具骨架 | CTR-01..06 | DONE | Codex | `2f64190` | `docs/evidence/ctr-07/c1-check.json` / sha256:361e6bfc226ad17d50897654a5c30d7a5b1c9d5f03e134855feb9a150195f985 |
+| `CTR-08` | Mock API 与 MSW | CTR-01,06, BOOT-07 | DONE | Codex | `2f64190` | `docs/evidence/ctr-08/msw-check.json` / sha256:1c24e080ca98f3d9fee93e91334d9574cd0aa94b4562232b2c05fa5438f39b3a |
 
 ### C. SQLite、Migration 与事务基础
 
@@ -352,7 +353,7 @@ Gate A 已于 2026-09-05 评审通过（全部 9 项 DONE，证据见 Gate 记�
 | Gate | Status | Required evidence | Commit | Reviewer | Notes |
 |---|---|---|---|---|---|
 | Gate A | PASS | 可重建骨架、工具链、许可证、单镜像 | `5ca8c09` | Codex（记录人；仓库所有者复核待 owner 确认） | 2026-09-05 逐项核验：README 引导 `make bootstrap && make preflight && make build` 全链在当前源码 PASS（boot-05/07 证据）；容器 distroless 无 Node 运行时、nonroot、只读根文件系统（boot-08 runtime）；工具链 go1.26.3/node 24.14.0/pnpm 10.33.0 锁定，Dockerfile 固定基础镜像 tag（distroless 建议后续改 digest 引用）；`verify-license`/`verify-qui-lock` PASS；SBOM 由 `make sbom` 确定性生成 |
-| Gate B | PENDING | 合同源、生成链、C1 不伪 PASS | — | — | — |
+| Gate B | PASS | 合同源、生成链、C1 不伪 PASS | `2f64190` | Codex（记录人；仓库所有者复核待 owner 确认） | 2026-09-05 逐项核验：无手写重复枚举（C1-STATE-ENUMS PASS，枚举 source-derived）；API 示例过 schema 校验（C1-OPENAPI PASS）；生成后 Git diff 为空（generate-check PASS）；C1 全部 11 项 PASS 且 `eligible_for_g3=false` 不伪 PASS（CTR-07 证据，报告 sha256:253219a4…） |
 | Gate C | PENDING | fresh/upgrade schema、触发器和事务负测 | — | — | — |
 | Gate D | PENDING | 三 Profile fixture 确定性 Sync；未验证 fail closed | — | — | — |
 | Gate E | PENDING | RSS/Identity/并行准备乱序与恢复 | — | — | — |
@@ -486,3 +487,4 @@ Gate A 已于 2026-09-05 评审通过（全部 9 项 DONE，证据见 Gate 记�
 | 2026-09-05 | 新增 `internal/metrics` 计数器注册表作为 OBS-02 地基，OBS-02 转 IN_PROGRESS（`a6ab72c`） | Codex |
 | 2026-09-05 | 新增 `tools/sbom` 与 `make sbom` 确定性 SBOM 生成，compose 实验室全链路重验 PASS，BOOT-08 收口 DONE（`5ca8c09`） | Codex |
 | 2026-09-05 | Gate A 评审 PASS（阶段 A 9/9 DONE），总览推进至 9/149 | Codex |
+| 2026-09-05 | CTR-01..08 在当前源码重验并刷新证据（`2f64190`），阶段 B 8/8 收口 DONE，Gate B 评审 PASS，总览推进至 17/149 | Codex |
