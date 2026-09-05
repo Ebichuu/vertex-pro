@@ -30,7 +30,8 @@ try {
         'lint' = { & go vet ./... }
         'test-unit' = {
             & go test ./... -count=1
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            # exit would terminate the whole preflight before evidence is written
+            if ($LASTEXITCODE -ne 0) { return }
             & pnpm --dir web test
         }
         'test-contracts' = { & go run ./tools/contractcheck }
