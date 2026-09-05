@@ -57,7 +57,7 @@ PENDING -> IN_PROGRESS -> IN_REVIEW -> DONE
 | C | SQLite 与事务 | `11/11 DONE` | Gate C | `PASS` |
 | D | qui、Profile、Sync | `12/12 DONE` | Gate D / G1 基础 | `PASS`（G1 Gate 评审另行进行） |
 | E | RSS、Torrent、并行准备 | `13/13 DONE` | Gate E | `PASS` |
-| F | 规则与 Query Builder | `0/12 DONE; 12 IN_PROGRESS` | Gate F | `PENDING` |
+| F | 规则与 Query Builder | `12/12 DONE` | Gate F | `PASS` |
 | G | Placement 与容量 | `0/14 DONE; 14 IN_PROGRESS` | Gate G / G2 基础 | `PENDING` |
 | H | Add、确认与恢复 | `0/14 DONE; 14 IN_PROGRESS` | Gate H | `PENDING` |
 | I | API、认证与 SSE | `0/12 DONE; 12 IN_PROGRESS` | Gate I | `PENDING` |
@@ -66,8 +66,8 @@ PENDING -> IN_PROGRESS -> IN_REVIEW -> DONE
 | L | 加固与运维 | `0/12 DONE; 12 PENDING` | Gate L | `PENDING` |
 | M | RC 与冻结 | `0/7 DONE; 7 PENDING` | Gate M / G3 | `PENDING` |
 
-总体状态：`53/149 DONE`；`68 IN_PROGRESS`；`28 PENDING`。
-Gate A–E 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 12/12、E 13/13）；正式施工项推进至阶段 F `RULE-01`；功能开发触达：阶段 J `UI-10`（local-only）。
+总体状态：`65/149 DONE`；`56 IN_PROGRESS`；`28 PENDING`。
+Gate A–F 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 12/12、E 13/13、F 12/12）；正式施工项推进至阶段 G `CAP-01`；功能开发触达：阶段 J `UI-10`（local-only）。
 
 ### 2026-08-30 状态校准
 
@@ -129,6 +129,7 @@ Gate A–E 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 1
 - 阶段 D 收口：QUI-01..11 在 `ac0ff92` 源码重验（`bc177b6`）——secrets、qui/control、qui/proxy、qbprofile、qbadd、qbresponse、syncmerge、snapshot、syncwatcher、quihealth、quprobe 包测试全 PASS，各证据文件补充当日重验记录；QUI-12 行内“publish controls open”为 2026-09-02 时点备注，此后 harness 固化为 pinned 镜像、clean-commit P0×3 战役全 PASS、9 条 VERIFIED runs 与三份 activation bindings 已归档（campaign manifest sha256:cc96c39d… 补入行证据），该开口就此闭合，QUI-12 转 DONE。注意：各 G1 历史证据文件内部的瞬时 status 字段记录的是其生成时点状态，以 campaign 汇总与本表为准。
 - Gate D 评审通过（PASS，见第 4 节 Gate 记录）：三 Profile fixture 确定性 Sync 与未验证 fail closed 两条判据均有当前证据支撑。G1 Gate 的正式评审与生产运行时的 Profile 激活消费另行进行（对应 REL-01 及用户卡点清单第 3 项），不阻塞 Gate D。施工前沿推进至阶段 E `RSS-01`。
 - 阶段 E 收口：RSS-01..06、TOR-01..04、RACE-01..03 共 13 项在 `ac0ff92` 源码重验（`bb64fe4`）——rssservice/rssfetch/rsscheduler/rssbaseline/rsssource/rsspreview/torrentdownload/torrentparse/torrentidentity/torrentlink/racejobstore/raceprep/racegate 包测试全 PASS；RACE-02 的 supervisor 实现位于 `internal/raceprep`（`internal/race` 为空目录，git 不跟踪）。Gate E 评审通过（PASS），阶段 E 13/13 完成，施工前沿推进至阶段 F `RULE-01`。
+- 阶段 F 收口：RULE-01..12 在 `ac0ff92` 源码重验（`cff31ec`）——rules/ruleversion/ruleaggregate/ruledryrun/ruleservice 包测试与前端 24 项规则组件测试（编辑器 8、列表 6、预览 2、dry-run 4、编辑页 4）全 PASS，全套 vitest 81/81；RULE-12 上游差异记录与 verify-license 一致。Gate F 评审通过（PASS），阶段 F 12/12 完成，施工前沿推进至阶段 G `CAP-01`。
 
 > 总数由本表的 149 个正式实施项计算。若施工手册新增、删除或改名实施项，必须同 PR 更新本表并由合同检查验证集合一致。
 
@@ -218,18 +219,18 @@ Gate A–E 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 1
 
 | ID | 内容 | Depends on | Status | Owner | PR/Merge | Evidence |
 |---|---|---|---|---|---|---|
-| `RULE-01` | 条件 AST | CTR-01,02 | IN_PROGRESS | Codex | local-only | `docs/evidence/rule-01/condition-ast-check.json` / sha256:6abe244743ddc582ec644b469a35b85612e4b2d8e1c38b60e234d6bdea8c4866 |
-| `RULE-02` | 字段与运算符目录 | RULE-01 | IN_PROGRESS | Codex | local-only | `docs/evidence/rule-02/field-operator-catalog-check.json` / sha256:80a98a712bffef5b3bf0241fd3fd22845c354bd6dcdf3a167e925a2dba0bb039 |
-| `RULE-03` | 三值 Evaluator | RULE-01,02 | IN_PROGRESS | Codex | local-only | `docs/evidence/rule-03/evaluator-check.json` / sha256:3b405e237bf62b1fe8637bd252bd9de71a6c81c2c7e382cc4edd5f937e293a21 |
-| `RULE-04` | RuleVersion | RULE-01, DB-03 | IN_PROGRESS | Codex | local-only | `docs/evidence/rule-04/rule-version-check.json` / sha256:191763b4c85b0981b2a22d5ef3ee8ab4288fcc5743e677a7d69c30834449713b |
-| `RULE-05` | 多规则聚合 | RULE-03,04 | IN_PROGRESS | Codex | local-only | `docs/evidence/rule-05/multi-rule-aggregation-check.json` / sha256:6c39106a8788b6c16dcf6e94eeeb1dd7dfbbb28b625c2f5c53216512c65f68c3 |
-| `RULE-06` | Dry-run API | RULE-03,05, CTR-01 | IN_PROGRESS | Codex | local-only | `docs/evidence/rule-06/dry-run-check.json` / sha256:74fe8b53555641e7e1b8b645f8687bd882e3838880b023e46f32d7b00dff3192 |
-| `RULE-07` | 导入 qui 组件 | BOOT-04,07 | IN_PROGRESS | Codex | local-only | `docs/evidence/rule-07/qui-query-builder-import-check.json` / sha256:bb027d2b2b60725c05d0ce69f7c86cbe5f68cb995666b222deba09327c7a13e6 |
-| `RULE-08` | Vertex 字段适配 | RULE-02,07 | IN_PROGRESS | Codex | local-only | `docs/evidence/rule-08/vertex-field-adapter-check.json` / sha256:404404acd4810538efda2952e0984a01f3aaaf54f3c791e39f99dfa988db4468 |
-| `RULE-09` | 简单/高级模式 | RULE-01,08 | IN_PROGRESS | Codex | local-only | `docs/evidence/rule-09/simple-advanced-mode-check.json` / sha256:2d3e37521070b10f1e3a5f2b1b009a06650877438759cc055980acecb0afb082 |
-| `RULE-10` | 排序、启停与复制 | RULE-04,08 | IN_PROGRESS | Codex | local-only | `docs/evidence/rule-10/rule-order-toggle-duplicate-check.json` / sha256:3361e45f914ad94d908d64d230edbe8f1867cd802d1697b17db94927c131377b |
-| `RULE-11` | 聚合预览 UI | RULE-05,06,08 | IN_PROGRESS | Codex | local-only | `docs/evidence/rule-11/aggregation-preview-check.json` / sha256:531eda37f13095628fa5314bfb37954a43a1fbbb38d2478f698192acc644ac44 |
-| `RULE-12` | 上游差异记录 | RULE-07..11, BOOT-03 | IN_PROGRESS | Codex | local-only | `docs/evidence/rule-12/upstream-diff-check.json` / sha256:060df30420ab73bede78f95df7ab1762ad3554e8a5a52de10a02dfd4b3abc989 |
+| `RULE-01` | 条件 AST | CTR-01,02 | DONE | Codex | `cff31ec` | `docs/evidence/rule-01/condition-ast-check.json` / sha256:588438aee8a663e66ba871b6c4dba459a58f345436e1133ba241ce8df4524645 |
+| `RULE-02` | 字段与运算符目录 | RULE-01 | DONE | Codex | `cff31ec` | `docs/evidence/rule-02/field-operator-catalog-check.json` / sha256:b1e0301c5396f2c2d50aab8710c4d2a13fa9669f4653671d1f585449af78ab49 |
+| `RULE-03` | 三值 Evaluator | RULE-01,02 | DONE | Codex | `cff31ec` | `docs/evidence/rule-03/evaluator-check.json` / sha256:09891288c011376b5dbc983ec2f5671f6b398d17d91540ef2196dd66b3c47a8a |
+| `RULE-04` | RuleVersion | RULE-01, DB-03 | DONE | Codex | `cff31ec` | `docs/evidence/rule-04/rule-version-check.json` / sha256:95838d5c0a55bd35f80063ac4289b69857b56e4b776738ab81617c2374d3f8e1 |
+| `RULE-05` | 多规则聚合 | RULE-03,04 | DONE | Codex | `cff31ec` | `docs/evidence/rule-05/multi-rule-aggregation-check.json` / sha256:4dc2ca5583bf51826f71d148e74f611c00ea05a365db7aa869931780f189b774 |
+| `RULE-06` | Dry-run API | RULE-03,05, CTR-01 | DONE | Codex | `cff31ec` | `docs/evidence/rule-06/dry-run-check.json` / sha256:7d73913e212f4e7bc15bd5f630e167bf25fcea6c4080e9d7e937309e994b9199 |
+| `RULE-07` | 导入 qui 组件 | BOOT-04,07 | DONE | Codex | `cff31ec` | `docs/evidence/rule-07/qui-query-builder-import-check.json` / sha256:f961b649b604bcb89423929ad2077ea5d96f02c28f1bfb1d8815fd8ac07e6841 |
+| `RULE-08` | Vertex 字段适配 | RULE-02,07 | DONE | Codex | `cff31ec` | `docs/evidence/rule-08/vertex-field-adapter-check.json` / sha256:20c42a442f13c4415874aa1e47a89218d3e3c1598b11acbda734a15dc09037be |
+| `RULE-09` | 简单/高级模式 | RULE-01,08 | DONE | Codex | `cff31ec` | `docs/evidence/rule-09/simple-advanced-mode-check.json` / sha256:2ae3b045ae8d1bfbfa87f7c24af40358143505f032f7561b8db279754e2826a3 |
+| `RULE-10` | 排序、启停与复制 | RULE-04,08 | DONE | Codex | `cff31ec` | `docs/evidence/rule-10/rule-order-toggle-duplicate-check.json` / sha256:54fa62e53605826161cc6af2b36e4a48540cd11b4508aa7d91bbd71d7f99b7b4 |
+| `RULE-11` | 聚合预览 UI | RULE-05,06,08 | DONE | Codex | `cff31ec` | `docs/evidence/rule-11/aggregation-preview-check.json` / sha256:f401fe00c97bb1bb5659a7f372a3a962149d7a4c0c66fbee25be0e3503c3114d |
+| `RULE-12` | 上游差异记录 | RULE-07..11, BOOT-03 | DONE | Codex | `cff31ec` | `docs/evidence/rule-12/upstream-diff-check.json` / sha256:edeb25ee7c0fab427396b57e528880f8a2116cfe7c116ad2c886e61eef67533d |
 
 ### G. Placement 与容量账本
 
@@ -361,7 +362,7 @@ Gate A–E 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 1
 | Gate C | PASS | fresh/upgrade schema、触发器和事务负测 | `e239cf9` | Codex（记录人；仓库所有者复核待 owner 确认） | 2026-09-05 逐项核验：C1 六项（SCHEMA-FRESH/UPGRADE、FOREIGN-KEYS、ATTEMPT-IMMUTABLE、SUBMIT-INTENT-ONE-TO-ONE、RESERVATION-OWNER）真实实现全 PASS（报告 run 20260905T130000Z，sha256:36d1ef99…）；internal/db 负测覆盖迁移中途失败回滚、checksum 不符、跨表漂移与不可变更新拒绝、循环外键插入顺序、启动一致性 fail-closed、升级失败保留原库与备份恢复 |
 | Gate D | PASS | 三 Profile fixture 确定性 Sync；未验证 fail closed | `bc177b6` | Codex（记录人；仓库所有者复核待 owner 确认） | 2026-09-05 逐项核验：三 Profile 12 份金色 fixture 已归档且逐文件 SHA-256 校验（qui-12/fixtures），SyncWatcher/syncmerge 对 fixture 确定性重建全 PASS（含 live qB 5.0.4 与三 Profile lab 战役）；业务代码 fail closed——quihealth 判定真值表测试、Profile 非 VERIFIED 时 dispatchorchestrator 拒绝派发（0 网络调用）、生产写操作默认关闭 |
 | Gate E | PASS | RSS/Identity/并行准备乱序与恢复 | `bb64fe4` | Codex（记录人；仓库所有者复核待 owner 确认） | 2026-09-05 逐项核验：rsscheduler jitter/退避/停用/重启恢复（FakeClock 确定性）、rsssource 同站重复与字段变化去重、rssbaseline 首轮不竞速、raceprep 并行准备 supervisor 并发与取消、torrentparse 安全解析与大小上限、racegate 聚合门槛与 racejobstore 重启存续全部 PASS；schedulercycle 端到端测试覆盖乱序容忍与重复轮询去重（internal/app） |
-| Gate F | PENDING | 简单/高级规则、dry-run、许可追踪 | — | — | — |
+| Gate F | PASS | 简单/高级规则、dry-run、许可追踪 | `cff31ec` | Codex（记录人；仓库所有者复核待 owner 确认） | 2026-09-05 逐项核验：三值 Evaluator（UNKNOWN 永不匹配、fail closed）与多规则确定性聚合包测试 PASS；RuleVersion 不可变与 dry-run API PASS；前端 qui-style 编辑器（简单/高级模式、字段适配）24 项组件测试 PASS；上游差异记录经 verify-license 与 UPSTREAM_LOCK 校验 PASS |
 | Gate G | PENDING | 并发容量、Reflection、G2 oracle | — | — | — |
 | Gate H | PENDING | Add/UNKNOWN/首次绑定/恢复故障矩阵 | — | — | — |
 | Gate I | PENDING | OpenAPI、幂等、SSE 与安全 | — | — | — |
@@ -495,3 +496,4 @@ Gate A–E 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 1
 | 2026-09-05 | DB-01..11 在当前源码重验并刷新证据（`e239cf9`），阶段 C 11/11 收口 DONE，Gate C 评审 PASS，总览推进至 28/149 | Codex |
 | 2026-09-05 | QUI-01..11 在当前源码重验并刷新证据（`bc177b6`）；QUI-12 的 publish controls 开口经核实已由 P0×3 战役与 activation bindings 闭合，转 DONE；阶段 D 12/12 收口 DONE，Gate D 评审 PASS，总览推进至 40/149 | Codex |
 | 2026-09-05 | RSS/TOR/RACE 共 13 项在当前源码重验并刷新证据（`bb64fe4`），阶段 E 13/13 收口 DONE，Gate E 评审 PASS，总览推进至 53/149 | Codex |
+| 2026-09-05 | RULE-01..12 在当前源码重验并刷新证据（`cff31ec`），阶段 F 12/12 收口 DONE，Gate F 评审 PASS，总览推进至 65/149 | Codex |
