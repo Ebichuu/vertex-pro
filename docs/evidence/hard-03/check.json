@@ -1,0 +1,25 @@
+{
+  "item": "HARD-03",
+  "title": "API 安全",
+  "status": "PASS",
+  "branch": "main",
+  "source_commit": "PENDING_AT_WRITE",
+  "implementation": [
+    "auth: strong-password one-shot initialize, PBKDF2 hashing, login lockout after repeated failures, single fixed session, session expiry and logout",
+    "audit: adminauth now writes AUTH_INITIALIZED / AUTH_LOGIN_FAILED / AUTH_LOGIN_LOCKED / AUTH_LOGIN_LOCKED_DENIED / AUTH_LOGIN_SUCCEEDED / AUTH_LOGGED_OUT rows into system_events inside the same transaction as the state change (90-day audit retention, no credential material in messages)",
+    "headers: API responses carry Cache-Control no-store and Pragma no-cache in addition to CSP, nosniff, X-Frame-Options DENY, and Referrer-Policy",
+    "webembed: traversal negative tests pin that path traversal attempts never return 200 or file content"
+  ],
+  "checks": {
+    "auth_negatives": "PASS: initialize one-shot + strong password, login lockout, session expiry/logout, PBKDF2 format (adminauth suite)",
+    "audit_trail": "PASS: TestAuditTrailRecordsSecurityEvents - AUTH_INITIALIZED / AUTH_LOGIN_FAILED / AUTH_LOGIN_SUCCEEDED / AUTH_LOGGED_OUT rows recorded with no credential material in messages",
+    "csrf": "PASS: TestCSRFDoubleSubmitRequiredOnUnsafeMethods plus create-feed/site/update CSRF-before-database-write tests",
+    "origin_host": "PASS: TestHostValidationRejectsMaliciousHost and TestOriginValidationRejectsCrossSite",
+    "headers": "PASS: TestSecurityHeadersApplied extended with Cache-Control no-store and Pragma no-cache",
+    "session_cookie": "PASS: TestSessionCookieAttributesAreHardened (HttpOnly, Secure, SameSite=Strict, /api/v1 scope)",
+    "transport_hardening": "PASS: body limit, timeout, client-disconnect, recover-envelope, and error-contract middleware tests",
+    "path_traversal": "PASS: TestHandlerRejectsPathTraversal - encoded and plain traversal attempts never return 200 or file content",
+    "full_suite": "PASS: go test ./... twice on 2026-09-06, 100 packages ok, 0 failures"
+  },
+  "scope_note": "OWASP-style negative coverage spans the API surface served by resourcesapi/httpapi; SSRF and outbound boundary tests are HARD-04."
+}

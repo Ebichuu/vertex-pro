@@ -54,6 +54,19 @@ type queryable interface {
 	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
 }
 
+// auditRetention 是管理员安全事件的审计保留期（OBS-03 清理按 expires_at
+// 执行，90 天内不会被清除）。
+const auditRetention = 90 * 24 * time.Hour
+
+// audit 在 system_events 中登记管理员安全事件：与引发它的状态变更共用同一
+// 事务（审计与状态原子一致），消息不含凭据。审计行是补充观测，写入失败
+// 不回滚安全状态本身——安全判定由失败计数、锁定窗口与会话唯一性保证。
+func audit(ctx context.Context, q queryable, now time.Time, severity, code, message string) {
+	stamp := now.UTC()
+	_, _ = q.ExecContext(ctx, `INSERT INTO system_events(event_type, severity, code, safe_message, safe_data_json, occurred_at, expires_at) VALUES ('system.alert', ?, ?, ?, '{}', ?, ?)`,
+		severity, code, message, stamp.Format(time.RFC3339Nano), stamp.Add(auditRetention).Format(time.RFC3339Nano))
+}
+
 // Session 是签发给管理员的唯一活动会话；原始令牌只在签发时返回一次。
 type Session struct {
 	Token     string
@@ -100,7 +113,11 @@ func (s *Service) Initialize(ctx context.Context, password string) error {
 		if strings.TrimSpace(existing) != "" {
 			return ErrAlreadyInitialized
 		}
-		return setMetas(ctx, tx, map[string]string{metaPasswordHash: hash})
+		if err := setMetas(ctx, tx, map[string]string{metaPasswordHash: hash}); err != nil {
+			return err
+		}
+		audit(ctx, tx, time.Now().UTC(), "INFO", "AUTH_INITIALIZED", "admin credential initialized")
+		return nil
 	})
 }
 
@@ -124,6 +141,9 @@ func (s *Service) Login(ctx context.Context, password string, now time.Time, ses
 			return nil
 		}
 		if err := enforceLockout(ctx, tx, now); err != nil {
+			if errors.Is(err, ErrLocked) {
+				audit(ctx, tx, now, "WARNING", "AUTH_LOGIN_LOCKED_DENIED", "login attempt rejected during lockout window")
+			}
 			loginErr = err
 			return nil
 		}
@@ -131,6 +151,7 @@ func (s *Service) Login(ctx context.Context, password string, now time.Time, ses
 			if err := recordFailure(ctx, tx, now); err != nil {
 				return err
 			}
+			audit(ctx, tx, now, "WARNING", "AUTH_LOGIN_FAILED", "admin login failed")
 			loginErr = ErrInvalidCredentials
 			return nil
 		}
@@ -184,7 +205,11 @@ func (s *Service) Logout(ctx context.Context, token string) error {
 		if subtle.ConstantTimeCompare(sessionDigest(token), decodeDigest(stored)) != 1 {
 			return nil
 		}
-		return setMetas(ctx, tx, map[string]string{metaSessionToken: "", metaSessionExpires: ""})
+		if err := setMetas(ctx, tx, map[string]string{metaSessionToken: "", metaSessionExpires: ""}); err != nil {
+			return err
+		}
+		audit(ctx, tx, time.Now().UTC(), "INFO", "AUTH_LOGGED_OUT", "admin session cleared")
+		return nil
 	})
 }
 
@@ -222,7 +247,13 @@ func recordFailure(ctx context.Context, tx queryable, now time.Time) error {
 	if attempts >= maxFailedAttempts {
 		updates[metaLockoutUntil] = now.UTC().Add(lockoutDuration).Format(time.RFC3339)
 	}
-	return setMetas(ctx, tx, updates)
+	if err := setMetas(ctx, tx, updates); err != nil {
+		return err
+	}
+	if attempts >= maxFailedAttempts {
+		audit(ctx, tx, now, "WARNING", "AUTH_LOGIN_LOCKED", "lockout window started after repeated failures")
+	}
+	return nil
 }
 
 func resetFailuresAndIssueSession(ctx context.Context, tx queryable, now time.Time, ttl time.Duration, session *Session) error {
@@ -234,12 +265,16 @@ func resetFailuresAndIssueSession(ctx context.Context, tx queryable, now time.Ti
 	session.Token = token
 	session.ExpiresAt = now.UTC().Add(ttl)
 	tokenDigest := sessionDigest(token)
-	return setMetas(ctx, tx, map[string]string{
+	if err := setMetas(ctx, tx, map[string]string{
 		metaFailedAttempts: "0",
 		metaLockoutUntil:   "",
 		metaSessionToken:   base64.RawStdEncoding.EncodeToString(tokenDigest),
 		metaSessionExpires: session.ExpiresAt.Format(time.RFC3339),
-	})
+	}); err != nil {
+		return err
+	}
+	audit(ctx, tx, now, "INFO", "AUTH_LOGIN_SUCCEEDED", "admin session issued")
+	return nil
 }
 
 func getMeta(ctx context.Context, q queryable, key string) (string, error) {

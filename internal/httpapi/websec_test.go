@@ -167,4 +167,10 @@ func TestSecurityHeadersApplied(t *testing.T) {
 	if response.Header().Get("Referrer-Policy") != "no-referrer" {
 		t.Fatal("referrer policy missing")
 	}
+	if response.Header().Get("Cache-Control") != "no-store" {
+		t.Fatal("Cache-Control no-store missing")
+	}
+	if response.Header().Get("Pragma") != "no-cache" {
+		t.Fatal("Pragma no-cache missing")
+	}
 }

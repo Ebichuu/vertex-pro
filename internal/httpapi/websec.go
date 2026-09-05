@@ -111,6 +111,9 @@ func applySecurityHeaders(response http.ResponseWriter) {
 	header.Set("X-Content-Type-Options", "nosniff")
 	header.Set("Referrer-Policy", "no-referrer")
 	header.Set("X-Frame-Options", "DENY")
+	// API 响应携带会话相关数据，禁止任何层级的缓存（OWASP 安全响应头）。
+	header.Set("Cache-Control", "no-store")
+	header.Set("Pragma", "no-cache")
 }
 
 // NewSessionCookies 为已认证会话签发 cookie 对：HttpOnly 会话令牌与

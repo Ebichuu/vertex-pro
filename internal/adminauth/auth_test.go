@@ -188,3 +188,69 @@ func openMigrated(t *testing.T) *sql.DB {
 	}
 	return database
 }
+
+// HARD-03 审计负测：初始化、登录失败、登录成功与登出必须在 system_events
+// 中留下审计行（与状态变更同事务），且消息不含任何凭据原文。
+func TestAuditTrailRecordsSecurityEvents(t *testing.T) {
+	database, err := sql.Open("sqlite", filepath.Join(t.TempDir(), "audit.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer database.Close()
+	runner, err := db.DefaultRunner()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := runner.Apply(context.Background(), database); err != nil {
+		t.Fatal(err)
+	}
+	service, err := New(database)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := service.Initialize(context.Background(), "correct-horse-battery"); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 8, 29, 8, 0, 0, 0, time.UTC)
+	if _, err := service.Login(context.Background(), "wrong-password", now, time.Hour); err == nil {
+		t.Fatal("wrong password must fail")
+	}
+	session, err := service.Login(context.Background(), "correct-horse-battery", now.Add(time.Minute), time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := service.Logout(context.Background(), session.Token); err != nil {
+		t.Fatal(err)
+	}
+
+	codes := map[string]int{}
+	rows, err := database.Query(`SELECT code, COUNT(*) FROM system_events GROUP BY code`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for rows.Next() {
+		var code string
+		var count int
+		if err := rows.Scan(&code, &count); err != nil {
+			t.Fatal(err)
+		}
+		codes[code] = count
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]int{"AUTH_INITIALIZED": 1, "AUTH_LOGIN_FAILED": 1, "AUTH_LOGIN_SUCCEEDED": 1, "AUTH_LOGGED_OUT": 1}
+	for code, count := range want {
+		if codes[code] != count {
+			t.Fatalf("audit code %s = %d, want %d (all: %+v)", code, codes[code], count, codes)
+		}
+	}
+	var leaked int
+	if err := database.QueryRow(`SELECT COUNT(*) FROM system_events WHERE safe_message LIKE '%wrong-password%' OR safe_message LIKE '%correct-horse%'`).Scan(&leaked); err != nil {
+		t.Fatal(err)
+	}
+	if leaked != 0 {
+		t.Fatalf("credentials leaked into audit messages: %d", leaked)
+	}
+}
