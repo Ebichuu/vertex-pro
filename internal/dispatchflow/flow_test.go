@@ -215,7 +215,9 @@ func TestExternalProcessKillAfterSendBeforeRecordRecoversWithoutReplay(t *testin
 		}
 	})
 
-	deadline := time.NewTimer(15 * time.Second)
+	// 60s 只约束等待边界信号的时长：子进程提前退出仍会立即经 childDone
+	// 报错，真实失败不会被延长掩盖；全量套件高负载下 15s 曾偶发不足。
+	deadline := time.NewTimer(60 * time.Second)
 	poll := time.NewTicker(10 * time.Millisecond)
 	defer deadline.Stop()
 	defer poll.Stop()
