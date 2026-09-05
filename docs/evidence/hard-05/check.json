@@ -1,0 +1,19 @@
+{
+  "item": "HARD-05",
+  "title": "Parser fuzz",
+  "status": "PASS",
+  "branch": "main",
+  "source_commit": "ddd3a28",
+  "implementation": [
+    "internal/rsspreview FuzzParse: structured RSS/Atom seeds plus arbitrary bytes; asserts no panic and the 20-entry limit",
+    "internal/torrentparse FuzzParse: bencode edge shapes (negative integers, nested files, huge keys) plus arbitrary bytes; asserts no panic and DefaultLimits compliance (total size, file count)",
+    "internal/syncmerge FuzzMerge: arbitrary RID/full-update/torrent-dictionary/removed-list combinations; asserts no panic and merge-result self-consistency (applied xor ignored)",
+    "internal/apipaging FuzzDecode: arbitrary cursor strings; asserts signed-cursor rejection for tampering and exact round-trip for valid cursors"
+  ],
+  "checks": {
+    "fuzz_run": "PASS: 30s per target on 2026-09-06, zero failures - rsspreview 8.82M execs (312 corpus inputs), torrentparse 47.83M execs (61 inputs), syncmerge 39.31M execs (453 inputs), apipaging 2.88M execs (43 inputs)",
+    "limits": "PASS: RSS entry limit and bencode size/file-count invariants held across the fuzz runs",
+    "regression": "PASS: go test ./... twice on 2026-09-06, 101 packages ok, 0 failures (fuzz seed corpora run as normal tests)"
+  },
+  "scope_note": "The fuzz targets are permanent: CI and preflight run their seed corpora, and longer -fuzztime sessions can be run locally at any time. No failing inputs were discovered, so no regression corpus files were added to testdata."
+}
