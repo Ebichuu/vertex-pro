@@ -46,11 +46,24 @@ func main() {
 			logger.Error("doctor failed", "error", err)
 			os.Exit(1)
 		}
+	case "verify":
+		if err := runVerify(os.Args[2:]); err != nil {
+			os.Exit(1)
+		}
+	case "readiness":
+		if err := runReadiness(os.Args[2:]); err != nil {
+			os.Exit(1)
+		}
+	case "support-bundle":
+		if err := runSupportBundle(os.Args[2:]); err != nil {
+			logger.Error("support bundle failed", "error", err)
+			os.Exit(1)
+		}
 	case "version":
 		fmt.Println(version)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n", command)
-		fmt.Fprintln(os.Stderr, "usage: vertex-pro [serve|doctor|version]")
+		fmt.Fprintln(os.Stderr, "usage: vertex-pro [serve|doctor|verify|readiness|support-bundle|version]")
 		os.Exit(2)
 	}
 }
@@ -258,4 +271,113 @@ func requestLogger(logger *slog.Logger, next http.Handler) http.Handler {
 		logger.InfoContext(ctx, "http request", observability.IDs(ctx)...)
 		next.ServeHTTP(response, request.WithContext(ctx))
 	})
+}
+
+// opsDatabase 打开运维命令的数据库：文件不存在时直接报错，不静默创建。
+func opsDatabase(path string) (*sql.DB, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		path = envOrDefault("VERTEX_PRO_DATABASE", "vertex-pro.db")
+	}
+	if _, err := os.Stat(path); err != nil {
+		return nil, fmt.Errorf("database file %s does not exist", path)
+	}
+	return db.Open(context.Background(), db.Config{Path: path})
+}
+
+func statusOf(checks []diagnostics.Check) string {
+	if diagnostics.AllOK(checks) {
+		return "PASS"
+	}
+	return "FAIL"
+}
+
+// runVerify 执行 HARD-10 的离线安装校验：迁移版本、启动一致性与外键
+// 完整性。全部通过时退出码为 0，任一失败为 1。
+func runVerify(arguments []string) error {
+	flags := flag.NewFlagSet("verify", flag.ContinueOnError)
+	databasePath := flags.String("database", envOrDefault("VERTEX_PRO_DATABASE", "vertex-pro.db"), "SQLite database path")
+	if err := flags.Parse(arguments); err != nil {
+		return err
+	}
+	database, err := opsDatabase(*databasePath)
+	if err != nil {
+		return err
+	}
+	defer database.Close()
+	runner, err := db.DefaultRunner()
+	if err != nil {
+		return err
+	}
+	checks := diagnostics.VerifyChecks(context.Background(), database, runner, len(runner.Migrations))
+	payload, err := json.MarshalIndent(map[string]any{"command": "verify", "status": statusOf(checks), "checks": checks}, "", "  ")
+	if err != nil {
+		return err
+	}
+	fmt.Println(string(payload))
+	if !diagnostics.AllOK(checks) {
+		return fmt.Errorf("verification failed")
+	}
+	return nil
+}
+
+// runReadiness 输出就绪原因清单：与 verify 共用检查集，面向监控探针
+// 的可读诊断输出。
+func runReadiness(arguments []string) error {
+	flags := flag.NewFlagSet("readiness", flag.ContinueOnError)
+	databasePath := flags.String("database", envOrDefault("VERTEX_PRO_DATABASE", "vertex-pro.db"), "SQLite database path")
+	if err := flags.Parse(arguments); err != nil {
+		return err
+	}
+	database, err := opsDatabase(*databasePath)
+	if err != nil {
+		return err
+	}
+	defer database.Close()
+	runner, err := db.DefaultRunner()
+	if err != nil {
+		return err
+	}
+	checks := diagnostics.VerifyChecks(context.Background(), database, runner, len(runner.Migrations))
+	payload, err := json.MarshalIndent(map[string]any{"command": "readiness", "ready": diagnostics.AllOK(checks), "reasons": checks}, "", "  ")
+	if err != nil {
+		return err
+	}
+	fmt.Println(string(payload))
+	return nil
+}
+
+// runSupportBundle 生成 OBS-04/HARD-10 的支持包：诊断报告加数据库行数
+// 摘要，写入 0600 权限的文件并输出其摘要。
+func runSupportBundle(arguments []string) error {
+	flags := flag.NewFlagSet("support-bundle", flag.ContinueOnError)
+	databasePath := flags.String("database", envOrDefault("VERTEX_PRO_DATABASE", "vertex-pro.db"), "SQLite database path")
+	outPath := flags.String("out", "vertex-pro-support-bundle.json", "support bundle output path")
+	if err := flags.Parse(arguments); err != nil {
+		return err
+	}
+	database, err := opsDatabase(*databasePath)
+	if err != nil {
+		return err
+	}
+	defer database.Close()
+	report, err := diagnostics.Build(version, buildidentity.Current(), map[string]any{
+		"database_path": *databasePath,
+	}, database, time.Now())
+	if err != nil {
+		return err
+	}
+	bundle, err := diagnostics.BuildSupportBundle(context.Background(), report, database, nil)
+	if err != nil {
+		return err
+	}
+	payload, err := json.MarshalIndent(bundle, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(strings.TrimSpace(*outPath), payload, 0o600); err != nil {
+		return fmt.Errorf("write support bundle: %w", err)
+	}
+	fmt.Printf("support bundle written to %s (%s)\n", strings.TrimSpace(*outPath), bundle.Digest)
+	return nil
 }
