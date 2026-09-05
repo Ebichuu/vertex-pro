@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -59,11 +60,26 @@ func main() {
 			logger.Error("support bundle failed", "error", err)
 			os.Exit(1)
 		}
+	case "backup":
+		if err := runBackup(os.Args[2:]); err != nil {
+			logger.Error("backup failed", "error", err)
+			os.Exit(1)
+		}
+	case "restore":
+		if err := runRestore(os.Args[2:]); err != nil {
+			logger.Error("restore failed", "error", err)
+			os.Exit(1)
+		}
+	case "restore-drill":
+		if err := runRestoreDrill(os.Args[2:]); err != nil {
+			logger.Error("restore drill failed", "error", err)
+			os.Exit(1)
+		}
 	case "version":
 		fmt.Println(version)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n", command)
-		fmt.Fprintln(os.Stderr, "usage: vertex-pro [serve|doctor|verify|readiness|support-bundle|version]")
+		fmt.Fprintln(os.Stderr, "usage: vertex-pro [serve|doctor|verify|readiness|support-bundle|backup|restore|restore-drill|version]")
 		os.Exit(2)
 	}
 }
@@ -379,5 +395,157 @@ func runSupportBundle(arguments []string) error {
 		return fmt.Errorf("write support bundle: %w", err)
 	}
 	fmt.Printf("support bundle written to %s (%s)\n", strings.TrimSpace(*outPath), bundle.Digest)
+	return nil
+}
+
+// HARD-08：备份、恢复与定期 restore drill。密钥经环境变量传入
+// （默认 VERTEX_PRO_BACKUP_KEY，64 位十六进制字符 = 32 字节），
+// 备份文件以 AES-256-GCM 加密，认证失败不解密。
+func backupKey(envName string) ([]byte, error) {
+	if strings.TrimSpace(envName) == "" {
+		envName = "VERTEX_PRO_BACKUP_KEY"
+	}
+	value := strings.TrimSpace(os.Getenv(envName))
+	if value == "" {
+		return nil, fmt.Errorf("backup key environment variable %s is empty", envName)
+	}
+	return db.LoadKey(value)
+}
+
+func runBackup(arguments []string) error {
+	flags := flag.NewFlagSet("backup", flag.ContinueOnError)
+	databasePath := flags.String("database", envOrDefault("VERTEX_PRO_DATABASE", "vertex-pro.db"), "SQLite database path")
+	outPath := flags.String("out", "", "backup output path (required)")
+	keyEnv := flags.String("key-env", "VERTEX_PRO_BACKUP_KEY", "environment variable holding the 64-hex backup key; encryption is skipped when the variable is empty")
+	if err := flags.Parse(arguments); err != nil {
+		return err
+	}
+	if strings.TrimSpace(*outPath) == "" {
+		return errors.New("-out is required")
+	}
+	plaintext := *outPath + ".plain.tmp"
+	defer os.Remove(plaintext)
+	if err := db.BackupDatabase(context.Background(), db.Config{Path: *databasePath}, plaintext); err != nil {
+		return err
+	}
+	if key := strings.TrimSpace(os.Getenv(*keyEnv)); key != "" {
+		keyBytes, err := db.LoadKey(key)
+		if err != nil {
+			return err
+		}
+		if err := db.EncryptFile(plaintext, *outPath, keyBytes); err != nil {
+			return err
+		}
+		fmt.Printf("encrypted backup written to %s\n", *outPath)
+		return nil
+	}
+	if err := os.Rename(plaintext, *outPath); err != nil {
+		return err
+	}
+	fmt.Printf("plaintext backup written to %s\n", *outPath)
+	return nil
+}
+
+func runRestore(arguments []string) error {
+	flags := flag.NewFlagSet("restore", flag.ContinueOnError)
+	databasePath := flags.String("database", envOrDefault("VERTEX_PRO_DATABASE", "vertex-pro.db"), "SQLite database path to replace")
+	backupPath := flags.String("backup", "", "backup file path (required)")
+	keyEnv := flags.String("key-env", "VERTEX_PRO_BACKUP_KEY", "environment variable holding the 64-hex backup key; decryption is skipped when the variable is empty")
+	if err := flags.Parse(arguments); err != nil {
+		return err
+	}
+	if strings.TrimSpace(*backupPath) == "" {
+		return errors.New("-backup is required")
+	}
+	if key := strings.TrimSpace(os.Getenv(*keyEnv)); key != "" {
+		keyBytes, err := db.LoadKey(key)
+		if err != nil {
+			return err
+		}
+		decrypted := *backupPath + ".plain.tmp"
+		defer os.Remove(decrypted)
+		if err := db.DecryptFile(*backupPath, decrypted, keyBytes); err != nil {
+			return err
+		}
+		if err := db.Restore(db.Config{Path: *databasePath}, decrypted); err != nil {
+			return err
+		}
+		fmt.Printf("decrypted backup restored to %s\n", *databasePath)
+		return nil
+	}
+	if err := db.Restore(db.Config{Path: *databasePath}, *backupPath); err != nil {
+		return err
+	}
+	fmt.Printf("backup restored to %s\n", *databasePath)
+	return nil
+}
+
+// runRestoreDrill 是 HARD-08 的定期恢复演练：备份 → （可选解密）→ 还原
+// 到临时目录 → 打开并跑启动一致性检查 → 报告与清理。全程不触碰生产库。
+func runRestoreDrill(arguments []string) error {
+	flags := flag.NewFlagSet("restore-drill", flag.ContinueOnError)
+	databasePath := flags.String("database", envOrDefault("VERTEX_PRO_DATABASE", "vertex-pro.db"), "SQLite database path to drill against")
+	keyEnv := flags.String("key-env", "VERTEX_PRO_BACKUP_KEY", "environment variable holding the 64-hex backup key; encryption is skipped when the variable is empty")
+	if err := flags.Parse(arguments); err != nil {
+		return err
+	}
+	drill := filepath.Join(os.TempDir(), "vertex-pro-restore-drill")
+	_ = os.RemoveAll(drill)
+	if err := os.MkdirAll(drill, 0o750); err != nil {
+		return err
+	}
+	defer os.RemoveAll(drill)
+
+	backupPath := filepath.Join(drill, "drill.db.bak")
+	if err := db.BackupDatabase(context.Background(), db.Config{Path: *databasePath}, backupPath); err != nil {
+		return fmt.Errorf("drill backup: %w", err)
+	}
+	restoredPath := filepath.Join(drill, "drill.db")
+	if key := strings.TrimSpace(os.Getenv(*keyEnv)); key != "" {
+		keyBytes, err := db.LoadKey(key)
+		if err != nil {
+			return err
+		}
+		encryptedPath := filepath.Join(drill, "drill.db.enc")
+		if err := db.EncryptFile(backupPath, encryptedPath, keyBytes); err != nil {
+			return fmt.Errorf("drill encryption: %w", err)
+		}
+		if err := db.DecryptFile(encryptedPath, restoredPath, keyBytes); err != nil {
+			return fmt.Errorf("drill decryption: %w", err)
+		}
+	} else if err := copyDatabaseFileForDrill(backupPath, restoredPath); err != nil {
+		return err
+	}
+	database, err := db.Open(context.Background(), db.Config{Path: restoredPath})
+	if err != nil {
+		return fmt.Errorf("drill open: %w", err)
+	}
+	defer database.Close()
+	if err := db.CheckStartupConsistency(context.Background(), database); err != nil {
+		return fmt.Errorf("drill consistency: %w", err)
+	}
+	var tables int
+	if err := database.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table'`).Scan(&tables); err != nil {
+		return fmt.Errorf("drill table count: %w", err)
+	}
+	fmt.Printf("restore drill PASS: %d tables verified from a %s backup\n", tables, map[bool]string{true: "encrypted", false: "plaintext"}[strings.TrimSpace(os.Getenv(*keyEnv)) != ""])
+	return nil
+}
+
+// copyDatabaseFileForDrill 在未加密场景下把备份复制为演练库。
+func copyDatabaseFileForDrill(sourcePath, destinationPath string) error {
+	source, err := os.Open(sourcePath)
+	if err != nil {
+		return fmt.Errorf("open drill backup: %w", err)
+	}
+	defer source.Close()
+	destination, err := os.Create(destinationPath)
+	if err != nil {
+		return fmt.Errorf("create drill database: %w", err)
+	}
+	defer destination.Close()
+	if _, err := io.Copy(destination, source); err != nil {
+		return fmt.Errorf("copy drill database: %w", err)
+	}
 	return nil
 }
