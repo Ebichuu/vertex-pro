@@ -1,7 +1,12 @@
 {
   "item": "API-12",
   "title": "生成 TS Client",
-  "status": "IN_PROGRESS",
+  "status": "PASS",
+  "revalidation_2026-09-05": {
+    "source_commit": "ac0ff927254e670e689dee0e12cbadbf916ce449",
+    "command": "go run ./tools/codegen -check (PASS 2026-09-05)",
+    "result": "PASS"
+  },
   "local_status": "PASS",
   "branch": "local-only",
   "implementation": [
