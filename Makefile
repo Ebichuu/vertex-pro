@@ -1,4 +1,4 @@
-.PHONY: bootstrap generate generate-check fmt fmt-check lint test-unit test-race test-contracts test-integration test-e2e test-protocol test-fault verify-license verify-implementation-plan verify-contracts sbom preflight ci build image
+.PHONY: bootstrap generate generate-check fmt fmt-check lint test-unit test-race test-contracts test-integration test-e2e test-protocol test-fault verify-license verify-implementation-plan verify-contracts sbom secretscan preflight ci build image
 
 SHELL := pwsh
 
@@ -53,6 +53,9 @@ verify-contracts:
 
 sbom:
 	pwsh -NoProfile -File tools/dev/collect-sbom.ps1
+
+secretscan:
+	go run ./tools/secretscan -root . -out artifacts/secretscan.json
 
 preflight:
 	pwsh -NoProfile -File tools/dev/preflight.ps1
