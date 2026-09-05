@@ -1,7 +1,7 @@
 # Vertex Pro V1 实施状态表
 
 文档状态：`ACTIVE / AUTHORITATIVE-TRACKER-BY-RC8`  
-最后修订：2026-09-05
+最后修订：2026-09-06
 对应施工手册：`docs/实施流程/VERTEX_PRO_V1_CODE_IMPLEMENTATION_PLAYBOOK.md`  
 对应主规范：`docs/产品方案设计/VERTEX_PRO_COMPLETE_REDESIGN_V1_RC8_FINAL.md`  
 对应产品合同：`docs/产品方案设计/VERTEX_PRO_V1_USER_RULES_CONTRACT.md`  
@@ -67,7 +67,12 @@ PENDING -> IN_PROGRESS -> IN_REVIEW -> DONE
 | M | RC 与冻结 | `0/7 DONE; 7 PENDING` | Gate M / G3 | `PENDING` |
 
 总体状态：`121/149 DONE`；`1 IN_PROGRESS`；`27 PENDING`。
-Gate A–I 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 12/12、E 13/13、F 12/12、G 14/14、H 14/14、I 12/12）；阶段 J 已收口 UI-01..10，阶段 K 已收口 HIS-01..02 与 STAT-01..04。剩余 28 项均为待实现新功能或 RC 冻结工作：J 的 UI-11/12/13、K 的 HIS-03/STAT-05/OBS-01..04（含 OBS-02 地基已提交）、L 全部 12 项加固、M 全部 7 项 RC 冻结。
+Gate A–I 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 12/12、E 13/13、F 12/12、G 14/14、H 14/14、I 12/12）；G1 Gate 于 2026-09-06 评审通过。阶段 J 已收口 UI-01..10，阶段 K 已收口 HIS-01..02 与 STAT-01..04。剩余 28 项均为待实现新功能或 RC 冻结工作：J 的 UI-11/12/13、K 的 HIS-03/STAT-05/OBS-01..04（含 OBS-02 地基已提交）、L 全部 12 项加固、M 全部 7 项 RC 冻结。
+
+### 2026-09-06 状态校准
+
+- G1 Gate 正式评审通过（PASS，见第 4 节 Gate 记录）：对 `docs/evidence/qui-12/verification-campaign/` 执行证据评审——manifest 所列 12 份 artifact 逐文件 SHA-256 核验一致，9 条 profile verification runs（3 Profile × 3 repetition）全部 `VERIFIED` 且 21/21 用例、外部 kill -9 用例通过、0 自动重投，3 份 activation bindings 绑定第三次重复。
+- Profile 激活的构建绑定：runs/bindings 绑定 `63161b1`；`profileverify.Resolve` 在运行时构建身份与绑定不一致时判定 `RUNTIME_BUILD_INVALID` 并保持 `EXPECTED`（fail closed，设计内行为）。生产部署须构建自 `63161b1`，或在更新 commit 上重跑 P0×3 战役生成新绑定后激活。campaign SQLite 数据库保留在仓库外受限存储，仓库内归档的 run JSON 与 bindings 为权威记录。
 
 ### 2026-08-30 状态校准
 
@@ -373,7 +378,7 @@ Gate A–I 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 1
 | Gate J | PENDING | Dashboard/RSS/Rules/History 用户闭环 | — | — | — |
 | Gate K | PENDING | 历史、删除事实、统计口径、诊断 | — | — | — |
 | Gate L | PENDING | 安全、性能、备份、升级与镜像 | — | — | — |
-| G1 | PENDING | 固定 qui + qB 4.3.8/5.0.4/5.2.2 真实链路 | — | — | 核心与归档 3×6 矩阵 PASS；2026-09-02 在 `a314d42` 完成当前源码重跑 18/18 PASS，并新增三 Profile 外部 kill -9 用例 3/3 PASS（durable marker、UNKNOWN 提升、禁重放、对账确认均有证据）；golden fixtures 已归档、harness 固化为 pinned 容器镜像、clean-commit P0×3 三连跑全 PASS 并持久化 9 条 VERIFIED runs + activation bindings；G1 阻塞已全部闭合，Gate 待正式评审确认（文中的 kill -9 / external_kill 均指对 Vertex Pro 自身测试子进程的崩溃模拟，见第 0 节） |
+| G1 | PASS | 固定 qui + qB 4.3.8/5.0.4/5.2.2 真实链路 | `63161b1`（战役）/ 评审记录见校准 | Codex（记录人；仓库所有者复核待 owner 确认） | 2026-09-06 正式评审通过：campaign manifest 的 12 份归档 artifact 逐文件 SHA-256 核验一致；9 条 runs（3 Profile × 3 repetition）全部 `VERIFIED`（21/21 用例、外部 kill -9 通过、0 自动重投、clean commit `63161b1`）；3 份 activation bindings 绑定第三次重复与同 commit；此前各阻塞（golden fixtures、pinned harness、P0×3、kill -9 崩溃模拟——均指对 Vertex Pro 自身测试子进程，见第 0 节）已全部闭合。**Profile 激活绑定说明**：runs/bindings 绑定构建身份 `63161b1`，`profileverify.Apply` 要求运行时可执行文件构建身份与之匹配（否则 `RUNTIME_BUILD_INVALID` fail closed）；生产运行时须构建自该 commit，或在更新的 commit 上重跑 P0×3 战役生成新绑定后，方可将 Profile 提升为 `VERIFIED`。此为设计内的构建绑定，不影响本 Gate 判定；REL-01 在 RC 阶段执行最终 G1 |
 | G2 | PENDING | 容量与恢复故障验证 | — | — | — |
 | C1 | PENDING | `make verify-contracts` 机器报告 | — | — | — |
 | A24 | PENDING | RC8 第 24 节逐项 PASS | — | — | — |
@@ -506,3 +511,4 @@ Gate A–I 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 1
 | 2026-09-05 | API-01..12 在当前源码重验并刷新证据（`d8537fc`），阶段 I 12/12 收口 DONE，Gate I 评审 PASS，总览推进至 105/149 | Codex |
 | 2026-09-05 | UI-01..10 在当前源码重验并刷新证据（`f189e71`），阶段 J 部分收口 10/13 DONE（UI-11..13 保持 PENDING），总览推进至 115/149 并修正 K 阶段计数 | Codex |
 | 2026-09-05 | HIS-01..02 与 STAT-01..04 在当前源码重验并刷新证据（`ac79dac`），阶段 K 部分收口 6/12 DONE，总览推进至 121/149；剩余 28 项为待实现新功能（UI-11..13、HIS-03、STAT-05、OBS-01..04）与 L/M 加固冻结工作 | Codex |
+| 2026-09-06 | G1 Gate 正式评审 PASS：campaign 归档证据链逐文件核验，9 条 VERIFIED runs 与 3 份 activation bindings 绑定 `63161b1`；Profile 激活为构建绑定动作，运行时须构建自绑定 commit 或重跑战役生成新绑定（见第 2 节校准） | Codex |
