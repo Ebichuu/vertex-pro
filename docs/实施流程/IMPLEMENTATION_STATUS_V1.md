@@ -62,12 +62,12 @@ PENDING -> IN_PROGRESS -> IN_REVIEW -> DONE
 | H | Add、确认与恢复 | `14/14 DONE` | Gate H | `PASS` |
 | I | API、认证与 SSE | `12/12 DONE` | Gate I | `PASS` |
 | J | 前端页面 | `10/13 DONE; 3 PENDING` | Gate J | `PENDING` |
-| K | 历史、统计与观测 | `7/12 DONE; 5 PENDING` | Gate K | `PENDING` |
+| K | 历史、统计与观测 | `8/12 DONE; 4 PENDING` | Gate K | `PENDING` |
 | L | 加固与运维 | `0/12 DONE; 12 PENDING` | Gate L | `PENDING` |
 | M | RC 与冻结 | `0/7 DONE; 7 PENDING` | Gate M / G3 | `PENDING` |
 
-总体状态：`122/149 DONE`；`27 PENDING`。
-Gate A–I 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 12/12、E 13/13、F 12/12、G 14/14、H 14/14、I 12/12）；G1 Gate 于 2026-09-06 评审通过。阶段 J 已收口 UI-01..10，阶段 K 已收口 HIS-01..02 与 STAT-01..04。剩余 27 项均为待实现新功能或 RC 冻结工作：J 的 UI-11/12/13、K 的 HIS-03/STAT-05/OBS-01/03/04、L 全部 12 项加固、M 全部 7 项 RC 冻结。
+总体状态：`123/149 DONE`；`26 PENDING`。
+Gate A–I 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 12/12、E 13/13、F 12/12、G 14/14、H 14/14、I 12/12）；G1 Gate 于 2026-09-06 评审通过。阶段 J 已收口 UI-01..10，阶段 K 已收口 HIS-01..02 与 STAT-01..04。剩余 26 项均为待实现新功能或 RC 冻结工作：J 的 UI-11/12/13、K 的 STAT-05/OBS-01/03/04、L 全部 12 项加固、M 全部 7 项 RC 冻结。
 
 ### 2026-09-06 状态校准
 
@@ -320,7 +320,7 @@ Gate A–I 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 1
 |---|---|---|---|---|---|---|
 | `HIS-01` | History projection | ADD-01,02, CTR-05 | DONE | Codex | `ac79dac` | `docs/evidence/his-01/history-projection-check.json` / sha256:85407d5b0cd92d5904c17ba231b058c5494f7fe5b752c71233b2dbcba37fbe28 |
 | `HIS-02` | 删除事实持久化 | HIS-01, CAP-12 | DONE | Codex | `ac79dac` | `docs/evidence/his-02/history-deletion-check.json` / sha256:ef614e091d44ea50663fdd5a388bdb4ac11abeacc2214d4dabc224692d36b04e |
-| `HIS-03` | 详情时间线 | HIS-01, API-08 | PENDING | — | — | — |
+| `HIS-03` | 详情时间线 | HIS-01, API-08 | DONE | Codex | `42e8c3a` | `docs/evidence/his-03/detail-timeline-check.json` / sha256:f0f8cfc98929fd58a6dd5c2874af8ea8d05d9c66a1df1ef3577199d376faf37c |
 | `STAT-01` | StatsSampler | QUI-02,07,09 | DONE | Codex | `ac79dac` | `docs/evidence/stat-01/check.json` / sha256:301ce18520b3004a3e8c387ed8dd03b15eaa163b4b2d79712a259f1699af7302 |
 | `STAT-02` | Counter delta | STAT-01 | DONE | Codex | `ac79dac` | `docs/evidence/stat-02/check.json` / sha256:1354e8b726cbe36785c8710fbcbec59a4659cdb9b324fd2bea9c85c4abc64089 |
 | `STAT-03` | 小时桶 | STAT-02, DB-07 | DONE | Codex | `ac79dac` | `docs/evidence/stat-03/check.json` / sha256:bebae93852b07ce64fe5c601ffc6edc1eaa920b02b9844b9433a44f93dc33a3c |
@@ -513,3 +513,4 @@ Gate A–I 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 1
 | 2026-09-05 | HIS-01..02 与 STAT-01..04 在当前源码重验并刷新证据（`ac79dac`），阶段 K 部分收口 6/12 DONE，总览推进至 121/149；剩余 28 项为待实现新功能（UI-11..13、HIS-03、STAT-05、OBS-01..04）与 L/M 加固冻结工作 | Codex |
 | 2026-09-06 | G1 Gate 正式评审 PASS：campaign 归档证据链逐文件核验，9 条 VERIFIED runs 与 3 份 activation bindings 绑定 `63161b1`；Profile 激活为构建绑定动作，运行时须构建自绑定 commit 或重跑战役生成新绑定（见第 2 节校准） | Codex |
 | 2026-09-06 | OBS-02 完成：7 个有界标签计数器族接入运行时各接缝，/metrics 端点上线，cardinality 测试与运行时端点验证 PASS（`8c1e9ea`），阶段 K 推进至 7/12，总览推进至 122/149 | Codex |
+| 2026-09-06 | HIS-03 完成：GET /jobs/{id} 暴露 historytimeline 稳定排序时间线（用户语言 stage + 诊断字段），`42e8c3a`；dispatchflow 外部 kill 边界等待上限放宽至 60s 消除慢宿主残留 flake（`17a73f3`）；总览推进至 123/149 | Codex |

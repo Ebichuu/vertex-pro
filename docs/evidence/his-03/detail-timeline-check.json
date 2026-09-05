@@ -1,0 +1,19 @@
+{
+  "item": "HIS-03",
+  "title": "详情时间线",
+  "status": "PASS",
+  "branch": "main",
+  "source_commit": "42e8c3a3146738e2edbe26dd1c6aad5314df5d35",
+  "implementation": [
+    "internal/historytimeline: stable-ordered timeline per job (occurred_at ASC, event_id ASC) with the §16.6 user-language stage mapping",
+    "internal/resourcesapi getJob: GET /api/v1/jobs/{id} now returns timeline events (event_id, stage, from_state, to_state, reason_code, occurred_at); raw states are diagnostic fields alongside the user-readable stage"
+  ],
+  "checks": {
+    "unit": "PASS: go test ./internal/resourcesapi -count=1 (includes TestJobDetailExposesStableUserTimeline)",
+    "stable_order": "PASS: out-of-order inserts (07:05, 07:10, 07:15, 07:12) are returned as 准备/添加/添加/待确认 in ascending occurred_at order",
+    "user_language": "PASS: stage values use the fixed user vocabulary (准备/添加/确认/已存在/失败/待确认/状态变更); raw internal states stay in diagnostic fields only",
+    "missing_job": "PASS: unknown job id returns 404 NOT_FOUND",
+    "full_suite": "PASS: go test ./... twice on 2026-09-06, 0 failures"
+  },
+  "scope_note": "The server-side timeline is exposed for the history detail view. The History Detail page currently renders its timeline from the local fixture loader shipped with UI-08 (local-only); consuming this endpoint end to end in the page belongs to the full history-detail API wiring and is not required by this item's acceptance (server-side stable timeline in user language)."
+}
