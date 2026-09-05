@@ -62,12 +62,12 @@ PENDING -> IN_PROGRESS -> IN_REVIEW -> DONE
 | H | Add、确认与恢复 | `14/14 DONE` | Gate H | `PASS` |
 | I | API、认证与 SSE | `12/12 DONE` | Gate I | `PASS` |
 | J | 前端页面 | `10/13 DONE; 3 PENDING` | Gate J | `PENDING` |
-| K | 历史、统计与观测 | `10/12 DONE; 2 PENDING` | Gate K | `PENDING` |
+| K | 历史、统计与观测 | `11/12 DONE; 1 PENDING` | Gate K | `PENDING` |
 | L | 加固与运维 | `0/12 DONE; 12 PENDING` | Gate L | `PENDING` |
 | M | RC 与冻结 | `0/7 DONE; 7 PENDING` | Gate M / G3 | `PENDING` |
 
-总体状态：`125/149 DONE`；`24 PENDING`。
-Gate A–I 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 12/12、E 13/13、F 12/12、G 14/14、H 14/14、I 12/12）；G1 Gate 于 2026-09-06 评审通过。阶段 J 已收口 UI-01..10，阶段 K 已收口 HIS-01..02 与 STAT-01..04。剩余 24 项均为待实现新功能或 RC 冻结工作：J 的 UI-11/12/13、K 的 OBS-03/04、L 全部 12 项加固、M 全部 7 项 RC 冻结。
+总体状态：`126/149 DONE`；`23 PENDING`。
+Gate A–I 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 12/12、E 13/13、F 12/12、G 14/14、H 14/14、I 12/12）；G1 Gate 于 2026-09-06 评审通过。阶段 J 已收口 UI-01..10，阶段 K 已收口 HIS-01..02 与 STAT-01..04。剩余 23 项均为待实现新功能或 RC 冻结工作：J 的 UI-11/12/13、K 的 OBS-04、L 全部 12 项加固、M 全部 7 项 RC 冻结。
 
 ### 2026-09-06 状态校准
 
@@ -328,7 +328,7 @@ Gate A–I 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 1
 | `STAT-05` | 实时卡片样本 | STAT-01, CTR-01 | DONE | Codex | `65e5d1e` | `docs/evidence/stat-05/check.json` / sha256:af093a473603c70620e58be6f7535e4bfa386214c5ca2dc77be3bed9a02560df |
 | `OBS-01` | 结构化日志 | BOOT-09 | DONE | Codex | `f2906ec` | `docs/evidence/obs-01/check.json` / sha256:dca2e30728ef5f63daa2de6113dd83fca306e9839dcde66413b6e04568b339d5 |
 | `OBS-02` | Metrics/health | QUI-10, CAP-07, ADD-10 | DONE | Codex | `8c1e9ea` | `docs/evidence/obs-02/metrics-check.json` / sha256:dd2f5c4088ec127872edd582bdeaec1c598bc649617b2b7a0aa9ee0bcb18dd62 |
-| `OBS-03` | 保留与清理 | DB-07, QUI-08, STAT-03 | PENDING | — | — | — |
+| `OBS-03` | 保留与清理 | DB-07, QUI-08, STAT-03 | DONE | Codex | `206a5ba` | `docs/evidence/obs-03/check.json` / sha256:25b212f2e2ea8cbf694b56b1cd554427ba3371c1d9cf539d19a0680907499893 |
 | `OBS-04` | 诊断包 | OBS-01..03, QUI-11 | PENDING | — | — | — |
 
 ### L. 安全、性能与运维加固
@@ -516,3 +516,4 @@ Gate A–I 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 1
 | 2026-09-06 | HIS-03 完成：GET /jobs/{id} 暴露 historytimeline 稳定排序时间线（用户语言 stage + 诊断字段），`42e8c3a`；dispatchflow 外部 kill 边界等待上限放宽至 60s 消除慢宿主残留 flake（`17a73f3`）；总览推进至 123/149 | Codex |
 | 2026-09-06 | OBS-01 完成：Secret corpus 扫描发现并修复两处真实泄漏（URL userinfo 凭据未移除、x_api_key 键不脱敏），关联字段核验 PASS（`f2906ec`） | Codex |
 | 2026-09-06 | STAT-05 完成：卡片层慢客户端摘除不阻塞生产者 + REST 快照重建测试（`65e5d1e`），阶段 K 推进至 10/12，总览推进至 125/149 | Codex |
+| 2026-09-06 | OBS-03 完成：internal/retention 批量清理（expires_at 强制执行、快照保留每实例最新、stats 委托 statsstore.Prune）+ 每小时 worker 与 retention 计数器（`c72122a`、`206a5ba`），阶段 K 推进至 11/12，总览推进至 126/149 | Codex |

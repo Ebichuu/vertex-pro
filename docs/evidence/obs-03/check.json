@@ -1,0 +1,24 @@
+{
+  "item": "OBS-03",
+  "title": "保留与清理",
+  "status": "PASS",
+  "branch": "main",
+  "source_commit": "206a5ba",
+  "implementation": [
+    "internal/retention: Sweep enforces the expires_at facts writers persist, in LIMIT-ed chunks with one immediate transaction per batch (no long write locks)",
+    "durable events and system events: RC8 sse.durable_event_retention (7d) via expires_at; terminal commands kept 7d then removed with their idempotency records in the same transaction (RESTRICT foreign key); non-terminal commands are never swept",
+    "idempotency records: RC8 api.idempotency_retention (24h) via expires_at",
+    "stats: delegated to statsstore.Prune (raw 30d, hourly 180d per the RC8 stats block)",
+    "snapshots: completed snapshots older than the retention window (7d, OBS-03 policy decision) are removed unless they are the newest revision of their instance; files removed only when unreferenced and path-contained",
+    "artifacts: no-op in V1 - artifacts are re-downloaded into memory at dispatch time and never persisted (RC8 artifact_retention 24h applies to the V2 artifact plane)"
+  ],
+  "checks": {
+    "expires_at_enforcement": "PASS: TestSweepEnforcesExpiresAtFacts - expired event/terminal command/idempotency removed; fresh rows and non-terminal commands survive",
+    "batching": "PASS: TestSweepBatchesDeletesUntilEmpty - BatchSize=2 with 5 expired rows deletes all across 3 batches",
+    "snapshot_policy": "PASS: TestSweepRemovesOldSnapshotsButKeepsLatestRevision - keeps the newest (generation, revision) per instance even when expired, removes older rows and their files",
+    "stats_delegation": "PASS: TestSweepPrunesStatsByRetention",
+    "runtime_wiring": "PASS: TestRetentionSweepEnforcesExpiresAtAndCountsMetrics - serve wires an hourly worker with a startup sweep and counts removals in vertex_retention_deleted_total{kind=...}",
+    "full_suite": "PASS: go test ./... twice on 2026-09-06, 97 packages ok, 0 failures"
+  },
+  "clock": "now is injected; tests pass deterministic times (FakeClock discipline), no test reads the wall clock"
+}
