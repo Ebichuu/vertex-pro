@@ -52,7 +52,7 @@ PENDING -> IN_PROGRESS -> IN_REVIEW -> DONE
 
 | 阶段 | 范围 | 代码状态 | Gate | Gate 状态 |
 |---|---|---|---|---|
-| A | 仓库与骨架 | `1/9 DONE; 8 IN_PROGRESS` | Gate A | `PENDING` |
+| A | 仓库与骨架 | `8/9 DONE; 1 IN_PROGRESS` | Gate A | `PENDING` |
 | B | 合同与生成 | `0/8 DONE; 8 IN_PROGRESS` | Gate B | `PENDING` |
 | C | SQLite 与事务 | `0/11 DONE; 11 IN_PROGRESS` | Gate C | `PENDING` |
 | D | qui、Profile、Sync | `0/12 DONE; 12 IN_PROGRESS` | Gate D / G1 基础 | `PENDING` |
@@ -66,8 +66,8 @@ PENDING -> IN_PROGRESS -> IN_REVIEW -> DONE
 | L | 加固与运维 | `0/12 DONE; 12 PENDING` | Gate L | `PENDING` |
 | M | RC 与冻结 | `0/7 DONE; 7 PENDING` | Gate M / G3 | `PENDING` |
 
-总体状态：`1/149 DONE`；`120 IN_PROGRESS`；`28 PENDING`。
-正式施工项推进至阶段 A `BOOT-02`（Gate A `PENDING`）；功能开发触达：阶段 J `UI-10`（local-only）。
+总体状态：`8/149 DONE`；`113 IN_PROGRESS`；`28 PENDING`。
+正式施工项推进至阶段 A `BOOT-08`（Gate A `PENDING`，仅余 BOOT-08 的 SBOM 与 compose 重验）；功能开发触达：阶段 J `UI-10`（local-only）。
 
 ### 2026-08-30 状态校准
 
@@ -115,6 +115,14 @@ PENDING -> IN_PROGRESS -> IN_REVIEW -> DONE
 - Harness 固化为容器镜像并完成首个完整容器化矩阵运行：`deploy/compose/lab/images/harness/Dockerfile` 将宿主机 clean 树构建（linux/amd64、`-trimpath`、嵌入 vcs 身份）的 `qutransactionprobe` 二进制封装进 pinned alpine 镜像 `vertex-pro-g1/harness:pinned`，probe 全部经 `docker compose run` 以 non-root、只读根文件系统、drop ALL、tmpfs /tmp 执行，evidence 目录经 `VERTEX_PRO_G1_EVIDENCE_DIR` 显式挂载；`g1-harness-identity.json` 归档 image_id 与 source commit。21 事务/故障用例与 3 份 fixture 采集在此镜像内全 PASS。G1 剩余阻塞收敛为：clean-commit 上 P0×3 连续运行并记录 verification runs。
 - Clean-commit P0×3 战役完成并全 PASS：harness 二进制/镜像从 clean 树 `15707ff` 构建（`vertex-pro-g1/harness:pinned` = `sha256:624069b7...`），三轮完整 P0 矩阵（18 事务/故障 + 3 外部 kill -9 + 3 fixture 采集 ×3）全部 PASS、0 自动重投；每轮矩阵摘要归档于仓库外 campaign 目录并按轮次取摘要。9 条 `profile_verification_runs`（3 Profile × 3 repetition，`required_case_count=21`、`kill9_case_passed=true`、`verification_state=VERIFIED`）经 `tools/profileverification` 持久化，第三次重复后 Resolve 判定 `VERIFIED_RUN_MATCHED` 并产出三份 profile activation binding，连同 run JSON 与 campaign-manifest 归档于 `docs/evidence/qui-12/verification-campaign/`。recorder 构建身份为当前 clean commit `63161b1`（与 harness 源码 `15707ff` 仅差文档）。至此 G1 所列阻塞全部闭合；Profile 提升与 G1 Gate 仍待生产装配读取 campaign runs 并由正式评审确认。
 
+### 2026-09-05 状态校准
+
+- 验证管线修复：三处缺陷在收口验证中暴露并修复——`tools/profileverification` 战役测试硬编码 2026-09-02 基准日期，而工具以真实时钟判定，24 小时证据窗口过期后第三次重复误报 `EVIDENCE_EXPIRED`（改为相对真实时钟构建战役）；`internal/dispatchflow` 外部 kill 用例的崩溃子进程以裸 `select{}` 永久阻塞，transport goroutine 退出后被 Go 死锁检测器提前终止，高负载下父进程 `Kill` 打在已回收进程上（改为睡眠循环）；`preflight.ps1` 的 test-unit scriptblock 内 `exit` 会静默终止整个脚本，导致单测失败时证据文件不落盘且无 per-target 记录（改为 `return`，失败照常记录）。
+- 修复后验证：全量 preflight 11 个目标在 `83b062a` 源码 PASS（含 81/81 前端测试）；随后连续两次全量 Go 套件 95 包全 ok，dispatchflow flake 未再复现；`verify-license`、`verify-qui-lock` 在当前源码重跑 PASS。
+- BOOT-02..07、09 收口为 DONE（merge commit `bcb9d2d`，证据同 commit 刷新）；BOOT-08 在当前源码重建镜像并通过容器边界检查（healthz/readyz 200、未认证资源与 SSE 401、nonroot、只读根文件系统、drop ALL），但 SBOM 清单尚无任何已提交工具链支撑、compose 重验未执行，保持 IN_PROGRESS。Gate A 仅余 BOOT-08。
+- `internal/metrics` 新增带标签的单调计数器注册表（Prometheus 文本格式，含测试）作为 OBS-02 地基（`a6ab72c`）；OBS-02 转 IN_PROGRESS，/metrics 端点接线与 RSS/Add/Sync/容量/UNKNOWN/Profile 子系统计数器及 label cardinality 检查仍开放，且其依赖 QUI-10、CAP-07、ADD-10 均 IN_PROGRESS。
+- 权威文档（状态表、施工手册、RC8）已加入项目性质与术语锚点（`bac042f`），不改变任何技术语义。
+
 > 总数由本表的 149 个正式实施项计算。若施工手册新增、删除或改名实施项，必须同 PR 更新本表并由合同检查验证集合一致。
 
 ## 3. 实施项清单
@@ -126,14 +134,14 @@ PENDING -> IN_PROGRESS -> IN_REVIEW -> DONE
 | ID | 内容 | Depends on | Status | Owner | PR/Merge | Evidence |
 |---|---|---|---|---|---|---|
 | `BOOT-01` | 单仓库和目录合同 | — | DONE | Codex | `f741663a5f27820915c8161201acfb3831bd7369` | `docs/evidence/boot-01/layout-check.json` / sha256:588d2fa5a8654dacc796a8d7dc90e8743ea7724b04ac35343af5a7475362c37e; `docs/evidence/boot-01/readiness-check.json` / sha256:a431ac74ad91ab93527629d868b9cc8e911262cd17c08563518e381d9cab931a |
-| `BOOT-02` | 固定 Go/Node/pnpm 工具链 | BOOT-01 | IN_PROGRESS | Codex | local-only | `go.mod` / sha256:ce30f9a9ff9a9115ba5758b46a31e993a518b3ea260d23448b19e0ac57f16fb2; `pnpm-lock.yaml` / sha256:0d0f142ee439b8faec01d1f40586c27e45e7bc0b6016e034a5c659b3374015ee |
-| `BOOT-03` | GPL 项目文件 | BOOT-01 | IN_PROGRESS | Codex | local-only | `docs/evidence/boot-03/license-check.json` / sha256:96c4df1a3802345a0d78ae69dda400bcf9222d348fa29aab9dffef15b7c95277 |
-| `BOOT-04` | 固定 qui 上游 | BOOT-03 | IN_PROGRESS | Codex | local-only | `docs/evidence/boot-04/qui-lock-check.json` / sha256:b4defb857d0f9ab2a2aa69a1de31240abc21f7cdb3daff110edd05c87cecc3ef |
-| `BOOT-05` | Make 与 CI | BOOT-01..03 | IN_PROGRESS | Codex | local-only | `docs/evidence/boot-05/preflight-check.json` / sha256:34532b67bf65b991533e4a1ed5ae82fffd89a84de2211f8ed7482a4129c09492 |
-| `BOOT-06` | Go 服务骨架 | BOOT-02,05 | IN_PROGRESS | Codex | local-only | `cmd/vertex-pro/main_test.go` / sha256:a2a5c80284637653eab771d7180c03ba7fd7e4ec1e06fb11fd7196fcafe7344a |
-| `BOOT-07` | React 应用骨架 | BOOT-02,05 | IN_PROGRESS | Codex | local-only | `docs/evidence/boot-07/frontend-check.json` / sha256:d66fbd061c450d571ad6ecd8b8e5f047c8c17ed378e18b2f8c3f8300085d62ea |
-| `BOOT-08` | 单二进制和容器 | BOOT-06,07 | IN_PROGRESS | Codex | local-only | `docs/evidence/boot-08/container-check.json` / sha256:68e43b3d83300185b4c19782f4f80345dff5dda1927f5cec7a8078a8e90b662c |
-| `BOOT-09` | 结构化日志与关联 ID | BOOT-06 | IN_PROGRESS | Codex | local-only | `docs/evidence/boot-09/observability-check.json` / sha256:e7d52a49a3b4dcf9a1fd85719dbe66168f5180f3d180c863937a4f83f8958955 |
+| `BOOT-02` | 固定 Go/Node/pnpm 工具链 | BOOT-01 | DONE | Codex | `bcb9d2d` | `go.mod` / sha256:ce30f9a9ff9a9115ba5758b46a31e993a518b3ea260d23448b19e0ac57f16fb2; `pnpm-lock.yaml` / sha256:0d0f142ee439b8faec01d1f40586c27e45e7bc0b6016e034a5c659b3374015ee |
+| `BOOT-03` | GPL 项目文件 | BOOT-01 | DONE | Codex | `bcb9d2d` | `docs/evidence/boot-03/license-check.json` / sha256:e7c135ffe1e792bfe69570564c9b7b06c1a5250a57b27a8aaed46369130c6ca0 |
+| `BOOT-04` | 固定 qui 上游 | BOOT-03 | DONE | Codex | `bcb9d2d` | `docs/evidence/boot-04/qui-lock-check.json` / sha256:9af48b7f723b083c2f799c146ecc8c779f41d97ede73d92854989e186145926a |
+| `BOOT-05` | Make 与 CI | BOOT-01..03 | DONE | Codex | `bcb9d2d` | `docs/evidence/boot-05/preflight-check.json` / sha256:4069d2cf4e8d52bf3fb18c4838247aa3c2d36f1bc8783bf73c322596902dcfe8 |
+| `BOOT-06` | Go 服务骨架 | BOOT-02,05 | DONE | Codex | `bcb9d2d` | `cmd/vertex-pro/main_test.go` / sha256:45520fc2fa7e333aca5e50df6ca01e0eebd394b6e0410a341cc022dc94d0e3d0 |
+| `BOOT-07` | React 应用骨架 | BOOT-02,05 | DONE | Codex | `bcb9d2d` | `docs/evidence/boot-07/frontend-check.json` / sha256:8291415ad6d2d428847add4ea8a21c7f9606c4cf50b63f175ecd73bac8d47c06 |
+| `BOOT-08` | 单二进制和容器 | BOOT-06,07 | IN_PROGRESS | Codex | `bcb9d2d` revalidation / SBOM open | `docs/evidence/boot-08/container-check.json` / sha256:c6ba8c271aada2d6a04c633671d8bba358c78c5398a3e4c48e1a72d650fdb978 |
+| `BOOT-09` | 结构化日志与关联 ID | BOOT-06 | DONE | Codex | `bcb9d2d` | `docs/evidence/boot-09/observability-check.json` / sha256:e3c58c2be2da866314514a6a436be143120fef7b0f3e4ed31338d0ac3df934f1 |
 
 ### B. 合同优先与生成链
 
@@ -302,7 +310,7 @@ PENDING -> IN_PROGRESS -> IN_REVIEW -> DONE
 | `STAT-04` | 汇总查询 | STAT-03, DB-09, CTR-01 | IN_PROGRESS | Codex | local-only | `docs/evidence/stat-04/check.json` / sha256:fca79b77b0ec46218930f9654fdfe980d00754b2971959a050d96a4c56ba6a97 |
 | `STAT-05` | 实时卡片样本 | STAT-01, CTR-01 | PENDING | — | — | — |
 | `OBS-01` | 结构化日志 | BOOT-09 | PENDING | — | — | — |
-| `OBS-02` | Metrics/health | QUI-10, CAP-07, ADD-10 | PENDING | — | — | — |
+| `OBS-02` | Metrics/health | QUI-10, CAP-07, ADD-10 | IN_PROGRESS | Codex | `a6ab72c` groundwork | `internal/metrics/metrics.go` / sha256:c167c9433dbe63679d96886ed7ea3922ee25f928967ea088a30dcf0afe063c43; counter registry only — endpoint wiring, subsystem counters, and label cardinality checks open |
 | `OBS-03` | 保留与清理 | DB-07, QUI-08, STAT-03 | PENDING | — | — | — |
 | `OBS-04` | 诊断包 | OBS-01..03, QUI-11 | PENDING | — | — | — |
 
@@ -341,7 +349,7 @@ PENDING -> IN_PROGRESS -> IN_REVIEW -> DONE
 
 | Gate | Status | Required evidence | Commit | Reviewer | Notes |
 |---|---|---|---|---|---|
-| Gate A | PENDING | 可重建骨架、工具链、许可证、单镜像 | — | — | — |
+| Gate A | PENDING | 可重建骨架、工具链、许可证、单镜像 | — | — | BOOT-01..07、09 已 DONE（2026-09-05 在 `83b062a` 源码重验，见第 2 节校准）；仅余 BOOT-08（SBOM 工具链与 compose 重验） |
 | Gate B | PENDING | 合同源、生成链、C1 不伪 PASS | — | — | — |
 | Gate C | PENDING | fresh/upgrade schema、触发器和事务负测 | — | — | — |
 | Gate D | PENDING | 三 Profile fixture 确定性 Sync；未验证 fail closed | — | — | — |
@@ -470,4 +478,7 @@ PENDING -> IN_PROGRESS -> IN_REVIEW -> DONE
 | 2026-09-03 | 派发阶段接入运行时：新增 `internal/dispatchstage`（运维存储/容量参考行幂等 upsert、DISCOVERED job 准备、artifact 重下载、qbadd 重建 Add 请求）并经 `QuiConfig.DispatchStage` 装配（仅 EnableDispatch+VERIFIED 可启动）；app 层完整闭环测试——VERIFIED 战役 + 调度建链 + 派发阶段经 qui Proxy 向自有 qB 实例恰好一次添加任务请求（Add） → attempt/job=AWAITING_CONFIRMATION。RSS→规则→Placement→Reservation→Dispatch→确认的生产链路在运行时全面可用 | Codex |
 | 2026-09-03 | 生产运行时装配完成：`internal/app` sync 周期接入 confirmcoordinator（RunOnce 事件 → OnSyncEvent → 状态刷新），新增 `Runtime.TickSync` 供测试与诊断工具同步执行单个周期；app 层测试验证 coordinator 已挂载且 tick 后状态保持 READY。RSS→规则→Placement→Reservation→Dispatch→FirstConfirm/对账调度链在运行时层面全部接通 | Codex |
 | 2026-09-03 | 新增 `internal/schedulercycle`：单个 RSS 轮询周期的生产编排——rssfetch 拉取 → rsspreview 解析（RSS/Atom）→ rsssource 去重 → torrentdownload 受控下载（host 白名单）→ torrentparse/torrentidentity 身份计算 → matchpipeline 匹配建链；逐条目失败不中断周期并记入 Failures。端到端测试覆盖真实 HTTP 服务器上的完整周期与重复轮询去重 | Codex |
-| 2026-09-05 | 新增第 0 节“项目性质与术语澄清”，并为多处表述补充上下文（外部实例均为用户自有实例、kill -9 为对自身探针子进程的崩溃模拟、SSRF/Secret 相关条目均为防御性加固项、写操作语义明确为自有 qB 的任务管理操作），不改变任何技术事实、实施状态、Gate 判定或证据引用；同步在施工手册与 RC8 主规范篇首加入同源的非规范性阅读指引 | Codex |
+| 2026-09-05 | 权威文档加入项目性质与术语锚点（第 0 节与篇首阅读指引），不改变技术语义（`bac042f`） | Codex |
+| 2026-09-05 | 修复三处验证管线缺陷：profileverification 战役测试时间炸弹、dispatchflow 外部 kill 子进程被死锁检测器提前终止、preflight test-unit 失败静默终止（`4a95cb4`、`b2bfddf`）；修复后全量 preflight 11 目标 PASS，连续两次全量 Go 套件零失败 | Codex |
+| 2026-09-05 | 在 `83b062a` 源码重验并刷新 BOOT-02..09 证据（`bcb9d2d`）；BOOT-02..07、09 收口 DONE，BOOT-08 保留 IN_PROGRESS（SBOM 工具链与 compose 重验），Gate A 仅余 BOOT-08 | Codex |
+| 2026-09-05 | 新增 `internal/metrics` 计数器注册表作为 OBS-02 地基，OBS-02 转 IN_PROGRESS（`a6ab72c`） | Codex |
