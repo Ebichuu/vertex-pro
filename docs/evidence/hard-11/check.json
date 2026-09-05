@@ -1,0 +1,20 @@
+{
+  "item": "HARD-11",
+  "title": "数据保留",
+  "status": "PASS",
+  "branch": "main",
+  "source_commit": "d1a6fbe",
+  "implementation": [
+    "default retention values documented and enforced by internal/retention DefaultPolicy: durable events 7d, terminal commands 7d, idempotency 24h, stats raw 30d / hourly 180d, snapshots 7d, audit rows 90d",
+    "batched cleanup: LIMIT-ed chunks, one immediate transaction per batch, no long write locks (OBS-03)",
+    "snapshot safety: the newest (generation, revision) per instance is never swept - pinned by TestSweepRemovesOldSnapshotsButKeepsLatestRevision",
+    "disk watermark: cross-platform free-space check (x/sys windows/unix) reported as a named readiness reason and inside the support bundle digest; below-watermark detail points operators at the retention sweep"
+  ],
+  "checks": {
+    "defaults": "PASS: DefaultPolicy values mirror the RC8 retention contract block",
+    "batched": "PASS: TestSweepBatchesDeletesUntilEmpty (BatchSize=2 across 5 expired rows)",
+    "snapshot_safety": "PASS: the newest snapshot per instance survives even when expired; only non-latest expired rows and their unreferenced files are removed",
+    "watermark": "PASS: TestDiskFreeCheckReportsWatermark - ok above the watermark, fails with a below-watermark reason under it; readiness --min-free-bytes wires the threshold",
+    "full_suite": "PASS: go test ./... twice on 2026-09-06, 101 packages ok, 0 failures"
+  }
+}

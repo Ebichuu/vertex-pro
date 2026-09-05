@@ -63,11 +63,11 @@ PENDING -> IN_PROGRESS -> IN_REVIEW -> DONE
 | I | API、认证与 SSE | `12/12 DONE` | Gate I | `PASS` |
 | J | 前端页面 | `10/13 DONE; 3 PENDING` | Gate J | `PENDING` |
 | K | 历史、统计与观测 | `12/12 DONE` | Gate K | `PASS` |
-| L | 加固与运维 | `6/12 DONE; 6 PENDING` | Gate L | `PENDING` |
+| L | 加固与运维 | `7/12 DONE; 5 PENDING` | Gate L | `PENDING` |
 | M | RC 与冻结 | `0/7 DONE; 7 PENDING` | Gate M / G3 | `PENDING` |
 
-总体状态：`133/149 DONE`；`16 PENDING`。
-Gate A–I 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 12/12、E 13/13、F 12/12、G 14/14、H 14/14、I 12/12）；G1 Gate 于 2026-09-06 评审通过。阶段 J 已收口 UI-01..10，阶段 K 已收口 HIS-01..02 与 STAT-01..04。剩余 16 项均为待实现新功能或 RC 冻结工作：J 的 UI-11/12/13、L 的 HARD-02/06/07/09/11/12、M 全部 7 项 RC 冻结。
+总体状态：`134/149 DONE`；`15 PENDING`。
+Gate A–I 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 12/12、E 13/13、F 12/12、G 14/14、H 14/14、I 12/12）；G1 Gate 于 2026-09-06 评审通过。阶段 J 已收口 UI-01..10，阶段 K 已收口 HIS-01..02 与 STAT-01..04。剩余 15 项均为待实现新功能或 RC 冻结工作：J 的 UI-11/12/13、L 的 HARD-02/06/07/09/12、M 全部 7 项 RC 冻结。
 
 ### 2026-09-06 状态校准
 
@@ -347,7 +347,7 @@ Gate A–I 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 1
 | `HARD-08` | 备份恢复 | DB-11, ADD-13, OBS-03 | DONE | Codex | `46ab21e` | `docs/evidence/hard-08/check.json` / sha256:7d51be3b05f70be65325f4443ac5594790e7885a3828001010da624eb3927e1e |
 | `HARD-09` | 升级回滚 | DB-11, HARD-08 | PENDING | — | — | — |
 | `HARD-10` | 运维命令 | BOOT-06, DB-10, OBS-04 | DONE | Codex | `e30507c` | `docs/evidence/hard-10/check.json` / sha256:4799e5d38853f407ce9d9c587ec9ca2e574264587b75020b85263d4f0ae92db5 |
-| `HARD-11` | 数据保留 | OBS-03, HARD-08 | PENDING | — | — | — |
+| `HARD-11` | 数据保留 | OBS-03, HARD-08 | DONE | Codex | `d1a6fbe` | `docs/evidence/hard-11/check.json` / sha256:6bb8facbaf64490e5200e3de058ff9eb17c47f9169117c0f6bb5a29dfd39d23f |
 | `HARD-12` | 发布镜像 | BOOT-08, HARD-01..11 | PENDING | — | — | — |
 
 ### M. RC、证据与冻结
@@ -524,3 +524,4 @@ Gate A–I 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 1
 | 2026-09-06 | HARD-05 完成：四个 Go 原生 fuzz 目标（RSS/bencode/sync delta/cursor）各 30 秒共约 9900 万次执行零崩溃，限制不变量钉入断言，种子语料随套件常驻（`ddd3a28`），L 阶段 4/12，总览推进至 131/149 | Codex |
 | 2026-09-06 | HARD-10 完成：verify/readiness/support-bundle 运维命令（共享离线检查集：迁移版本/启动一致性/外键完整性，命名原因输出），运行时端到端验证 PASS（`e30507c`），L 阶段 5/12，总览推进至 132/149 | Codex |
 | 2026-09-06 | HARD-08 完成：AES-256-GCM 加密备份/解密恢复/restore-drill 命令（密钥仅经环境变量，错误密钥拒绝且不落盘），运行时演练 32 表验证 PASS（`46ab21e`），L 阶段 6/12，总览推进至 133/149 | Codex |
+| 2026-09-06 | HARD-11 完成：保留默认值核对、快照不误删测试、跨平台磁盘水位检查接入 readiness/support-bundle（`d1a6fbe`），L 阶段 7/12，总览推进至 134/149 | Codex |
