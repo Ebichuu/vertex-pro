@@ -63,11 +63,11 @@ PENDING -> IN_PROGRESS -> IN_REVIEW -> DONE
 | I | API、认证与 SSE | `12/12 DONE` | Gate I | `PASS` |
 | J | 前端页面 | `10/13 DONE; 3 PENDING` | Gate J | `PENDING` |
 | K | 历史、统计与观测 | `12/12 DONE` | Gate K | `PASS` |
-| L | 加固与运维 | `2/12 DONE; 10 PENDING` | Gate L | `PENDING` |
+| L | 加固与运维 | `3/12 DONE; 9 PENDING` | Gate L | `PENDING` |
 | M | RC 与冻结 | `0/7 DONE; 7 PENDING` | Gate M / G3 | `PENDING` |
 
-总体状态：`129/149 DONE`；`20 PENDING`。
-Gate A–I 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 12/12、E 13/13、F 12/12、G 14/14、H 14/14、I 12/12）；G1 Gate 于 2026-09-06 评审通过。阶段 J 已收口 UI-01..10，阶段 K 已收口 HIS-01..02 与 STAT-01..04。剩余 20 项均为待实现新功能或 RC 冻结工作：J 的 UI-11/12/13、L 的 HARD-02/04..12、M 全部 7 项 RC 冻结。
+总体状态：`130/149 DONE`；`19 PENDING`。
+Gate A–I 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 12/12、E 13/13、F 12/12、G 14/14、H 14/14、I 12/12）；G1 Gate 于 2026-09-06 评审通过。阶段 J 已收口 UI-01..10，阶段 K 已收口 HIS-01..02 与 STAT-01..04。剩余 19 项均为待实现新功能或 RC 冻结工作：J 的 UI-11/12/13、L 的 HARD-02/05..12、M 全部 7 项 RC 冻结。
 
 ### 2026-09-06 状态校准
 
@@ -340,7 +340,7 @@ Gate A–I 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 1
 | `HARD-01` | Secret/隐私扫描 | BOOT-03,09, OBS-04 | DONE | Codex | `89176166` | `docs/evidence/hard-01/check.json` / sha256:30a2729badfea05ece5929ea790dea45b63de9afc9ee43b418e460c5572b4d15 |
 | `HARD-02` | 依赖与许可证 | BOOT-02..04, RULE-12 | PENDING | — | — | — |
 | `HARD-03` | API 安全 | API-01..07 | DONE | Codex | `1113b8c` | `docs/evidence/hard-03/check.json` / sha256:1b43d1978bf2a87e5852f715bd11648161a2cd6e745567f1285ab132f77cd6b2 |
-| `HARD-04` | SSRF 与出站边界 | RSS-03, TOR-01, QUI-03 | PENDING | — | — | — |
+| `HARD-04` | SSRF 与出站边界 | RSS-03, TOR-01, QUI-03 | DONE | Codex | `131a314` | `docs/evidence/hard-04/check.json` / sha256:52cfa4f6148035198aee9617b6335cffc77ebe1e845a40531c303a663318c47d |
 | `HARD-05` | Parser fuzz | TOR-02, QUI-07, RULE-01 | PENDING | — | — | — |
 | `HARD-06` | 并发加固 | QUI-09, RACE-02, CAP-08, ADD-08 | PENDING | — | — | — |
 | `HARD-07` | 性能基线 | UI-13, STAT-05, HARD-06 | PENDING | — | — | — |
@@ -520,3 +520,4 @@ Gate A–I 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 1
 | 2026-09-06 | OBS-04 完成：doctor 升级为 digest 戳诊断包（配置摘要脱敏/构建身份/状态检查），运行时验证 PASS（`3d3ce7f`）；阶段 K 12/12 收口 DONE，Gate K 评审 PASS，总览推进至 127/149 | Codex |
 | 2026-09-06 | HARD-01 完成：tools/secretscan 扫描器（熵值+模式+允许清单，含二进制模式与 CJK 路径处理），仓库 630 文件与发布二进制扫描 0 发现（`89176166`），L 阶段 1/12，总览推进至 128/149 | Codex |
 | 2026-09-06 | HARD-03 完成：管理员安全事件审计（initialize/登录失败/锁定/会话签发/登出写入 system_events，与状态变更同事务）、API 响应 no-store 头、webembed 路径穿越负测（`1113b8c`），L 阶段 2/12，总览推进至 129/149 | Codex |
+| 2026-09-06 | HARD-04 完成：internal/outbound 出站边界（封锁网段分类、DNS 绕过拒绝、双栈答案整体校验、重定向逐跳重验），rssfetch/torrentdownload 接入边界开关，serve 默认加固（`131a314`），L 阶段 3/12，总览推进至 130/149 | Codex |

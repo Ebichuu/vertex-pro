@@ -1,0 +1,23 @@
+{
+  "item": "HARD-04",
+  "title": "SSRF 与出站边界",
+  "status": "PASS",
+  "branch": "main",
+  "source_commit": "131a314",
+  "implementation": [
+    "internal/outbound: blocked-range classification (loopback, RFC1918/ULA private, link-local incl. 169.254 metadata, unspecified, multicast), DNS-answer validation (a hostname resolving into a blocked range is rejected, dual-stack answers must be fully clean), and per-hop URL validation (scheme, userinfo, host allowlist)",
+    "rssfetch: Boundary option - every redirect hop is revalidated, private IP literals and DNS bypass rejected when hardened; host allowlist supported per fetcher",
+    "torrentdownload: RejectPrivateIPs mode with injectable resolver covering direct downloads and redirect hops on top of the existing host allowlist and redirect revalidation",
+    "runtime: serve enables hardened mode by default; unhardened behavior preserved for local development and tests"
+  ],
+  "checks": {
+    "ip_ranges": "PASS: TestIsBlockedIPRanges - 127.0.0.1/10.x/172.16-31/192.168/169.254.169.254/0.0.0.0/::1/fe80/fc00/ff02 blocked; public addresses allowed",
+    "dns_bypass": "PASS: fake-resolver tests in outbound, rssfetch, and torrentdownload - hostnames resolving into private ranges rejected, dual-stack answers with one blocked address rejected",
+    "redirect_bypass": "PASS: redirect hops revalidated - allowlisted host redirecting outside the allowlist rejected (rssfetch and torrentdownload)",
+    "scheme_userinfo": "PASS: non-http schemes and userinfo-bearing URLs rejected (outbound + existing validateURL)",
+    "allowlist": "PASS: exact-host allowlist enforcement with port normalization (rssfetch and torrentdownload)",
+    "dev_compat": "PASS: unhardened mode tolerates loopback targets; existing app/scheduler/dispatch tests unaffected",
+    "full_suite": "PASS: go test ./... twice on 2026-09-06, 101 packages ok, 0 failures"
+  },
+  "residual": "DNS pinning at dial time (TOCTOU between validation and dial) is not implemented; the validation-at-fetch posture plus the qui fixed origin covers the V1 threat model, and a pinning dialer can be added without interface changes."
+}
