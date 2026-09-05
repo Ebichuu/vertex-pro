@@ -1,0 +1,20 @@
+{
+  "item": "OBS-01",
+  "title": "结构化日志",
+  "status": "PASS",
+  "branch": "main",
+  "source_commit": "f2906ec",
+  "implementation": [
+    "internal/observability: slog JSON logger with ReplaceAttr redaction",
+    "RC8 correlation fields request_id/command_id/job_id/attempt_id/instance_id flow from context into every record",
+    "RedactString strips secret query parameters and URL userinfo credentials; sensitive attribute keys are fully redacted"
+  ],
+  "checks": {
+    "secret_corpus_scan": "PASS: TestLoggerRedactsSecretCorpus sweeps realistic secret shapes (announce passkey, api_key and access_token queries, https and udp URLs, URL userinfo credentials) and asserts raw secrets never reach the output while benign parameters survive",
+    "sensitive_key_scan": "PASS: TestLoggerRedactsSensitiveAttributeKeys walks the sensitive key fragment set including x_api_key/api_key header shapes",
+    "correlation_fields": "PASS: TestLoggerKeepsCorrelationFieldsAndBenignData asserts all five RC8 correlation fields render and benign query parameters are not damaged",
+    "regression": "PASS: existing redaction tests (TestJSONLoggerRedactsSecretsAndURLQuery, TestRedactStringPreservesNonSecretQueryValues) still pass after the userinfo/api_key fix",
+    "full_suite": "PASS: go test ./... on 2026-09-06, 96 packages ok, 0 failures"
+  },
+  "fix_note": "The corpus scan found and fixed two real leaks: URL userinfo credentials (RC8 20.1 requires removal) passed through untouched, and attribute keys matching x_api_key/api_key hit none of the previous sensitive fragments."
+}

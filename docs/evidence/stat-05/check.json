@@ -1,0 +1,19 @@
+{
+  "item": "STAT-05",
+  "title": "实时卡片样本",
+  "status": "PASS",
+  "branch": "main",
+  "source_commit": "65e5d1e",
+  "implementation": [
+    "internal/realtimecards: Card carries instantaneous download/upload rates, task counts, sync state, and source marker; Registry broadcasts transient stats.realtime events that never occupy event IDs",
+    "Freshness marks NOT_FRESH for missing/stale samples and never fabricates values",
+    "resourcesapi /stats/downloaders/realtime rebuilds the card view for disconnected clients"
+  ],
+  "checks": {
+    "broadcast": "PASS: TestUpdateBroadcastsTransientEventWithoutEventID - subscriber receives the card payload without a persistent event id",
+    "freshness": "PASS: TestFreshnessMarksStaleCardsWithoutFabrication - FRESH/NOT_FRESH truth table, unknown instances stay NOT_FRESH",
+    "slow_and_disconnected_clients": "PASS: TestSlowSubscriberDroppedAndSnapshotRebuilds - a subscriber that stops reading is dropped once its 64-row buffer fills without blocking the producer, fresh subscribers still receive live events, and the snapshot rebuild serves the latest card (STAT-05 acceptance: 慢/断线客户端)",
+    "sse_layer": "PASS: sseserver TestHeartbeatAndSlowClientDrop and TestClientDisconnectUnsubscribes cover the transport side",
+    "full_suite": "PASS: go test ./... on 2026-09-06, 96 packages ok, 0 failures"
+  }
+}
