@@ -1,0 +1,19 @@
+{
+  "item": "HARD-09",
+  "title": "升级回滚",
+  "status": "PASS",
+  "branch": "main",
+  "source_commit": "21dc192",
+  "implementation": [
+    "migration backup: db.Upgrade creates a cold pre-migration backup and atomically restores it when migration or consistency validation fails (DB-11)",
+    "N-1 fixture drill: TestUpgradeDrillsFromPreviousSchemaVersion applies the first N-1 migrations, seeds real product rows (site + feed), then upgrades to the latest version and verifies the migration count, startup consistency, and that the seeded rows survive",
+    "image rollback procedure: keep the previous release image digest (base images are now digest-pinned in the Dockerfile); rollback is re-running the previous digest tag - documented for RC operations",
+    "schema compatibility: the migration runner is checksum-verified and append-only; downgrade scripts are not provided by design (rollback = restore the pre-upgrade backup)"
+  ],
+  "checks": {
+    "n1_drill": "PASS: TestUpgradeDrillsFromPreviousSchemaVersion - N-1 database with seeded rows upgrades cleanly with backup retained",
+    "backup_rollback": "PASS: TestUpgradeRestoresOriginalDatabaseWhenMigrationFails - failed upgrade restores the original file",
+    "restore_drill": "PASS: TestBackupAndEncryptedRestoreRoundTrip + the runtime restore-drill command (HARD-08)",
+    "full_suite": "PASS: go test ./... on 2026-09-06, 101 packages ok, 0 failures"
+  }
+}

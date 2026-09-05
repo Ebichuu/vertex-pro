@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestUpgradeCreatesBackupAndMigratesSupportedOldSchema(t *testing.T) {
@@ -156,4 +157,60 @@ func migrationsSQL(t *testing.T, version int) string {
 	}
 	t.Fatalf("migration %d not found", version)
 	return ""
+}
+
+// TestUpgradeDrillsFromPreviousSchemaVersion 是 HARD-09 的 N-1 fixture
+// 演练：先只应用前 N-1 个迁移并写入真实业务行，再执行 Upgrade 升级到
+// 最新版本，验证业务数据存活、迁移计数完整且启动一致性通过。
+func TestUpgradeDrillsFromPreviousSchemaVersion(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "vertex-pro.db")
+	config := Config{Path: path}
+	fullRunner, err := DefaultRunner()
+	if err != nil {
+		t.Fatalf("DefaultRunner() error = %v", err)
+	}
+	if len(fullRunner.Migrations) < 2 {
+		t.Fatal("expected at least two migrations for the N-1 drill")
+	}
+	n1 := fullRunner.Migrations[:len(fullRunner.Migrations)-1]
+	oldRunner, err := NewRunner(n1)
+	if err != nil {
+		t.Fatalf("NewRunner(N-1) error = %v", err)
+	}
+	database := openTestDatabaseAtPath(t, path)
+	if err := oldRunner.Apply(context.Background(), database); err != nil {
+		t.Fatalf("N-1 Apply() error = %v", err)
+	}
+	// N-1 版本即存在的产品数据：站点与订阅源各一行。
+	nowText := time.Date(2026, 9, 6, 12, 0, 0, 0, time.UTC).Format(time.RFC3339)
+	if _, err := database.Exec(`INSERT INTO sites(site_id, name, base_url, enabled, created_at, updated_at) VALUES ('site-n1','HDSky','https://hdsky.me',1,?,?)`, nowText, nowText); err != nil {
+		t.Fatalf("seed site at N-1: %v", err)
+	}
+	if _, err := database.Exec(`INSERT INTO feeds(feed_id, site_id, name, feed_url, enabled, created_at, updated_at) VALUES ('feed-n1','site-n1','Main','https://hdsky.me/feed',1,?,?)`, nowText, nowText); err != nil {
+		t.Fatalf("seed feed at N-1: %v", err)
+	}
+	if err := database.Close(); err != nil {
+		t.Fatalf("close N-1 database: %v", err)
+	}
+
+	backupPath := filepath.Join(t.TempDir(), "n1.bak")
+	if _, err := Upgrade(context.Background(), config, UpgradeOptions{BackupPath: backupPath}); err != nil {
+		t.Fatalf("Upgrade() error = %v", err)
+	}
+	if _, err := os.Stat(backupPath); err != nil {
+		t.Fatalf("backup stat error = %v", err)
+	}
+	upgraded := openTestDatabaseAtPath(t, path)
+	defer upgraded.Close()
+	assertMigrationCount(t, upgraded, len(fullRunner.Migrations))
+	if err := CheckStartupConsistency(context.Background(), upgraded); err != nil {
+		t.Fatalf("upgraded consistency error = %v", err)
+	}
+	var siteName, feedURL string
+	if err := upgraded.QueryRow(`SELECT s.name, f.feed_url FROM sites s JOIN feeds f ON f.site_id = s.site_id WHERE s.site_id = 'site-n1'`).Scan(&siteName, &feedURL); err != nil {
+		t.Fatalf("seeded rows did not survive the upgrade: %v", err)
+	}
+	if siteName != "HDSky" || feedURL != "https://hdsky.me/feed" {
+		t.Fatalf("seeded data mismatch: %q %q", siteName, feedURL)
+	}
 }
