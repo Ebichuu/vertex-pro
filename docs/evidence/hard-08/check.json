@@ -1,0 +1,21 @@
+{
+  "item": "HARD-08",
+  "title": "备份恢复",
+  "status": "PASS",
+  "branch": "main",
+  "source_commit": "46ab21e",
+  "implementation": [
+    "db.BackupDatabase: WAL checkpoint + atomic cold copy of the SQLite file (0600)",
+    "db.EncryptFile/DecryptFile: AES-256-GCM with a random nonce, key loaded from an environment variable via db.LoadKey (64 hex = 32 bytes); wrong keys fail without writing the destination",
+    "cmd backup: cold backup with optional encryption; cmd restore: optional decryption + atomic restore with sidecar cleanup",
+    "cmd restore-drill: backs up, encrypts, decrypts into a temp directory, opens the restored database, and runs startup consistency - the production database is never touched",
+    "snapshots are derived data re-creatable by re-syncing qui; the SQLite backup is the authoritative restore artifact (documented policy, consistent with OBS-03 pruning)"
+  ],
+  "checks": {
+    "round_trip": "PASS: TestBackupAndEncryptedRestoreRoundTrip - plaintext restore drill reads the drill marker; wrong-key decryption fails without output; correct-key decryption restores identical content",
+    "key_handling": "PASS: TestLoadKeyRejectsBadInput - non-hex and short keys rejected",
+    "runtime_drill": "PASS: serve created a database, then backup (encrypted, 516124 bytes) and restore-drill reported 32 tables verified from the encrypted backup",
+    "upgrade_backup": "PASS: db.Upgrade already creates a pre-migration backup and restores it when migration or consistency fails (DB-11 evidence)"
+  },
+  "scope_note": "The drill is a manual/CI command; scheduling it periodically belongs to deployment (cron/systemd) since the server process must not block on drills. Snapshot directory encryption follows the same EncryptFile helper when operators archive the root."
+}
