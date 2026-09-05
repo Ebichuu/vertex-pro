@@ -11,6 +11,7 @@ import (
 	"github.com/vertex-pro/vertex-pro/internal/adminauth"
 	"github.com/vertex-pro/vertex-pro/internal/apipaging"
 	"github.com/vertex-pro/vertex-pro/internal/historyproject"
+	"github.com/vertex-pro/vertex-pro/internal/historytimeline"
 	"github.com/vertex-pro/vertex-pro/internal/httpapi"
 	"github.com/vertex-pro/vertex-pro/internal/realtimecards"
 	"github.com/vertex-pro/vertex-pro/internal/rssservice"
@@ -302,7 +303,25 @@ func (d Deps) getJob(response http.ResponseWriter, request *http.Request) {
 		httpapi.WriteError(response, request, "INTERNAL_ERROR", "query job failed")
 		return
 	}
-	d.writeData(response, request, map[string]any{"id": jobID, "title": title, "job_state": jobState})
+	// HIS-03 详情时间线：服务端按 occurred_at/event_id 稳定排序，stage 输出
+	// 用户可读阶段名（§16.6），内部 from/to 状态仅作为诊断字段保留。
+	events, err := historytimeline.ForJob(request.Context(), d.Database, jobID)
+	if err != nil {
+		httpapi.WriteError(response, request, "INTERNAL_ERROR", "query job timeline failed")
+		return
+	}
+	timeline := make([]map[string]any, 0, len(events))
+	for _, event := range events {
+		timeline = append(timeline, map[string]any{
+			"event_id":    event.EventID,
+			"stage":       event.Stage(),
+			"from_state":  event.FromState,
+			"to_state":    event.ToState,
+			"reason_code": event.ReasonCode,
+			"occurred_at": event.OccurredAt,
+		})
+	}
+	d.writeData(response, request, map[string]any{"id": jobID, "title": title, "job_state": jobState, "timeline": timeline})
 }
 
 func (d Deps) listInstances(response http.ResponseWriter, request *http.Request) {
