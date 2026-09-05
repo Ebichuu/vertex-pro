@@ -1,4 +1,4 @@
-.PHONY: bootstrap generate generate-check fmt fmt-check lint test-unit test-race test-contracts test-integration test-e2e test-protocol test-fault verify-license verify-implementation-plan verify-contracts preflight ci build image
+.PHONY: bootstrap generate generate-check fmt fmt-check lint test-unit test-race test-contracts test-integration test-e2e test-protocol test-fault verify-license verify-implementation-plan verify-contracts sbom preflight ci build image
 
 SHELL := pwsh
 
@@ -50,6 +50,9 @@ verify-implementation-plan:
 
 verify-contracts:
 	go run ./tools/contractcheck
+
+sbom:
+	pwsh -NoProfile -File tools/dev/collect-sbom.ps1
 
 preflight:
 	pwsh -NoProfile -File tools/dev/preflight.ps1
