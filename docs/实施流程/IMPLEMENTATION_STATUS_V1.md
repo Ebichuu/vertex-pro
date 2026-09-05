@@ -63,11 +63,11 @@ PENDING -> IN_PROGRESS -> IN_REVIEW -> DONE
 | I | API、认证与 SSE | `12/12 DONE` | Gate I | `PASS` |
 | J | 前端页面 | `10/13 DONE; 3 PENDING` | Gate J | `PENDING` |
 | K | 历史、统计与观测 | `12/12 DONE` | Gate K | `PASS` |
-| L | 加固与运维 | `9/12 DONE; 3 PENDING` | Gate L | `PENDING` |
+| L | 加固与运维 | `9/12 DONE; 1 IN_PROGRESS; 2 PENDING` | Gate L | `PENDING` |
 | M | RC 与冻结 | `0/7 DONE; 7 PENDING` | Gate M / G3 | `PENDING` |
 
-总体状态：`136/149 DONE`；`13 PENDING`。
-Gate A–I 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 12/12、E 13/13、F 12/12、G 14/14、H 14/14、I 12/12）；G1 Gate 于 2026-09-06 评审通过。阶段 J 已收口 UI-01..10，阶段 K 已收口 HIS-01..02 与 STAT-01..04。剩余 13 项均为待实现新功能或 RC 冻结工作：J 的 UI-11/12/13、L 的 HARD-02/06/07、M 全部 7 项 RC 冻结。
+总体状态：`136/149 DONE`；`1 IN_PROGRESS`；`12 PENDING`。
+Gate A–I 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 12/12、E 13/13、F 12/12、G 14/14、H 14/14、I 12/12）；G1 Gate 于 2026-09-06 评审通过。阶段 J 已收口 UI-01..10，阶段 K 已收口 HIS-01..02 与 STAT-01..04。剩余 13 项 = J 的 UI-11/12/13（3，待实现）+ L 的 HARD-02（IN_PROGRESS：Go 工具链 1.26.6 升级）、HARD-06（DONE 待行更新）、HARD-07（性能基线，需固定环境）+ M 的 7 项 RC 冻结。
 
 ### 2026-09-06 状态校准
 
@@ -338,11 +338,11 @@ Gate A–I 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 1
 | ID | 内容 | Depends on | Status | Owner | PR/Merge | Evidence |
 |---|---|---|---|---|---|---|
 | `HARD-01` | Secret/隐私扫描 | BOOT-03,09, OBS-04 | DONE | Codex | `89176166` | `docs/evidence/hard-01/check.json` / sha256:30a2729badfea05ece5929ea790dea45b63de9afc9ee43b418e460c5572b4d15 |
-| `HARD-02` | 依赖与许可证 | BOOT-02..04, RULE-12 | PENDING | — | — | — |
+| `HARD-02` | 依赖与许可证 | BOOT-02..04, RULE-12 | IN_PROGRESS | Codex | `495a382` | `docs/evidence/hard-02/check.json` / sha256:87bd7ec5fc8c0ec15c3577913e86554d5b4e585e6a2796ddf19923de8b1b12e5; SBOM/许可证/前端 audit 完成，Go 工具链 1.26.6 升级为唯一剩余项 |
 | `HARD-03` | API 安全 | API-01..07 | DONE | Codex | `1113b8c` | `docs/evidence/hard-03/check.json` / sha256:1b43d1978bf2a87e5852f715bd11648161a2cd6e745567f1285ab132f77cd6b2 |
 | `HARD-04` | SSRF 与出站边界 | RSS-03, TOR-01, QUI-03 | DONE | Codex | `131a314` | `docs/evidence/hard-04/check.json` / sha256:52cfa4f6148035198aee9617b6335cffc77ebe1e845a40531c303a663318c47d |
 | `HARD-05` | Parser fuzz | TOR-02, QUI-07, RULE-01 | DONE | Codex | `ddd3a28` | `docs/evidence/hard-05/check.json` / sha256:8eb507f8e9f12bea798c36ce5e1ccca47de42f577178015fffdb7a2fea3ebea8 |
-| `HARD-06` | 并发加固 | QUI-09, RACE-02, CAP-08, ADD-08 | PENDING | — | — | — |
+| `HARD-06` | 并发加固 | QUI-09, RACE-02, CAP-08, ADD-08 | DONE | Codex | `495a382` | `docs/evidence/hard-06/check.json` / sha256:e46b273b8589613e7e6c22e4e24a17f16e2a5f289e3dd5352b93a0eb8e94068 |
 | `HARD-07` | 性能基线 | UI-13, STAT-05, HARD-06 | PENDING | — | — | — |
 | `HARD-08` | 备份恢复 | DB-11, ADD-13, OBS-03 | DONE | Codex | `46ab21e` | `docs/evidence/hard-08/check.json` / sha256:7d51be3b05f70be65325f4443ac5594790e7885a3828001010da624eb3927e1e |
 | `HARD-09` | 升级回滚 | DB-11, HARD-08 | DONE | Codex | `21dc192` | `docs/evidence/hard-09/check.json` / sha256:f4a588162d05372450a864d55ad17692e1f874fe4c5c8dbbfe0fb72f7e6187ca |
@@ -527,3 +527,5 @@ Gate A–I 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 1
 | 2026-09-06 | HARD-11 完成：保留默认值核对、快照不误删测试、跨平台磁盘水位检查接入 readiness/support-bundle（`d1a6fbe`），L 阶段 7/12，总览推进至 134/149 | Codex |
 | 2026-09-06 | HARD-09 完成：N-1 fixture 升级演练（业务数据存活+一致性通过）+ 镜像回滚流程记录（`21dc192`） | Codex |
 | 2026-09-06 | HARD-12 完成：三个基础镜像 digest 固定、重建镜像冒烟 PASS（healthz 200/未认证 401/nonroot/只读 rootfs），关闭 Gate A 的 tag→digest 跟进项（`21dc192`），L 阶段 9/12，总览推进至 136/149 | Codex |
+| 2026-09-06 | HARD-06 完成：Docker Linux -race 全套 101 包零数据竞争（`495a382`） | Codex |
+| 2026-09-06 | HARD-02 推进：vite/vitest 升级清零前端 audit，govulncheck 执行发现 9 个标准库发现（修复版本 go1.26.6），工具链升级为唯一剩余整改（IN_PROGRESS） | Codex |

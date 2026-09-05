@@ -1,0 +1,20 @@
+{
+  "item": "HARD-06",
+  "title": "并发加固",
+  "status": "PASS",
+  "branch": "main",
+  "source_commit": "495a382",
+  "implementation": [
+    "race detector: go test -race ./... -count=1 executed in the Linux container (golang:1.26.3-bookworm) across all packages including the concurrency-critical seams (syncwatcher single in-flight request, dispatch commit/flow, retention worker, confirmation coordinator)",
+    "worker lifecycle: runtime workers (scheduler cycle, sync ticker, dispatch stage, retention) share one WaitGroup with context cancellation on Close",
+    "single watcher: one sync watcher per instance with generation-gated requests (QUI-09)",
+    "worker lease: dispatch stage processes jobs in bounded batches under the caller context",
+    "stress and kill -9: the external kill test re-executes a real child process, kills it at the send boundary, and verifies no-replay recovery; the P0 campaign repeated the matrix three times"
+  ],
+  "checks": {
+    "race_detector_linux": "PASS: docker Linux -race ./... -count=1 across 101 packages, zero data races (2026-09-06)",
+    "windows_note": "race on the Windows host remains CGO-blocked; the Linux container run is the authoritative race evidence",
+    "kill9": "PASS: TestExternalProcessKillAfterSendBeforeRecordRecoversWithoutReplay (with the 60s boundary deadline hardening)",
+    "full_suite": "PASS: go test ./... twice on 2026-09-06, 101 packages ok, 0 failures"
+  }
+}
