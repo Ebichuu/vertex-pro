@@ -1,7 +1,11 @@
 {
   "item": "CTR-08",
-  "status": "IN_PROGRESS",
-  "branch": "local-only",
+  "status": "PASS",
+  "branch": "main",
+  "revalidation_2026-09-05": {
+    "source_commit": "ac0ff927254e670e689dee0e12cbadbf916ce449",
+    "results": "typecheck, vitest 81/81, and production build all PASS inside the 2026-09-05 preflight; all embedded input digests re-verified against current source"
+  },
   "implementation": [
     "OpenAPI-shaped Dashboard and Page fixtures for instances, Sites & RSS, and Rules",
     "stable ErrorEnvelope and stale snapshot fixtures",
@@ -38,6 +42,6 @@
     "unhandled_requests": "PASS: server remains configured to fail on unhandled requests",
     "no_real_upstream_calls": "PASS"
   },
-  "blocker": "Only frontend mock transport is implemented. Real API worker lifecycle, database workers, qui/qB adapters, browser worker integration, and main-flow E2E remain future work.",
+  "scope_note": "MSW covers the frontend contract transport; the backend API and database workers exist local-only (stage I evidence), and browser main-flow E2E (UI-13) plus live qui/qB integration remain future work.",
   "no_real_upstream_calls": true
 }

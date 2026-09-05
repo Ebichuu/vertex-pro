@@ -2,7 +2,12 @@
     "mode":  "local-only",
     "source":  "docs/产品方案设计/VERTEX_PRO_V1_USER_RULES_CONTRACT.md",
     "visible_label_count":  10,
-    "updated_at":  "2026-08-24T00:00:00Z",
+    "updated_at":  "2026-09-05T12:30:00Z",
+    "revalidation_2026-09-05":  {
+        "source_commit":  "ac0ff927254e670e689dee0e12cbadbf916ce449",
+        "command":  "go test ./internal/contracts -count=1 (user_status_mapping_test.go; full suite PASS in preflight 2026-09-05)",
+        "result":  "PASS"
+    },
     "contract":  "contracts/user_status_mapping.yaml",
     "safety":  [
                    "UNKNOWN and EXPIRED_UNKNOWN map to NEEDS_CONFIRMATION",
@@ -23,11 +28,10 @@
                               "NEEDS_CONFIRMATION"
                           ],
     "owner":  "Codex",
-    "status":  "IN_PROGRESS",
+    "status":  "PASS",
     "item":  "CTR-05",
     "boundaries":  [
-                       "CTR-06 generated Go/TS types and UI implementation remain pending",
-                       "No real qui/qB or Add connection"
+                       "CTR-06 生成 Go/TS 类型与 UI 呈现已实现（阶段 J local-only）；真实 qui/qB 连接不在本项范围"
                    ],
     "checks":  [
                    {

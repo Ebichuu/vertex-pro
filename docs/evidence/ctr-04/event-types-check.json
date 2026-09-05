@@ -2,11 +2,18 @@
     "mode":  "local-only",
     "source":  "docs/产品方案设计/VERTEX_PRO_COMPLETE_REDESIGN_V1_RC8_FINAL.md",
     "implementation_boundary":  [
-                                    "SSE handler, event persistence and generated Go/TS types remain pending",
+                                    "SSE handler, event persistence and generated Go/TS types are implemented (API-08/09, CTR-06)",
                                     "No real qui/qB or Add connection"
                                 ],
     "contract":  "contracts/event_types.yaml",
-    "updated_at":  "2026-08-24T00:00:00Z",
+    "updated_at":  "2026-09-05T12:30:00Z",
+    "revalidation_2026-09-05":  {
+        "source_commit":  "ac0ff927254e670e689dee0e12cbadbf916ce449",
+        "command":  "go run ./tools/contractcheck (preflight test-contracts)",
+        "check":  "C1-EVENT-CONTRACT",
+        "result":  "PASS",
+        "report":  "artifacts/contract-consistency/dev/20260905T112934Z/report.json / sha256:253219a42a46efc2669f9b4d477d92c06147da405fe3b942baaa84c06c282350"
+    },
     "owner":  "Codex",
     "events":  [
                    "stream.ready",
@@ -20,7 +27,7 @@
                    "stats.realtime",
                    "system.alert"
                ],
-    "status":  "IN_PROGRESS",
+    "status":  "PASS",
     "item":  "CTR-04",
     "boundaries":  [
                        "Persisted events retain event_id and replay for at least 7 days",

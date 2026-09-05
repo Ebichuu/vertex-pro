@@ -1,10 +1,12 @@
 {
   "item": "CTR-07",
   "tool": "vertex-pro-contractcheck",
-  "command": "go run ./tools/contractcheck -run-id 20260831T182500Z",
-  "report_path": "artifacts/contract-consistency/dev/20260831T182500Z/report.json",
-  "report_sha256": "2c37f837833c82e7c8f93d19a46eb4ce2d814e3bc6c1269f1e19393547b5f6f4",
+  "command": "go run ./tools/contractcheck -run-id 20260905T112934Z",
+  "report_path": "artifacts/contract-consistency/dev/20260905T112934Z/report.json",
+  "report_sha256": "253219a42a46efc2669f9b4d477d92c06147da405fe3b942baaa84c06c282350",
   "report_status": "PASS",
+  "revalidated_at": "2026-09-05T12:30:00Z",
+  "source_commit": "ac0ff927254e670e689dee0e12cbadbf916ce449",
   "eligible_for_g3": false,
   "checks_count": 11,
   "required_checks": [

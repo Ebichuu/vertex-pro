@@ -1,18 +1,23 @@
 {
   "item": "CTR-06",
   "title": "Go/TS 代码生成",
-  "status": "IN_PROGRESS",
-  "branch": "local-only",
+  "status": "PASS",
+  "branch": "main",
   "mode": "local-only",
   "generator": "tools/codegen/main.go",
+  "revalidation_2026-09-05": {
+    "source_commit": "ac0ff927254e670e689dee0e12cbadbf916ce449",
+    "note": "generate-check, go vet, frontend typecheck/tests/build, and the full Go suite all ran inside the 2026-09-05 preflight (11/11 targets PASS); the earlier Windows-only linker panic and missing-make blockers no longer apply",
+    "results": "generate-check PASS; go test ./... PASS; pnpm typecheck/test/build PASS"
+  },
   "checks": [
     { "command": "go run ./tools/codegen -check", "result": "PASS" },
     { "command": "go vet ./...", "result": "PASS" },
     { "command": "pnpm --dir web typecheck", "result": "PASS" },
-    { "command": "pnpm --dir web test -- --run", "result": "PASS: 16 test files, 78/78" },
-    { "command": "pnpm --dir web build", "result": "PASS" },
-    { "command": "go test -p 1 ./... -count=1", "result": "BLOCKED: Windows Go 1.26.3 linker panic in internal/capacitysnapshot; the package passes alone" },
-    { "command": "make generate-check", "result": "BLOCKED: make is not installed on this Windows host" }
+    { "command": "pnpm --dir web test -- --run", "result": "PASS: 16 test files, 81/81 (2026-09-05 preflight)" },
+    { "command": "pnpm --dir web build", "result": "PASS (2026-09-05, 3.32s)" },
+    { "command": "go test ./... -count=1", "result": "PASS (2026-09-05 preflight; the earlier Windows linker panic in internal/capacitysnapshot no longer reproduces)" },
+    { "command": "generate-check (preflight)", "result": "PASS: regenerated diff is empty on 2026-09-05" }
   ],
   "outputs": [
     { "path": "internal/generated/contracts.go", "sha256": "dfc71bcd46009bfb9c925348677d2f755e0daef3f1ec946c14925fd48223b0d2" },

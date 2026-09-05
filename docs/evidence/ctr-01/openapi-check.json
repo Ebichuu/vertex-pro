@@ -1,5 +1,13 @@
 {
     "mode":  "local-only",
+    "status":  "PASS",
+    "revalidation_2026-09-05":  {
+        "source_commit":  "ac0ff927254e670e689dee0e12cbadbf916ce449",
+        "command":  "go run ./tools/contractcheck (preflight test-contracts)",
+        "check":  "C1-OPENAPI",
+        "result":  "PASS",
+        "report":  "artifacts/contract-consistency/dev/20260905T112934Z/report.json / sha256:253219a42a46efc2669f9b4d477d92c06147da405fe3b942baaa84c06c282350"
+    },
     "checks":  [
                    {
                        "result":  "PASS",
@@ -25,12 +33,12 @@
                 ],
     "contract":  "contracts/openapi/openapi.json",
     "openapi":  "3.1.0",
-    "updated_at":  "2026-08-24T00:00:00Z",
+    "updated_at":  "2026-09-05T12:30:00Z",
     "owner":  "Codex",
-    "status":  "IN_PROGRESS",
+    "status":  "PASS",
     "item":  "CTR-01",
     "boundaries":  [
-                       "业务 handler、OpenAPI 代码生成、数据库和真实 qui/qB 连接尚未实现",
-                       "CTR-02 到 CTR-08 仍保持 PENDING"
+                       "OpenAPI 代码生成与数据库合同已实现（CTR-06、阶段 C）；真实 qui/qB 连接不在本项范围",
+                       "本项覆盖合同源与解析校验，handler 行为验收属于阶段 I"
                    ]
 }

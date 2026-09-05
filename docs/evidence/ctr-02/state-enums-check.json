@@ -1,7 +1,14 @@
 {
     "mode":  "local-only",
     "source":  "docs/产品方案设计/VERTEX_PRO_COMPLETE_REDESIGN_V1_RC8_FINAL.md",
-    "updated_at":  "2026-08-24T00:00:00Z",
+    "updated_at":  "2026-09-05T12:30:00Z",
+    "revalidation_2026-09-05":  {
+        "source_commit":  "ac0ff927254e670e689dee0e12cbadbf916ce449",
+        "command":  "go run ./tools/contractcheck (preflight test-contracts)",
+        "check":  "C1-STATE-ENUMS",
+        "result":  "PASS",
+        "report":  "artifacts/contract-consistency/dev/20260905T112934Z/report.json / sha256:253219a42a46efc2669f9b4d477d92c06147da405fe3b942baaa84c06c282350"
+    },
     "contract":  "contracts/state_enums.yaml",
     "domains":  [
                     "job_state",
@@ -31,11 +38,10 @@
                        "amount_left UNKNOWN is distinct from KNOWN",
                        "capacity_state is fail-closed outside TRUSTED"
                    ],
-    "status":  "IN_PROGRESS",
+    "status":  "PASS",
     "item":  "CTR-02",
     "boundaries":  [
-                       "CTR-03 error codes, CTR-04 event types and CTR-06 generated Go/TS types remain pending",
-                       "No real qui/qB or Add connection"
+                       "CTR-03/04/06 合同与生成已实现并当日重验；真实 qui/qB 连接不在本项范围"
                    ],
     "checks":  [
                    {
