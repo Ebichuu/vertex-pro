@@ -1,7 +1,12 @@
 {
     "item":  "RULE-10",
-    "status":  "IN_PROGRESS",
-    "branch":  "local-only",
+    "status":  "PASS",
+    "branch":  "main",
+    "revalidation_2026-09-05":  {
+        "source_commit":  "ac0ff927254e670e689dee0e12cbadbf916ce449",
+        "command":  "web/src/components/rules/RuleList.test.tsx (6/6) and internal/ruleservice (2026-09-05; full vitest suite 81/81)",
+        "result":  "PASS"
+    },
     "implementation":  [
                            "deterministic rule list ordering by priority DESC, revision DESC, rule_id ASC",
                            "optimistic enabled and priority updates increment revision",

@@ -1,7 +1,12 @@
 {
     "item":  "RULE-12",
     "title":  "上游差异记录",
-    "status":  "IN_PROGRESS",
+    "status":  "PASS",
+    "revalidation_2026-09-05":  {
+        "source_commit":  "ac0ff927254e670e689dee0e12cbadbf916ce449",
+        "command":  "powershell tools/licensecheck/verify-license.ps1 (PASS 2026-09-05)",
+        "result":  "PASS"
+    },
     "local_status":  "COMPLETE",
     "branch":  "local-only",
     "upstream":  {

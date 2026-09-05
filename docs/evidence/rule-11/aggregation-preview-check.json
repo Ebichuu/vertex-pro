@@ -1,8 +1,13 @@
 ﻿{
   "id": "RULE-11",
   "title": "aggregation preview UI",
-  "status": "IN_PROGRESS",
-  "scope": "local-only fixture-backed React page",
+  "status": "PASS",
+  "scope": "fixture-backed React page",
+  "revalidation_2026-09-05": {
+    "source_commit": "ac0ff927254e670e689dee0e12cbadbf916ce449",
+    "command": "pnpm --dir web test (RuleAggregationPreview 2/2, RuleDryRunPage 4/4; full suite 81/81)",
+    "result": "PASS"
+  },
   "inputs": [
     "web/src/features/rules/aggregation-preview.ts",
     "web/src/components/rules/RuleAggregationPreview.tsx",

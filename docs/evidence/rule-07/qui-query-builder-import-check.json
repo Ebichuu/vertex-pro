@@ -1,7 +1,12 @@
 {
     "item":  "RULE-07",
-    "status":  "IN_PROGRESS",
-    "branch":  "local-only",
+    "status":  "PASS",
+    "branch":  "main",
+    "revalidation_2026-09-05":  {
+        "source_commit":  "ac0ff927254e670e689dee0e12cbadbf916ce449",
+        "command":  "web/src/components/rules/VertexRuleEditor.test.tsx (pnpm --dir web test, 8/8) (2026-09-05; full vitest suite 81/81)",
+        "result":  "PASS"
+    },
     "implementation":  [
                            "imported five qui Query Builder source files from locked commit 8fcfc4d2beaf5e68ccebe837d7c0d9be965c8896",
                            "preserved original GPL-2.0-or-later copyright and SPDX headers",
