@@ -24,6 +24,10 @@ const redactedValue = "<redacted>"
 
 var sensitiveQueryPattern = regexp.MustCompile(`(?i)([?&](?:token|access_token|api[_-]?key|passkey|password|secret|cookie|authorization|proxy[_-]?key|announce)[^=]*=)[^&#\s"]+`)
 
+// userinfoPattern 按 RC8 §20.1 移除 URL userinfo 凭据：scheme://user:pass@host
+// 记录为 scheme://[redacted]@host，用户名与密码都不进入日志。
+var userinfoPattern = regexp.MustCompile(`(?i)((?:https?|udp|wss?)://)([^@/\s]+)@`)
+
 // NewJSONLogger creates the application logger with stable JSON output and secret redaction.
 func NewJSONLogger(writer io.Writer) *slog.Logger {
 	return slog.New(slog.NewJSONHandler(writer, &slog.HandlerOptions{ReplaceAttr: replaceAttr}))
@@ -91,9 +95,11 @@ func IDs(ctx context.Context) []any {
 	return attributes
 }
 
-// RedactString removes known secret query parameters before a value reaches a log record.
+// RedactString removes known secret query parameters and URL userinfo
+// credentials before a value reaches a log record.
 func RedactString(value string) string {
-	return sensitiveQueryPattern.ReplaceAllString(value, `${1}`+redactedValue)
+	value = sensitiveQueryPattern.ReplaceAllString(value, `${1}`+redactedValue)
+	return userinfoPattern.ReplaceAllString(value, `${1}`+redactedValue+"@")
 }
 
 func replaceAttr(_ []string, attribute slog.Attr) slog.Attr {
@@ -108,7 +114,7 @@ func replaceAttr(_ []string, attribute slog.Attr) slog.Attr {
 }
 
 func isSensitiveKey(key string) bool {
-	for _, fragment := range []string{"token", "cookie", "passkey", "password", "secret", "authorization", "proxy_key", "proxy-key", "announce_url"} {
+	for _, fragment := range []string{"token", "cookie", "passkey", "password", "secret", "authorization", "api_key", "api-key", "proxy_key", "proxy-key", "announce_url"} {
 		if strings.Contains(key, fragment) {
 			return true
 		}
