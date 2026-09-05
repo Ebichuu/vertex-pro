@@ -166,3 +166,13 @@ func parseMigrationName(filename string) (int, string, error) {
 	}
 	return version, parts[1], nil
 }
+
+// AppliedVersion 返回已应用的最高迁移版本；schema_migrations 尚不存在或
+// 为空时返回 0（调用方据此区分"未迁移"与"已迁移"）。
+func (runner Runner) AppliedVersion(ctx context.Context, database *sql.DB) (int, error) {
+	var version sql.NullInt64
+	if err := database.QueryRowContext(ctx, `SELECT MAX(version) FROM schema_migrations`).Scan(&version); err != nil {
+		return 0, err
+	}
+	return int(version.Int64), nil
+}
