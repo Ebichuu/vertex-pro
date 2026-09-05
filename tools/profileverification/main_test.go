@@ -28,7 +28,9 @@ func TestExecutePersistsRunsAndWritesBindingOnlyAfterThirdPass(t *testing.T) {
 	directory := t.TempDir()
 	databasePath := filepath.Join(directory, "vertex-pro.db")
 	bindingPath := filepath.Join(directory, "binding.json")
-	base := time.Date(2026, 9, 2, 12, 0, 0, 0, time.UTC)
+	// execute decides with the real wall clock, so build the campaign relative
+	// to it; a fixed past date expires the 24h evidence window over time.
+	base := time.Now().UTC().Truncate(time.Second).Add(-time.Hour)
 	fixturePaths := map[string]string{}
 	for _, fixture := range []string{"add", "sync", "tracker", "transfer"} {
 		path := filepath.Join(directory, fixture+".json")

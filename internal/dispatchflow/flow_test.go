@@ -322,10 +322,11 @@ func runDispatchCrashChild(t *testing.T) {
 			return qbresponse.RawResponse{}, fmt.Errorf("write crash boundary signal: %w", err)
 		}
 		// The parent terminates this process at the boundary; block forever
-		// without reaching Record. A bare for{} is a terminating statement,
-		// so no unreachable return is needed for the Sender signature.
+		// without reaching Record. Sleep instead of a bare select{}: once the
+		// transport goroutines exit, an empty select trips the deadlock
+		// detector and the child self-exits before the parent's kill lands.
 		for {
-			select {}
+			time.Sleep(time.Hour)
 		}
 	}), func() time.Time { return time.Date(2026, 9, 1, 16, 0, 0, 0, time.UTC) })
 	if err != nil {
