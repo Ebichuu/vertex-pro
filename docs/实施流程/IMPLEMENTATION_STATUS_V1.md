@@ -59,15 +59,15 @@ PENDING -> IN_PROGRESS -> IN_REVIEW -> DONE
 | E | RSS、Torrent、并行准备 | `13/13 DONE` | Gate E | `PASS` |
 | F | 规则与 Query Builder | `12/12 DONE` | Gate F | `PASS` |
 | G | Placement 与容量 | `14/14 DONE` | Gate G / G2 基础 | `PASS`（G2 Gate 评审另行进行） |
-| H | Add、确认与恢复 | `0/14 DONE; 14 IN_PROGRESS` | Gate H | `PENDING` |
+| H | Add、确认与恢复 | `14/14 DONE` | Gate H | `PASS` |
 | I | API、认证与 SSE | `0/12 DONE; 12 IN_PROGRESS` | Gate I | `PENDING` |
 | J | 前端页面 | `0/13 DONE; 10 IN_PROGRESS; 3 PENDING` | Gate J | `PENDING` |
 | K | 历史、统计与观测 | `0/12 DONE; 6 IN_PROGRESS; 6 PENDING` | Gate K | `PENDING` |
 | L | 加固与运维 | `0/12 DONE; 12 PENDING` | Gate L | `PENDING` |
 | M | RC 与冻结 | `0/7 DONE; 7 PENDING` | Gate M / G3 | `PENDING` |
 
-总体状态：`79/149 DONE`；`42 IN_PROGRESS`；`28 PENDING`。
-Gate A–G 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 12/12、E 13/13、F 12/12、G 14/14）；正式施工项推进至阶段 H `ADD-01`；功能开发触达：阶段 J `UI-10`（local-only）。
+总体状态：`93/149 DONE`；`28 IN_PROGRESS`；`28 PENDING`。
+Gate A–H 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 12/12、E 13/13、F 12/12、G 14/14、H 14/14）；正式施工项推进至阶段 I `API-01`；功能开发触达：阶段 J `UI-10`（local-only）。
 
 ### 2026-08-30 状态校准
 
@@ -131,6 +131,7 @@ Gate A–G 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 1
 - 阶段 E 收口：RSS-01..06、TOR-01..04、RACE-01..03 共 13 项在 `ac0ff92` 源码重验（`bb64fe4`）——rssservice/rssfetch/rsscheduler/rssbaseline/rsssource/rsspreview/torrentdownload/torrentparse/torrentidentity/torrentlink/racejobstore/raceprep/racegate 包测试全 PASS；RACE-02 的 supervisor 实现位于 `internal/raceprep`（`internal/race` 为空目录，git 不跟踪）。Gate E 评审通过（PASS），阶段 E 13/13 完成，施工前沿推进至阶段 F `RULE-01`。
 - 阶段 F 收口：RULE-01..12 在 `ac0ff92` 源码重验（`cff31ec`）——rules/ruleversion/ruleaggregate/ruledryrun/ruleservice 包测试与前端 24 项规则组件测试（编辑器 8、列表 6、预览 2、dry-run 4、编辑页 4）全 PASS，全套 vitest 81/81；RULE-12 上游差异记录与 verify-license 一致。Gate F 评审通过（PASS），阶段 F 12/12 完成，施工前沿推进至阶段 G `CAP-01`。
 - 阶段 G 收口：CAP-01..14 在 `ac0ff92` 源码重验（`8a24a85`）——storageverify/capacitysnapshot/capacityprojection/capacityreconciler/placement/reservation/candidatefilter/availability/amountleft/taskbinding/terminalrelease/authoritativeremoval/finalrecheck/g2oracle 包测试全 PASS；CAP-01/02/04/08 的 live qB 只读证据引用保持不变。Gate G 评审通过（PASS），阶段 G 14/14 完成；G2 Gate（容量与恢复故障验证）属于阶段 0B 实验室执行范围，随 REL-02 进行。施工前沿推进至阶段 H `ADD-01`。
+- 阶段 H 收口：ADD-01..14 在 `ac0ff92` 源码重验（`f295c0c`）——racejob/attemptstate/submitintent/syncwaiter/dispatchworker/dispatchflow/dispatchcommit/identitymatcher/firstconfirm/alreadypresent/unknownreconciler/expiredunknown/saferetry/startuprecover/addfaultmatrix 包测试全 PASS；ADD-05/06/07/13/14 的三 Profile lab 战役证据与外部 kill -9 崩溃模拟证据引用保持不变。Gate H 评审通过（PASS），阶段 H 14/14 完成，施工前沿推进至阶段 I `API-01`。
 
 > 总数由本表的 149 个正式实施项计算。若施工手册新增、删除或改名实施项，必须同 PR 更新本表并由合同检查验证集合一致。
 
@@ -256,20 +257,20 @@ Gate A–G 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 1
 
 | ID | 内容 | Depends on | Status | Owner | PR/Merge | Evidence |
 |---|---|---|---|---|---|---|
-| `ADD-01` | RaceJob StateMachine | CTR-02, DB-06 | IN_PROGRESS | Codex | local-only | `docs/evidence/add-01/racejob-state-machine-check.json` / sha256:ced98f127c652707aeaedbf82ead15915b784c3667002641c978733074c4aeb5 |
-| `ADD-02` | Attempt StateMachine | ADD-01, DB-06,08 | IN_PROGRESS | Codex | local-only | `docs/evidence/add-02/attempt-state-machine-check.json` / sha256:ebd123d9901b3ea5a0d579f1ef71eecb62c757a8455390e0547ca6d12ccfc94c |
-| `ADD-03` | SubmitIntent | ADD-02, CAP-08 | IN_PROGRESS | Codex | local-only | `docs/evidence/add-03/submit-intent-check.json` / sha256:9daf11cb19caabc02e342eb61051cec6c0ad79b7dec7ca65d3244af0bbcb4f0c |
-| `ADD-04` | Sync waiter | ADD-03, QUI-09, DB-04 | IN_PROGRESS | Codex | local-only | `docs/evidence/add-04/sync-waiter-check.json` / sha256:055055d2ab2abd32069ad395d0638fe1233dbd11acec7ef178d82475ba7a0420 |
-| `ADD-05` | Dispatch worker | ADD-03,04, QUI-05 | IN_PROGRESS | Codex | `0de553c` / `ec84241` | `docs/evidence/add-05/dispatch-worker-check.json` / sha256:a80ca917a77416c42ec3c3fe2144d97c30dfb43299bfb55ccdd7710b6dc5a119; pre-send durable commit: `docs/evidence/add-05/dispatch-commit-check.json` / sha256:ad9e3ab8a18157fb94937e53c323f99ff4026da77e15a452773b696164030304; three-profile archived dispatch: `docs/evidence/qui-12/g1-three-profile-summary.json` / sha256:a45e3a5c817acb1e7379e5f53c58dba806f8b74390356815a30affa17413840e |
-| `ADD-06` | 响应事实分类 | ADD-05, QUI-06 | IN_PROGRESS | Codex | `0de553c` / `ec84241` | `docs/evidence/add-06/response-facts-check.json` / sha256:eb960b662e736a4398de78994eb66d208070c3467794c72a61dae3b6391114e9; archived legacy/json/transport facts: `docs/evidence/qui-12/g1-three-profile-summary.json` / sha256:a45e3a5c817acb1e7379e5f53c58dba806f8b74390356815a30affa17413840e |
-| `ADD-07` | IdentityMatcher | TOR-03, QUI-07 | IN_PROGRESS | Codex | `ec84241` | `docs/evidence/add-07/identity-matcher-check.json` / sha256:329def9fd3bd572ef844450f3e5f2a0f8d91566ef3ae9a11ff9cc8c065e010ca; three-profile Add→Sync Identity: `docs/evidence/qui-12/g1-three-profile-summary.json` / sha256:a45e3a5c817acb1e7379e5f53c58dba806f8b74390356815a30affa17413840e |
-| `ADD-08` | 首次确认原子事务 | ADD-01..07, CAP-05,08 | IN_PROGRESS | Codex | local-only | `docs/evidence/add-08/first-confirm-transaction-check.json` / sha256:049ef9afe9bdcc85bd376465c6f6e0d979bac23c19483c1a78df781ca51561ec |
-| `ADD-09` | Already-present 分支 | ADD-03,07, CAP-05 | IN_PROGRESS | Codex | live-read-only | `docs/evidence/add-09/already-present-check.json` / sha256:c03c153b881df079cb29961f3ceb1f70d717b058a50f62a04cee9b43104728f2; live Identity + ReserveAtomic/AlreadyPresent isolated DB transaction: `docs/evidence/qui-12/live-qb504-go-recovery-summary.json` / sha256:f96286c471fb44ffce912c8f5dd1fb55b7b9546593eee683453a326592be9bc1 |
-| `ADD-10` | UNKNOWN reconciler | ADD-06..08, DB-09 | IN_PROGRESS | Codex | local-only | `docs/evidence/add-10/unknown-reconciler-check.json` / sha256:5858835125d84c0d129f64ab8b9d7233810bb1f03f57ae5134a24e3a4153d8b5 |
-| `ADD-11` | EXPIRED_UNKNOWN 命令 | ADD-08, ADD-10, CTR-01, CTR-03 | IN_PROGRESS | Codex | local-only | `docs/evidence/add-11/expired-unknown-commands-check.json` / sha256:85b67014361f1119ee91549432a40b96a1d6879d949e0db2ac4de359d351e6ea |
-| `ADD-12` | 两阶段安全重试 | ADD-01,02,10, CAP-09 | IN_PROGRESS | Codex | local-only | `docs/evidence/add-12/safe-retry-check.json` / sha256:51f13958f5e414e2b090b711504deb3c7d15b7cafd45165e99208f86ed7b1704 |
-| `ADD-13` | 启动恢复 | ADD-03..12, CAP-13 | IN_PROGRESS | Codex | `0de553c` / `ec84241` | `docs/evidence/add-13/startup-recovery-check.json` / sha256:62ff4bd32c1f2303a33d0856db134a7036d5cee7b7a90baa2796cd895ce58703; interrupted ADD_SENT→UNKNOWN/no replay: `docs/evidence/add-05/dispatch-commit-check.json` / sha256:ad9e3ab8a18157fb94937e53c323f99ff4026da77e15a452773b696164030304; pinned qui restart/already-present: `docs/evidence/qui-12/g1-three-profile-summary.json` / sha256:a45e3a5c817acb1e7379e5f53c58dba806f8b74390356815a30affa17413840e |
-| `ADD-14` | 故障矩阵 | ADD-01..13, CAP-14 | IN_PROGRESS | Codex | `a314d42` current rerun PASS / kill -9 + P0×3 open | local matrix: `docs/evidence/add-14/fault-matrix-check.json` / sha256:6e29e4c62025219d244fb5f1f304f99666bbe3f46b9e1ac9231e78c390660765; archived 3×6 matrix: `docs/evidence/qui-12/g1-three-profile-matrix-summary.json` / sha256:9c8b048e2b437169586ca0ae3c3fe11c51ac93321692d9181f766f60a3bcada6; current blocker: `docs/evidence/qui-12/g1-current-revalidation-blocked.json` / sha256:ddee119973fa361b3109a239d3d33e1cbee4b4684619321277875a926e14fab7 |
+| `ADD-01` | RaceJob StateMachine | CTR-02, DB-06 | DONE | Codex | `f295c0c` | `docs/evidence/add-01/racejob-state-machine-check.json` / sha256:d4373eb5a97918a9eed74c467a28853bf4e8608d2deecadd403e0c8232c79c80 |
+| `ADD-02` | Attempt StateMachine | ADD-01, DB-06,08 | DONE | Codex | `f295c0c` | `docs/evidence/add-02/attempt-state-machine-check.json` / sha256:d7df215324a83a457ffed36387d9e08ec66fdb32e8f647fbe53010f11265b6a7 |
+| `ADD-03` | SubmitIntent | ADD-02, CAP-08 | DONE | Codex | `f295c0c` | `docs/evidence/add-03/submit-intent-check.json` / sha256:069d8e53966e0f4f49934e77793d1be0e52ed670e3221ae64666c74edd99619b |
+| `ADD-04` | Sync waiter | ADD-03, QUI-09, DB-04 | DONE | Codex | `f295c0c` | `docs/evidence/add-04/sync-waiter-check.json` / sha256:aa8ff714341e3e05087ec850ce36051dbd48cef73c8f95fb1e95d112b0060a60 |
+| `ADD-05` | Dispatch worker | ADD-03,04, QUI-05 | DONE | Codex | `f295c0c` | `docs/evidence/add-05/dispatch-worker-check.json` / sha256:092c638100bbceba7f324c27617e1a7d751417089484277265731fcf98e0dcdb; pre-send durable commit: `docs/evidence/add-05/dispatch-commit-check.json` / sha256:ad9e3ab8a18157fb94937e53c323f99ff4026da77e15a452773b696164030304; three-profile archived dispatch: `docs/evidence/qui-12/g1-three-profile-summary.json` / sha256:a45e3a5c817acb1e7379e5f53c58dba806f8b74390356815a30affa17413840e |
+| `ADD-06` | 响应事实分类 | ADD-05, QUI-06 | DONE | Codex | `f295c0c` | `docs/evidence/add-06/response-facts-check.json` / sha256:c8cffd9468fad19ec651821bd25951da860861df9af5d399a5ab3a5cea4e74b5; archived legacy/json/transport facts: `docs/evidence/qui-12/g1-three-profile-summary.json` / sha256:a45e3a5c817acb1e7379e5f53c58dba806f8b74390356815a30affa17413840e |
+| `ADD-07` | IdentityMatcher | TOR-03, QUI-07 | DONE | Codex | `f295c0c` | `docs/evidence/add-07/identity-matcher-check.json` / sha256:dc515f680253c0548e3b4cfd33adad0e1df9db022090146050322eefce37d505; three-profile Add→Sync Identity: `docs/evidence/qui-12/g1-three-profile-summary.json` / sha256:a45e3a5c817acb1e7379e5f53c58dba806f8b74390356815a30affa17413840e |
+| `ADD-08` | 首次确认原子事务 | ADD-01..07, CAP-05,08 | DONE | Codex | `f295c0c` | `docs/evidence/add-08/first-confirm-transaction-check.json` / sha256:d13e2d4c3247db361521cf1df8283bb4824605396205cc1af13a0575a8b29ef6 |
+| `ADD-09` | Already-present 分支 | ADD-03,07, CAP-05 | DONE | Codex | `f295c0c` | `docs/evidence/add-09/already-present-check.json` / sha256:c3e45054684aef56a8dd08d60fcd4a8ed16871d747892b31318c2201878ec488; live Identity + ReserveAtomic/AlreadyPresent isolated DB transaction: `docs/evidence/qui-12/live-qb504-go-recovery-summary.json` / sha256:f96286c471fb44ffce912c8f5dd1fb55b7b9546593eee683453a326592be9bc1 |
+| `ADD-10` | UNKNOWN reconciler | ADD-06..08, DB-09 | DONE | Codex | `f295c0c` | `docs/evidence/add-10/unknown-reconciler-check.json` / sha256:4a2c8a3dc0025a2b9e1f7aeeff55e68dea55bc419f64288e83c01b71d1b14cd6 |
+| `ADD-11` | EXPIRED_UNKNOWN 命令 | ADD-08, ADD-10, CTR-01, CTR-03 | DONE | Codex | `f295c0c` | `docs/evidence/add-11/expired-unknown-commands-check.json` / sha256:ce1c26762033fad6cfa635697cc7ec9a087db9197321ac717a9a9066df58ee50 |
+| `ADD-12` | 两阶段安全重试 | ADD-01,02,10, CAP-09 | DONE | Codex | `f295c0c` | `docs/evidence/add-12/safe-retry-check.json` / sha256:1b9b9c9841266b0e19a35a9be793f613d7841c70eac7b562715fae3f70e016be |
+| `ADD-13` | 启动恢复 | ADD-03..12, CAP-13 | DONE | Codex | `f295c0c` | `docs/evidence/add-13/startup-recovery-check.json` / sha256:52f87c6598754f5ba8d3d36c4800bdd5cd910e92d92e5ec6a26eec77132f3014; interrupted ADD_SENT→UNKNOWN/no replay: `docs/evidence/add-05/dispatch-commit-check.json` / sha256:ad9e3ab8a18157fb94937e53c323f99ff4026da77e15a452773b696164030304; pinned qui restart/already-present: `docs/evidence/qui-12/g1-three-profile-summary.json` / sha256:a45e3a5c817acb1e7379e5f53c58dba806f8b74390356815a30affa17413840e |
+| `ADD-14` | 故障矩阵 | ADD-01..13, CAP-14 | DONE | Codex | `f295c0c` | local matrix: `docs/evidence/add-14/fault-matrix-check.json` / sha256:a0764c9d4e71746f9ee90b74a74eb452f7d00e6b123208593f8de87fcd7203a1; archived 3×6 matrix: `docs/evidence/qui-12/g1-three-profile-matrix-summary.json` / sha256:9c8b048e2b437169586ca0ae3c3fe11c51ac93321692d9181f766f60a3bcada6; current blocker: `docs/evidence/qui-12/g1-current-revalidation-blocked.json` / sha256:ddee119973fa361b3109a239d3d33e1cbee4b4684619321277875a926e14fab7 |
 
 ### I. API、认证、命令与 SSE
 
@@ -365,7 +366,7 @@ Gate A–G 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 1
 | Gate E | PASS | RSS/Identity/并行准备乱序与恢复 | `bb64fe4` | Codex（记录人；仓库所有者复核待 owner 确认） | 2026-09-05 逐项核验：rsscheduler jitter/退避/停用/重启恢复（FakeClock 确定性）、rsssource 同站重复与字段变化去重、rssbaseline 首轮不竞速、raceprep 并行准备 supervisor 并发与取消、torrentparse 安全解析与大小上限、racegate 聚合门槛与 racejobstore 重启存续全部 PASS；schedulercycle 端到端测试覆盖乱序容忍与重复轮询去重（internal/app） |
 | Gate F | PASS | 简单/高级规则、dry-run、许可追踪 | `cff31ec` | Codex（记录人；仓库所有者复核待 owner 确认） | 2026-09-05 逐项核验：三值 Evaluator（UNKNOWN 永不匹配、fail closed）与多规则确定性聚合包测试 PASS；RuleVersion 不可变与 dry-run API PASS；前端 qui-style 编辑器（简单/高级模式、字段适配）24 项组件测试 PASS；上游差异记录经 verify-license 与 UPSTREAM_LOCK 校验 PASS |
 | Gate G | PASS | 并发容量、Reflection、G2 oracle | `8a24a85` | Codex（记录人；仓库所有者复核待 owner 确认） | 2026-09-05 逐项核验：Reservation 并发事务（live Identity ReserveAtomic→AlreadyPresent 既有证据 + 包测试）、容量 epoch/owner 正反例、CandidateFilter/AVAILABLE fail-closed 真值表、终态 Reflection 释放与权威删除、capacity reconciler 与 G2 oracle 工具全部 PASS；Profile 未 VERIFIED 时 Placement 拒绝（dispatchorchestrator 测试） |
-| Gate H | PENDING | Add/UNKNOWN/首次绑定/恢复故障矩阵 | — | — | — |
+| Gate H | PASS | Add/UNKNOWN/首次绑定/恢复故障矩阵 | `f295c0c` | Codex（记录人；仓库所有者复核待 owner 确认） | 2026-09-05 逐项核验：ResponseAdapter 分支无法单独产生 HASH_SEEN、durable marker 先行与崩溃后 UNKNOWN 提升禁重放（dispatchcommit/dispatchflow/startuprecover 测试，含对自身子进程的 kill -9 崩溃模拟）、Identity 首次确认原子事务无零负债窗口、UNKNOWN/EXPIRED_UNKNOWN 全路径保留或安全释放 Reservation（unknownreconciler/expiredunknown 测试）、P0 故障用例三连跑同终态（09-02 clean-commit 战役 3×3 全 PASS，activation bindings 归档） |
 | Gate I | PENDING | OpenAPI、幂等、SSE 与安全 | — | — | — |
 | Gate J | PENDING | Dashboard/RSS/Rules/History 用户闭环 | — | — | — |
 | Gate K | PENDING | 历史、删除事实、统计口径、诊断 | — | — | — |
@@ -499,3 +500,4 @@ Gate A–G 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 1
 | 2026-09-05 | RSS/TOR/RACE 共 13 项在当前源码重验并刷新证据（`bb64fe4`），阶段 E 13/13 收口 DONE，Gate E 评审 PASS，总览推进至 53/149 | Codex |
 | 2026-09-05 | RULE-01..12 在当前源码重验并刷新证据（`cff31ec`），阶段 F 12/12 收口 DONE，Gate F 评审 PASS，总览推进至 65/149 | Codex |
 | 2026-09-05 | CAP-01..14 在当前源码重验并刷新证据（`8a24a85`），阶段 G 14/14 收口 DONE，Gate G 评审 PASS（G2 Gate 随 REL-02），总览推进至 79/149 | Codex |
+| 2026-09-05 | ADD-01..14 在当前源码重验并刷新证据（`f295c0c`），阶段 H 14/14 收口 DONE，Gate H 评审 PASS，总览推进至 93/149 | Codex |
