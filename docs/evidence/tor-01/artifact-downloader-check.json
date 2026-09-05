@@ -1,7 +1,12 @@
 {
   "item": "TOR-01",
-  "status": "IN_PROGRESS",
-  "branch": "local-only",
+"status": "PASS",
+  "branch": "main",
+  "revalidation_2026-09-05": {
+    "source_commit": "ac0ff927254e670e689dee0e12cbadbf916ce449",
+    "command": "go test internal/torrentdownload -count=1 (also PASS inside the 2026-09-05 preflight)",
+    "result": "PASS"
+  },
   "implementation": [
     "injectable HTTP client for in-memory torrent artifact download",
     "exact host allowlist validation for initial URL and every redirect",

@@ -1,7 +1,12 @@
 {
   "item": "TOR-03",
-  "status": "IN_PROGRESS",
-  "branch": "local-only",
+"status": "PASS",
+  "branch": "main",
+  "revalidation_2026-09-05": {
+    "source_commit": "ac0ff927254e670e689dee0e12cbadbf916ce449",
+    "command": "go test internal/torrentidentity -count=1 (also PASS inside the 2026-09-05 preflight)",
+    "result": "PASS"
+  },
   "implementation": [
     "strong Version type for v1, v2, and hybrid identities",
     "v1 SHA-1 and v2 SHA-256 over canonical bencoded info dictionary",
