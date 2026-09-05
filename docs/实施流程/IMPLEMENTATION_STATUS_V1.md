@@ -54,7 +54,7 @@ PENDING -> IN_PROGRESS -> IN_REVIEW -> DONE
 |---|---|---|---|---|
 | A | 仓库与骨架 | `9/9 DONE` | Gate A | `PASS` |
 | B | 合同与生成 | `8/8 DONE` | Gate B | `PASS` |
-| C | SQLite 与事务 | `0/11 DONE; 11 IN_PROGRESS` | Gate C | `PENDING` |
+| C | SQLite 与事务 | `11/11 DONE` | Gate C | `PASS` |
 | D | qui、Profile、Sync | `0/12 DONE; 12 IN_PROGRESS` | Gate D / G1 基础 | `PENDING` |
 | E | RSS、Torrent、并行准备 | `0/13 DONE; 13 IN_PROGRESS` | Gate E | `PENDING` |
 | F | 规则与 Query Builder | `0/12 DONE; 12 IN_PROGRESS` | Gate F | `PENDING` |
@@ -66,8 +66,8 @@ PENDING -> IN_PROGRESS -> IN_REVIEW -> DONE
 | L | 加固与运维 | `0/12 DONE; 12 PENDING` | Gate L | `PENDING` |
 | M | RC 与冻结 | `0/7 DONE; 7 PENDING` | Gate M / G3 | `PENDING` |
 
-总体状态：`17/149 DONE`；`104 IN_PROGRESS`；`28 PENDING`。
-Gate A、Gate B 已于 2026-09-05 评审通过（阶段 A 9/9、阶段 B 8/8）；正式施工项推进至阶段 C `DB-01`；功能开发触达：阶段 J `UI-10`（local-only）。
+总体状态：`28/149 DONE`；`93 IN_PROGRESS`；`28 PENDING`。
+Gate A、B、C 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11）；正式施工项推进至阶段 D `QUI-01`；功能开发触达：阶段 J `UI-10`（local-only）。
 
 ### 2026-08-30 状态校准
 
@@ -125,6 +125,7 @@ Gate A、Gate B 已于 2026-09-05 评审通过（阶段 A 9/9、阶段 B 8/8）�
 - BOOT-08 收口：新增 `tools/sbom`（`debug/buildinfo` 读取发布二进制模块清单 + 前端声明依赖 + 基础镜像，内容确定性输出，含测试）与 `make sbom` 目标，SBOM 归档于 `docs/evidence/boot-08/sbom.json`；compose 实验室全链路重验 PASS（config parse、build、up、HTTP 边界 200/401、down 清理）。BOOT-08 转 DONE（`5ca8c09`），阶段 A 9/9 完成。
 - Gate A 评审通过（PASS，见第 4 节 Gate 记录）：逐项核验可重建骨架、工具链锁定、许可证、单镜像与容器加固。备注：distroless 基础镜像当前为 tag 引用，冻结前建议改为 digest 引用（不阻塞 Gate A，纳入 HARD-12 发布镜像范围）。
 - 阶段 B 收口：CTR-01..08 全部在 `ac0ff92` 源码重验（`2f64190`）——contractcheck 11 项 C1 检查全 PASS（报告 sha256:253219a4…，`eligible_for_g3=false` 保持不伪 PASS）、generate-check diff 为空、前端 81/81、用户状态映射与 MSW 合同测试全过；ctr-06 记录的两条 Windows 环境阻塞（链接器 panic、make 缺失）已消除，各证据中的过时边界说明一并修正。Gate B 评审通过（PASS），阶段 B 8/8 完成，施工前沿推进至阶段 C `DB-01`。
+- 阶段 C 收口：DB-01..11 全部在 `ac0ff92` 源码重验（`e239cf9`）——internal/db 的 28 项测试逐一映射各项判据（每连接 PRAGMA、迁移顺序/checksum/中途失败回滚、各表约束与负向 SQL、TxRunner 提交与回滚、启动一致性损坏 fixture fail-closed、旧 schema 升级失败保留原库与备份恢复）全 PASS；Gate C 六项 C1 检查以新报告 run 20260905T130000Z（sha256:36d1ef99…）再次确认全 PASS。Gate C 评审通过（PASS），阶段 C 11/11 完成，施工前沿推进至阶段 D `QUI-01`。
 
 > 总数由本表的 149 个正式实施项计算。若施工手册新增、删除或改名实施项，必须同 PR 更新本表并由合同检查验证集合一致。
 
@@ -163,17 +164,17 @@ Gate A、Gate B 已于 2026-09-05 评审通过（阶段 A 9/9、阶段 B 8/8）�
 
 | ID | 内容 | Depends on | Status | Owner | PR/Merge | Evidence |
 |---|---|---|---|---|---|---|
-| `DB-01` | SQLite 连接工厂 | BOOT-06 | IN_PROGRESS | Codex | local-only | `docs/evidence/db-01/sqlite-connection-check.json` / sha256:7914998197e022efbaae227ee8a8c402eaf436dd6a78bf415af154da6af2b022 |
-| `DB-02` | Migration runner | DB-01 | IN_PROGRESS | Codex | local-only | `docs/evidence/db-02/migration-check.json` / sha256:5985a5138bdf922c9643a3966023f53ab29861e450379a8204284a874e8a18b8 |
-| `DB-03` | Site/Feed/Rule/Identity 表 | DB-02, CTR-02 | IN_PROGRESS | Codex | local-only | `docs/evidence/db-03/site-feed-rule-identity-check.json` / sha256:83f20211de72a3c4d4fa2bd5dab9421b01388d73475d27d926227851b6306449 |
-| `DB-04` | Sync/Snapshot/Waiter 表 | DB-02, CTR-02 | IN_PROGRESS | Codex | local-only | `docs/evidence/db-04/sync-snapshot-waiter-check.json` / sha256:9fbbee4a69a9bd4ba99e1566abecacd932e16f1873a0135932fbcf5743f9841c |
-| `DB-05` | Storage/Capacity 表 | DB-02, CTR-02 | IN_PROGRESS | Codex | local-only | `docs/evidence/db-05/storage-capacity-check.json` / sha256:453a2c07162814dbb9cad517cdd30cc4e2e7aa8c0ccfe1e01b3e37a1846144a9 |
-| `DB-06` | Race/Attempt/Intent 表 | DB-02, CTR-02 | IN_PROGRESS | Codex | local-only | `docs/evidence/db-06/race-attempt-intent-check.json` / sha256:62affbd50f8ee127075e04dc988cab468656d9cc2e0b59246745df9fdd8b2382 |
-| `DB-07` | Events/Commands/Stats 表 | DB-02, CTR-04 | IN_PROGRESS | Codex | local-only | `docs/evidence/db-07/events-commands-stats-check.json` / sha256:76c8ca4a8562b64909561599f4388527fc3bc049840571a0c4449f33f016a9de |
-| `DB-08` | 索引与触发器 | DB-03..07 | IN_PROGRESS | Codex | local-only | `docs/evidence/db-08/index-trigger-check.json` / sha256:543299e124bbbf9dc8cf4af7939e03e519ad7585e79d350eb806a126af8a2de2 |
-| `DB-09` | TxRunner 与 Repository | DB-03..08 | IN_PROGRESS | Codex | local-only | `docs/evidence/db-09/txrunner-repository-check.json` / sha256:59b82b6b3d07b190d0ae3583871b916a9e2ce6dc6d9b65d832caf15ec32c8905 |
-| `DB-10` | 启动一致性检查 | DB-08,09 | IN_PROGRESS | Codex | local-only | `docs/evidence/db-10/startup-consistency-check.json` / sha256:8d4eda5969488ca441da3adced26cdb2389f9783d2aad1e0e0ac39bd0366bd29 |
-| `DB-11` | 升级与备份路径 | DB-02..10 | IN_PROGRESS | Codex | local-only | `docs/evidence/db-11/upgrade-backup-check.json` / sha256:0b0e9e9d25795f0b53f4c8f67b2c6e73c46f3108bde67dce2dcd125b71b2ffe9 |
+| `DB-01` | SQLite 连接工厂 | BOOT-06 | DONE | Codex | `e239cf9` | `docs/evidence/db-01/sqlite-connection-check.json` / sha256:fa19fd90db0741f905c381e59166872edfd9acc7a7a178e058c5967e1caf9c48 |
+| `DB-02` | Migration runner | DB-01 | DONE | Codex | `e239cf9` | `docs/evidence/db-02/migration-check.json` / sha256:4a1b42d7dac26f09f9d4260484704bf04257e677c57953cd2100ab285700ad1f |
+| `DB-03` | Site/Feed/Rule/Identity 表 | DB-02, CTR-02 | DONE | Codex | `e239cf9` | `docs/evidence/db-03/site-feed-rule-identity-check.json` / sha256:45f79adc553843893f689d5b37d8f9bf4ed4b17eb5bd8a8d447802bd5b8ac374 |
+| `DB-04` | Sync/Snapshot/Waiter 表 | DB-02, CTR-02 | DONE | Codex | `e239cf9` | `docs/evidence/db-04/sync-snapshot-waiter-check.json` / sha256:5be46f298b866c8bde5e9bdd763de4f44798cb5ebf9bfa29537af1fafc45da4c |
+| `DB-05` | Storage/Capacity 表 | DB-02, CTR-02 | DONE | Codex | `e239cf9` | `docs/evidence/db-05/storage-capacity-check.json` / sha256:5edd39b304fb624730dd62d6821bb9ad5e18b47396e5e85da229d051bd99bafd |
+| `DB-06` | Race/Attempt/Intent 表 | DB-02, CTR-02 | DONE | Codex | `e239cf9` | `docs/evidence/db-06/race-attempt-intent-check.json` / sha256:99f1e6d692b04391cb32ce10012faab4930254aa96d3649589385582c1ffdcb7 |
+| `DB-07` | Events/Commands/Stats 表 | DB-02, CTR-04 | DONE | Codex | `e239cf9` | `docs/evidence/db-07/events-commands-stats-check.json` / sha256:418c66990696fc017495a25b63ca3467cb18a2e3826da6a4a2a2922832717342 |
+| `DB-08` | 索引与触发器 | DB-03..07 | DONE | Codex | `e239cf9` | `docs/evidence/db-08/index-trigger-check.json` / sha256:b8dd7138879e1438893ea8709af2d42f2f578dfd9bb372d42669e14a51a7a5d3 |
+| `DB-09` | TxRunner 与 Repository | DB-03..08 | DONE | Codex | `e239cf9` | `docs/evidence/db-09/txrunner-repository-check.json` / sha256:1ecff50d707350a4a9031710611d8ef2827b014eb226d6f91b6f0ce87d59c721 |
+| `DB-10` | 启动一致性检查 | DB-08,09 | DONE | Codex | `e239cf9` | `docs/evidence/db-10/startup-consistency-check.json` / sha256:972d8970f8138892c05f0e4d0a19442f06aff35b2e892d3ac55b584db94367ae |
+| `DB-11` | 升级与备份路径 | DB-02..10 | DONE | Codex | `e239cf9` | `docs/evidence/db-11/upgrade-backup-check.json` / sha256:e5a2cac7a7cc149f7349f1a541b78751e979b793a7e8524639717f470b90bcf5 |
 
 ### D. qui 接入、qB Profile 与 Sync
 
@@ -354,7 +355,7 @@ Gate A、Gate B 已于 2026-09-05 评审通过（阶段 A 9/9、阶段 B 8/8）�
 |---|---|---|---|---|---|
 | Gate A | PASS | 可重建骨架、工具链、许可证、单镜像 | `5ca8c09` | Codex（记录人；仓库所有者复核待 owner 确认） | 2026-09-05 逐项核验：README 引导 `make bootstrap && make preflight && make build` 全链在当前源码 PASS（boot-05/07 证据）；容器 distroless 无 Node 运行时、nonroot、只读根文件系统（boot-08 runtime）；工具链 go1.26.3/node 24.14.0/pnpm 10.33.0 锁定，Dockerfile 固定基础镜像 tag（distroless 建议后续改 digest 引用）；`verify-license`/`verify-qui-lock` PASS；SBOM 由 `make sbom` 确定性生成 |
 | Gate B | PASS | 合同源、生成链、C1 不伪 PASS | `2f64190` | Codex（记录人；仓库所有者复核待 owner 确认） | 2026-09-05 逐项核验：无手写重复枚举（C1-STATE-ENUMS PASS，枚举 source-derived）；API 示例过 schema 校验（C1-OPENAPI PASS）；生成后 Git diff 为空（generate-check PASS）；C1 全部 11 项 PASS 且 `eligible_for_g3=false` 不伪 PASS（CTR-07 证据，报告 sha256:253219a4…） |
-| Gate C | PENDING | fresh/upgrade schema、触发器和事务负测 | — | — | — |
+| Gate C | PASS | fresh/upgrade schema、触发器和事务负测 | `e239cf9` | Codex（记录人；仓库所有者复核待 owner 确认） | 2026-09-05 逐项核验：C1 六项（SCHEMA-FRESH/UPGRADE、FOREIGN-KEYS、ATTEMPT-IMMUTABLE、SUBMIT-INTENT-ONE-TO-ONE、RESERVATION-OWNER）真实实现全 PASS（报告 run 20260905T130000Z，sha256:36d1ef99…）；internal/db 负测覆盖迁移中途失败回滚、checksum 不符、跨表漂移与不可变更新拒绝、循环外键插入顺序、启动一致性 fail-closed、升级失败保留原库与备份恢复 |
 | Gate D | PENDING | 三 Profile fixture 确定性 Sync；未验证 fail closed | — | — | — |
 | Gate E | PENDING | RSS/Identity/并行准备乱序与恢复 | — | — | — |
 | Gate F | PENDING | 简单/高级规则、dry-run、许可追踪 | — | — | — |
@@ -488,3 +489,4 @@ Gate A、Gate B 已于 2026-09-05 评审通过（阶段 A 9/9、阶段 B 8/8）�
 | 2026-09-05 | 新增 `tools/sbom` 与 `make sbom` 确定性 SBOM 生成，compose 实验室全链路重验 PASS，BOOT-08 收口 DONE（`5ca8c09`） | Codex |
 | 2026-09-05 | Gate A 评审 PASS（阶段 A 9/9 DONE），总览推进至 9/149 | Codex |
 | 2026-09-05 | CTR-01..08 在当前源码重验并刷新证据（`2f64190`），阶段 B 8/8 收口 DONE，Gate B 评审 PASS，总览推进至 17/149 | Codex |
+| 2026-09-05 | DB-01..11 在当前源码重验并刷新证据（`e239cf9`），阶段 C 11/11 收口 DONE，Gate C 评审 PASS，总览推进至 28/149 | Codex |
