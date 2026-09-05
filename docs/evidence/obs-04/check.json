@@ -1,0 +1,20 @@
+{
+  "item": "OBS-04",
+  "title": "诊断包",
+  "status": "PASS",
+  "branch": "main",
+  "source_commit": "3d3ce7f",
+  "implementation": [
+    "internal/diagnostics: digest-stamped bundle of version, VCS build identity, redacted configuration summary, and live status checks (database ping + startup consistency)",
+    "cmd/vertex-pro doctor: emits the bundle as JSON; refuses to create a missing database file (read-only diagnostic tool)",
+    "config values pass through observability redaction by key and by value; the digest covers every field except itself"
+  ],
+  "checks": {
+    "redaction": "PASS: TestBuildRedactsConfigAndStampsDigest - announce passkey and api_key values in the config summary never reach the bundle; sensitive keys collapse to <redacted>",
+    "digest": "PASS: TestBuildDigestIsDeterministicAndCoversContent - identical inputs produce identical digests; any content change moves the digest",
+    "honest_checks": "PASS: a nil database reports not-ok instead of a fabricated pass",
+    "runtime": "PASS: serve started against a real database, then doctor --database printed a bundle with database ok=true, build identity (dirty worktree reported honestly), and a sha256 digest",
+    "full_suite": "PASS: go test ./... twice on 2026-09-06, 98 packages ok, 0 failures"
+  },
+  "scope_note": "The bundle contains no secrets, announce URLs, or credentials; log excerpt retention in memory remains out of scope (logs stream to stdout with redaction applied at write time by OBS-01)."
+}
