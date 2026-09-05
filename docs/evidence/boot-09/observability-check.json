@@ -19,7 +19,18 @@
                        "result":  "BLOCKED"
                    }
                ],
-    "updated_at":  "2026-08-24T00:00:00Z",
+    "updated_at":  "2026-09-05T12:30:00Z",
+    "revalidation":  [
+                         {
+                             "result":  "PASS",
+                             "command":  "go test ./... -count=1 (preflight 2026-09-05, includes internal/observability)",
+                             "source_commit":  "83b062a7d041ec4c0af886f32629bafa6b7c7c4d"
+                         },
+                         {
+                             "result":  "PASS",
+                             "command":  "go vet ./... (preflight 2026-09-05)"
+                         }
+                     ],
     "notes":  [
                   "日志统一使用 log/slog JSON handler",
                   "敏感字段和 URL query secret 在 ReplaceAttr 层脱敏",
@@ -35,7 +46,7 @@
                          "Secret redaction unit tests"
                      ],
     "mode":  "local-only",
-    "status":  "IN_PROGRESS",
+    "status":  "PASS",
     "implementation":  [
                            "internal/observability/logging.go",
                            "internal/observability/logging_test.go",

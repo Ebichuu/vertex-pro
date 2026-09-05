@@ -42,37 +42,37 @@
       "name": "test-unit",
       "status": "PASS",
       "exit_code": 0,
-      "output_tail": "2m鉁?[39m src/components/sites/SitesRssPage.test.tsx \u001b[2m(\u001b[22m\u001b[2m4 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[90m 276\u001b[2mms\u001b[22m\u001b[39m\r\n \u001b[32m鉁?[39m src/components/downloaders/DownloaderDetailPage.test.tsx \u001b[2m(\u001b[22m\u001b[2m4 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[90m 278\u001b[2mms\u001b[22m\u001b[39m\r\n \u001b[32m鉁?[39m src/components/rules/VertexRuleEditor.test.tsx \u001b[2m(\u001b[22m\u001b[2m8 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[90m 291\u001b[2mms\u001b[22m\u001b[39m\r\n \u001b[32m鉁?[39m src/components/history/HistoryDetailPage.test.tsx \u001b[2m(\u001b[22m\u001b[2m6 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[33m 347\u001b[2mms\u001b[22m\u001b[39m\r\n \u001b[32m鉁?[39m src/test/smoke.test.tsx \u001b[2m(\u001b[22m\u001b[2m3 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[33m 348\u001b[2mms\u001b[22m\u001b[39m\r\n \u001b[32m鉁?[39m src/test/app-shell.test.tsx \u001b[2m(\u001b[22m\u001b[2m12 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[33m 701\u001b[2mms\u001b[22m\u001b[39m\r\n\r\n\u001b[2m Test Files \u001b[22m \u001b[1m\u001b[32m16 passed\u001b[39m\u001b[22m\u001b[90m (16)\u001b[39m\r\n\u001b[2m      Tests \u001b[22m \u001b[1m\u001b[32m81 passed\u001b[39m\u001b[22m\u001b[90m (81)\u001b[39m\r\n\u001b[2m   Start at \u001b[22m 16:09:05\r\n\u001b[2m   Duration \u001b[22m 3.98s\u001b[2m (transform 1.83s, setup 8.10s, collect 5.61s, tests 3.89s, environment 11.14s, prepare 2.12s)\u001b[22m"
+      "output_tail": "m 576\u001b[2mms\u001b[22m\u001b[39m\r\n \u001b[32m鉁?[39m src/components/rules/VertexRuleEditor.test.tsx \u001b[2m(\u001b[22m\u001b[2m8 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[33m 615\u001b[2mms\u001b[22m\u001b[39m\r\n \u001b[32m鉁?[39m src/components/history/HistoryDetailPage.test.tsx \u001b[2m(\u001b[22m\u001b[2m6 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[33m 649\u001b[2mms\u001b[22m\u001b[39m\r\n   \u001b[33m\u001b[2m鉁?[22m\u001b[39m UI-08 History Detail\u001b[2m > \u001b[22m灞曠ず鏈€鍚庣姸鎬併€佷笂浼犲垎浜巼銆佽鍒欒仛鍚堝拰鍒犻櫎纭 \u001b[33m336\u001b[2mms\u001b[22m\u001b[39m\r\n \u001b[32m鉁?[39m src/test/auth-gate.test.tsx \u001b[2m(\u001b[22m\u001b[2m2 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[90m 201\u001b[2mms\u001b[22m\u001b[39m\r\n \u001b[32m鉁?[39m src/test/smoke.test.tsx \u001b[2m(\u001b[22m\u001b[2m3 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[33m 326\u001b[2mms\u001b[22m\u001b[39m\r\n \u001b[32m鉁?[39m src/test/app-shell.test.tsx \u001b[2m(\u001b[22m\u001b[2m12 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[33m 679\u001b[2mms\u001b[22m\u001b[39m\r\n\r\n\u001b[2m Test Files \u001b[22m \u001b[1m\u001b[32m16 passed\u001b[39m\u001b[22m\u001b[90m (16)\u001b[39m\r\n\u001b[2m      Tests \u001b[22m \u001b[1m\u001b[32m81 passed\u001b[39m\u001b[22m\u001b[90m (81)\u001b[39m\r\n\u001b[2m   Start at \u001b[22m 19:29:18\r\n\u001b[2m   Duration \u001b[22m 15.33s\u001b[2m (transform 3.59s, setup 55.92s, collect 11.53s, tests 6.25s, environment 117.28s, prepare 9.58s)\u001b[22m"
     },
     {
       "name": "test-contracts",
       "status": "PASS",
       "exit_code": 0,
-      "output_tail": "report=D:\\Projects\\Vertex-pro\\artifacts\\contract-consistency\\dev\\20260902T080910Z\\report.json\r\nstatus=PASS"
+      "output_tail": "report=D:\\Projects\\Vertex-pro\\artifacts\\contract-consistency\\dev\\20260905T112934Z\\report.json\r\nstatus=PASS"
     },
     {
       "name": "test-integration",
       "status": "PASS",
       "exit_code": 0,
-      "output_tail": "ok  \tgithub.com/vertex-pro/vertex-pro/internal/app\t0.461s\r\nok  \tgithub.com/vertex-pro/vertex-pro/internal/dispatchflow\t0.446s\r\nok  \tgithub.com/vertex-pro/vertex-pro/internal/resourcesapi\t3.223s\r\nok  \tgithub.com/vertex-pro/vertex-pro/internal/rssservice\t0.182s\r\nok  \tgithub.com/vertex-pro/vertex-pro/internal/syncwatcher\t0.263s"
+      "output_tail": "ok  \tgithub.com/vertex-pro/vertex-pro/internal/app\t0.679s\r\nok  \tgithub.com/vertex-pro/vertex-pro/internal/dispatchflow\t0.539s\r\nok  \tgithub.com/vertex-pro/vertex-pro/internal/resourcesapi\t3.276s\r\nok  \tgithub.com/vertex-pro/vertex-pro/internal/rssservice\t0.157s\r\nok  \tgithub.com/vertex-pro/vertex-pro/internal/syncwatcher\t0.232s"
     },
     {
       "name": "test-e2e",
       "status": "PASS",
       "exit_code": 0,
-      "output_tail": "ok  \tgithub.com/vertex-pro/vertex-pro/cmd/vertex-pro\t0.062s\r\nok  \tgithub.com/vertex-pro/vertex-pro/internal/httpapi\t0.093s\r\nok  \tgithub.com/vertex-pro/vertex-pro/internal/resourcesapi\t3.159s\r\nok  \tgithub.com/vertex-pro/vertex-pro/internal/sseserver\t0.449s"
+      "output_tail": "ok  \tgithub.com/vertex-pro/vertex-pro/cmd/vertex-pro\t0.075s\r\nok  \tgithub.com/vertex-pro/vertex-pro/internal/httpapi\t0.104s\r\nok  \tgithub.com/vertex-pro/vertex-pro/internal/resourcesapi\t3.311s\r\nok  \tgithub.com/vertex-pro/vertex-pro/internal/sseserver\t0.440s"
     },
     {
       "name": "test-protocol",
       "status": "PASS",
       "exit_code": 0,
-      "output_tail": "ok  \tgithub.com/vertex-pro/vertex-pro/internal/qui/control\t0.169s\r\nok  \tgithub.com/vertex-pro/vertex-pro/internal/qui/proxy\t0.059s\r\nok  \tgithub.com/vertex-pro/vertex-pro/internal/qbadd\t0.047s\r\nok  \tgithub.com/vertex-pro/vertex-pro/internal/qbprofile\t0.045s\r\nok  \tgithub.com/vertex-pro/vertex-pro/internal/qbresponse\t0.050s\r\nok  \tgithub.com/vertex-pro/vertex-pro/internal/syncmerge\t0.042s"
+      "output_tail": "ok  \tgithub.com/vertex-pro/vertex-pro/internal/qui/control\t0.172s\r\nok  \tgithub.com/vertex-pro/vertex-pro/internal/qui/proxy\t0.064s\r\nok  \tgithub.com/vertex-pro/vertex-pro/internal/qbadd\t0.052s\r\nok  \tgithub.com/vertex-pro/vertex-pro/internal/qbprofile\t0.052s\r\nok  \tgithub.com/vertex-pro/vertex-pro/internal/qbresponse\t0.051s\r\nok  \tgithub.com/vertex-pro/vertex-pro/internal/syncmerge\t0.040s"
     },
     {
       "name": "test-fault",
       "status": "PASS",
       "exit_code": 0,
-      "output_tail": "ok  \tgithub.com/vertex-pro/vertex-pro/internal/addfaultmatrix\t1.350s\r\nok  \tgithub.com/vertex-pro/vertex-pro/internal/dispatchcommit\t0.340s\r\nok  \tgithub.com/vertex-pro/vertex-pro/internal/qbexecutor\t0.052s\r\nok  \tgithub.com/vertex-pro/vertex-pro/internal/saferetry\t0.315s\r\nok  \tgithub.com/vertex-pro/vertex-pro/internal/startuprecover\t0.253s\r\nok  \tgithub.com/vertex-pro/vertex-pro/internal/unknownreconciler\t0.320s"
+      "output_tail": "ok  \tgithub.com/vertex-pro/vertex-pro/internal/addfaultmatrix\t1.515s\r\nok  \tgithub.com/vertex-pro/vertex-pro/internal/dispatchcommit\t0.329s\r\nok  \tgithub.com/vertex-pro/vertex-pro/internal/qbexecutor\t0.060s\r\nok  \tgithub.com/vertex-pro/vertex-pro/internal/saferetry\t0.328s\r\nok  \tgithub.com/vertex-pro/vertex-pro/internal/startuprecover\t0.264s\r\nok  \tgithub.com/vertex-pro/vertex-pro/internal/unknownreconciler\t0.329s"
     },
     {
       "name": "verify-license",
