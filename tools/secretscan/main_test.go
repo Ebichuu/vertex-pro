@@ -23,7 +23,7 @@ func commitAll(t *testing.T, root string) {
 	t.Helper()
 	for _, arguments := range [][]string{
 		{"add", "-A"},
-		{"commit", "-m", "snapshot"},
+		{"-c", "user.email=scan@example", "-c", "user.name=scan", "commit", "-m", "snapshot"},
 	} {
 		command := exec.Command("git", arguments...)
 		command.Dir = root
