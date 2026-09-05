@@ -3,7 +3,7 @@
   "title": "API 安全",
   "status": "PASS",
   "branch": "main",
-  "source_commit": "PENDING_AT_WRITE",
+  "source_commit": "1113b8c",
   "implementation": [
     "auth: strong-password one-shot initialize, PBKDF2 hashing, login lockout after repeated failures, single fixed session, session expiry and logout",
     "audit: adminauth now writes AUTH_INITIALIZED / AUTH_LOGIN_FAILED / AUTH_LOGIN_LOCKED / AUTH_LOGIN_LOCKED_DENIED / AUTH_LOGIN_SUCCEEDED / AUTH_LOGGED_OUT rows into system_events inside the same transaction as the state change (90-day audit retention, no credential material in messages)",
