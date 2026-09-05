@@ -61,13 +61,13 @@ PENDING -> IN_PROGRESS -> IN_REVIEW -> DONE
 | G | Placement 与容量 | `14/14 DONE` | Gate G / G2 基础 | `PASS`（G2 Gate 评审另行进行） |
 | H | Add、确认与恢复 | `14/14 DONE` | Gate H | `PASS` |
 | I | API、认证与 SSE | `12/12 DONE` | Gate I | `PASS` |
-| J | 前端页面 | `0/13 DONE; 10 IN_PROGRESS; 3 PENDING` | Gate J | `PENDING` |
-| K | 历史、统计与观测 | `0/12 DONE; 6 IN_PROGRESS; 6 PENDING` | Gate K | `PENDING` |
+| J | 前端页面 | `10/13 DONE; 3 PENDING` | Gate J | `PENDING` |
+| K | 历史、统计与观测 | `0/12 DONE; 7 IN_PROGRESS; 5 PENDING` | Gate K | `PENDING` |
 | L | 加固与运维 | `0/12 DONE; 12 PENDING` | Gate L | `PENDING` |
 | M | RC 与冻结 | `0/7 DONE; 7 PENDING` | Gate M / G3 | `PENDING` |
 
-总体状态：`105/149 DONE`；`16 IN_PROGRESS`；`28 PENDING`。
-Gate A–I 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 12/12、E 13/13、F 12/12、G 14/14、H 14/14、I 12/12）；正式施工项推进至阶段 J `UI-11`；功能开发触达：阶段 J `UI-10`（local-only）。
+总体状态：`115/149 DONE`；`7 IN_PROGRESS`；`27 PENDING`。
+Gate A–I 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 12/12、E 13/13、F 12/12、G 14/14、H 14/14、I 12/12）；阶段 J 的 UI-01..10 已收口，其余为待实现新功能（UI-11 Settings、UI-12 可访问性/性能、UI-13 主流程 E2E）；功能开发触达：阶段 J（local-only）。
 
 ### 2026-08-30 状态校准
 
@@ -132,7 +132,8 @@ Gate A–I 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 1
 - 阶段 F 收口：RULE-01..12 在 `ac0ff92` 源码重验（`cff31ec`）——rules/ruleversion/ruleaggregate/ruledryrun/ruleservice 包测试与前端 24 项规则组件测试（编辑器 8、列表 6、预览 2、dry-run 4、编辑页 4）全 PASS，全套 vitest 81/81；RULE-12 上游差异记录与 verify-license 一致。Gate F 评审通过（PASS），阶段 F 12/12 完成，施工前沿推进至阶段 G `CAP-01`。
 - 阶段 G 收口：CAP-01..14 在 `ac0ff92` 源码重验（`8a24a85`）——storageverify/capacitysnapshot/capacityprojection/capacityreconciler/placement/reservation/candidatefilter/availability/amountleft/taskbinding/terminalrelease/authoritativeremoval/finalrecheck/g2oracle 包测试全 PASS；CAP-01/02/04/08 的 live qB 只读证据引用保持不变。Gate G 评审通过（PASS），阶段 G 14/14 完成；G2 Gate（容量与恢复故障验证）属于阶段 0B 实验室执行范围，随 REL-02 进行。施工前沿推进至阶段 H `ADD-01`。
 - 阶段 H 收口：ADD-01..14 在 `ac0ff92` 源码重验（`f295c0c`）——racejob/attemptstate/submitintent/syncwaiter/dispatchworker/dispatchflow/dispatchcommit/identitymatcher/firstconfirm/alreadypresent/unknownreconciler/expiredunknown/saferetry/startuprecover/addfaultmatrix 包测试全 PASS；ADD-05/06/07/13/14 的三 Profile lab 战役证据与外部 kill -9 崩溃模拟证据引用保持不变。Gate H 评审通过（PASS），阶段 H 14/14 完成，施工前沿推进至阶段 I `API-01`。
-- 阶段 I 收口：API-01..12 在 `ac0ff92` 源码重验（`d8537fc`）——httpapi/adminauth/resourcesapi/apiidempotency/apipaging/domainevents/sseserver/realtimecards 包测试与 codegen -check 全 PASS；API-07 异步命令的实现在 resourcesapi 命令端点（`internal/commands` 为空目录，git 不跟踪）。Gate I 评审通过（PASS），阶段 I 12/12 完成，施工前沿推进至阶段 J `UI-11`。
+- 阶段 I 收口：API-01..12 在 `ac0ff92` 源码重验（`d8537fc`）——httpapi/adminauth/resourcesapi/apiidempotency/apipaging/domainevents/sseserver/realtimecards 包测试与 codegen -check 全 PASS；API-07 异步命令的实现在 resourcesapi 命令端点（`internal/commands` 为空目录，git 不跟踪）。Gate I 评审通过（PASS），阶段 I 12/12 完成，施工前沿推进至阶段 J。
+- 阶段 J 部分收口：UI-01..10 在 `ac0ff92` 源码重验（`f189e71`）——对应组件测试全部 PASS，全套 vitest 16 文件 81/81、生产构建 PASS。UI-11（Settings）、UI-12（可访问性/性能）、UI-13（主流程 E2E）为待实现新功能，保持 PENDING；Gate J 待其完成后评审。另：K 阶段汇总行同步计入此前 OBS-02 转 IN_PROGRESS 的变化（7 IN_PROGRESS / 5 PENDING），总览数字修正为 115/7/27。
 
 > 总数由本表的 149 个正式实施项计算。若施工手册新增、删除或改名实施项，必须同 PR 更新本表并由合同检查验证集合一致。
 
@@ -294,16 +295,16 @@ Gate A–I 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 1
 
 | ID | 内容 | Depends on | Status | Owner | PR/Merge | Evidence |
 |---|---|---|---|---|---|---|
-| `UI-01` | App Shell | BOOT-07, API-02,12 | IN_PROGRESS | Codex | local-only | `docs/evidence/ui-01/app-shell-check.json` / sha256:a11a01d088c42b448600aadf76f66d61f08eb8eb2612d58ba3b34c0eb8555c52 |
-| `UI-02` | Dashboard | UI-01, API-10,11 | IN_PROGRESS | Codex | local-only | `docs/evidence/ui-02/dashboard-check.json` / sha256:e422aca39a47a9e3abf32a2085d1a104150a69d6575eb0f9d01ebd3dc2766a84 |
-| `UI-03` | Sites & RSS | UI-01, RSS-01,02, API-04 | IN_PROGRESS | Codex | local-only | `docs/evidence/ui-03/sites-rss-check.json` / sha256:cedddfb7aea705f1ef68c141ed93269b48c56c6a8460c8a11cd5e4c496ff465a |
-| `UI-04` | Rules 列表 | UI-01, RULE-04,10 | IN_PROGRESS | Codex | local-only | `docs/evidence/ui-04/rules-list-check.json` / sha256:7ac2efca80f6a8c205ead9a8798491631381ab44b2660da885a607568fba29e9 |
-| `UI-05` | Rule Editor | UI-04, RULE-08,09 | IN_PROGRESS | Codex | local-only | `docs/evidence/ui-05/rule-editor-check.json` / sha256:2803ad6103498d6f479f229b19c8c3671d30a46a60bcd94f6d5b040e3c160746 |
-| `UI-06` | Dry-run/聚合预览 | UI-05, RULE-06,11 | IN_PROGRESS | Codex | local-only | `docs/evidence/ui-06/dry-run-aggregation-check.json` / sha256:28aa3b55206e8546fe9694ee2b2c6af04db80e21fcbed234e94071133c44ff32 |
-| `UI-07` | History | UI-01, HIS-01, API-05 | IN_PROGRESS | Codex | local-only | `docs/evidence/ui-07/history-check.json` / sha256:d17c3f8db713c2f703338e0466ec4d0ae11aa7d574acfc19e5169b35581fbff9 |
-| `UI-08` | History Detail | UI-07, HIS-02,03 | IN_PROGRESS | Codex | local-only | `docs/evidence/ui-08/history-detail-check.json` / sha256:d8726eddd414106020d1c17878cb33cb99e71fb7077f6cbed2e8a4b556806aff |
-| `UI-09` | Downloader Detail | UI-02, STAT-01..05 | IN_PROGRESS | Codex | local-only | `docs/evidence/ui-09/downloader-detail-check.json` / sha256:aa0e77694157b119f05828a2bc65aa23065047db93505ff3dfe20f2d05493894 |
-| `UI-10` | Exceptions | UI-01, ADD-10,11, API-07 | IN_PROGRESS | Codex | local-only | `docs/evidence/ui-10/exceptions-check.json` / sha256:c9a357deb58f01ae6af5f686bbbbf36003d6e85f26be4947a05031b9698816a0 |
+| `UI-01` | App Shell | BOOT-07, API-02,12 | DONE | Codex | `f189e71` | `docs/evidence/ui-01/app-shell-check.json` / sha256:796e17e7accbc031ceeb635f35609ac553227dad0832eeab2e32e613ed16eebd |
+| `UI-02` | Dashboard | UI-01, API-10,11 | DONE | Codex | `f189e71` | `docs/evidence/ui-02/dashboard-check.json` / sha256:c63a128011b28b367b97dffeda6eab9a15b61defe01bb8119b90026675c878c9 |
+| `UI-03` | Sites & RSS | UI-01, RSS-01,02, API-04 | DONE | Codex | `f189e71` | `docs/evidence/ui-03/sites-rss-check.json` / sha256:3802b10b64c3fc12800a2a26d430a800c4d022f610ee20e177b500f250bcf140 |
+| `UI-04` | Rules 列表 | UI-01, RULE-04,10 | DONE | Codex | `f189e71` | `docs/evidence/ui-04/rules-list-check.json` / sha256:5391f4fe54f8d5f1147559564987c3bbc9c9970e2019e4d4ab6b36426a245b6c |
+| `UI-05` | Rule Editor | UI-04, RULE-08,09 | DONE | Codex | `f189e71` | `docs/evidence/ui-05/rule-editor-check.json` / sha256:f5a73466d74e101729515f7094a119013ed2e1892d9ee698ea3783a16b5ce030 |
+| `UI-06` | Dry-run/聚合预览 | UI-05, RULE-06,11 | DONE | Codex | `f189e71` | `docs/evidence/ui-06/dry-run-aggregation-check.json` / sha256:c788bf69c7ac096a7af684b2ea2fbc3c59580a9113d0752e5ac8d3e36985e4e3 |
+| `UI-07` | History | UI-01, HIS-01, API-05 | DONE | Codex | `f189e71` | `docs/evidence/ui-07/history-check.json` / sha256:cb3f89dc9021fa5c540112b93b2582c9cfc8dee0d81c6bc399a0f4189d947d22 |
+| `UI-08` | History Detail | UI-07, HIS-02,03 | DONE | Codex | `f189e71` | `docs/evidence/ui-08/history-detail-check.json` / sha256:2d513318625639ba5e4e6beeda83e0b068d50e58fbc3a77e0fed731b5bd20d5b |
+| `UI-09` | Downloader Detail | UI-02, STAT-01..05 | DONE | Codex | `f189e71` | `docs/evidence/ui-09/downloader-detail-check.json` / sha256:17b09c1ef7e485380f746004cbe18025c77f4e9be029868e7165ea4d07475fa8 |
+| `UI-10` | Exceptions | UI-01, ADD-10,11, API-07 | DONE | Codex | `f189e71` | `docs/evidence/ui-10/exceptions-check.json` / sha256:bde378546aa33f5d0afe5d051589fe88f979e129317867870f1afad126a66da1 |
 | `UI-11` | Settings | UI-01, API-04 | PENDING | — | — | — |
 | `UI-12` | Accessibility/性能 | UI-01..11 | PENDING | — | — | — |
 | `UI-13` | 主流程 E2E | UI-01..12, CTR-08 | PENDING | — | — | — |
@@ -503,3 +504,4 @@ Gate A–I 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 1
 | 2026-09-05 | CAP-01..14 在当前源码重验并刷新证据（`8a24a85`），阶段 G 14/14 收口 DONE，Gate G 评审 PASS（G2 Gate 随 REL-02），总览推进至 79/149 | Codex |
 | 2026-09-05 | ADD-01..14 在当前源码重验并刷新证据（`f295c0c`），阶段 H 14/14 收口 DONE，Gate H 评审 PASS，总览推进至 93/149 | Codex |
 | 2026-09-05 | API-01..12 在当前源码重验并刷新证据（`d8537fc`），阶段 I 12/12 收口 DONE，Gate I 评审 PASS，总览推进至 105/149 | Codex |
+| 2026-09-05 | UI-01..10 在当前源码重验并刷新证据（`f189e71`），阶段 J 部分收口 10/13 DONE（UI-11..13 保持 PENDING），总览推进至 115/149 并修正 K 阶段计数 | Codex |
