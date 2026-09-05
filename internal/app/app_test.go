@@ -20,6 +20,7 @@ import (
 	"github.com/vertex-pro/vertex-pro/internal/httpapi"
 	"github.com/vertex-pro/vertex-pro/internal/profileverify"
 	"github.com/vertex-pro/vertex-pro/internal/qui/proxy"
+	"github.com/vertex-pro/vertex-pro/internal/retention"
 	"github.com/vertex-pro/vertex-pro/internal/secrets"
 )
 
@@ -842,5 +843,56 @@ func TestMetricsFamiliesStayBounded(t *testing.T) {
 		if len(sets) > 8 {
 			t.Fatalf("metric family %s has %d labelsets, exceeding the bounded set\n%s", name, len(sets), rendered)
 		}
+	}
+}
+
+func TestRetentionSweepEnforcesExpiresAtAndCountsMetrics(t *testing.T) {
+	databasePath := filepath.Join(t.TempDir(), "vertex-pro.db")
+	database, err := db.Open(context.Background(), db.Config{Path: databasePath})
+	if err != nil {
+		t.Fatal(err)
+	}
+	runner, err := db.DefaultRunner()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := runner.Apply(context.Background(), database); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 9, 6, 12, 0, 0, 0, time.UTC)
+	expired := now.Add(-8 * 24 * time.Hour).Format(time.RFC3339)
+	future := now.Add(24 * time.Hour).Format(time.RFC3339)
+	if _, err := database.Exec(`INSERT INTO event_stream(event_type, aggregate_type, aggregate_id, aggregate_revision, occurred_at, expires_at) VALUES ('job.state.changed', 'system', 'job-1', 0, ?, ?)`, now.Add(-9*24*time.Hour).Format(time.RFC3339), expired); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := database.Exec(`INSERT INTO event_stream(event_type, aggregate_type, aggregate_id, aggregate_revision, occurred_at, expires_at) VALUES ('job.state.changed', 'system', 'job-2', 0, ?, ?)`, now.Format(time.RFC3339), future); err != nil {
+		t.Fatal(err)
+	}
+	if err := database.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	runtime, err := New(context.Background(), Config{
+		Database: db.Config{Path: databasePath},
+		Hosts:    []string{"vertex.local"},
+		Retention: &RetentionConfig{
+			SnapshotRoot: "",
+			Policy:       retention.DefaultPolicy(),
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer runtime.Close()
+	result, err := runtime.RunRetentionSweep(context.Background(), retention.DefaultPolicy(), func() time.Time { return now })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Events != 1 {
+		t.Fatalf("retention result = %+v", result)
+	}
+	rendered := runtime.Metrics.Render()
+	if !strings.Contains(rendered, `vertex_retention_deleted_total{kind="events"} 1`) {
+		t.Fatalf("retention counter missing:\n%s", rendered)
 	}
 }

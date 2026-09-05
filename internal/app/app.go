@@ -27,6 +27,7 @@ import (
 	"github.com/vertex-pro/vertex-pro/internal/racejobstore"
 	"github.com/vertex-pro/vertex-pro/internal/realtimecards"
 	"github.com/vertex-pro/vertex-pro/internal/resourcesapi"
+	"github.com/vertex-pro/vertex-pro/internal/retention"
 	"github.com/vertex-pro/vertex-pro/internal/rssfetch"
 	"github.com/vertex-pro/vertex-pro/internal/rsspreview"
 	"github.com/vertex-pro/vertex-pro/internal/rssservice"
@@ -57,6 +58,16 @@ type Config struct {
 	Qui                          *QuiConfig
 	Scheduler                    *SchedulerConfig
 	DispatchStage                *DispatchStageConfig
+	Retention                    *RetentionConfig
+}
+
+// RetentionConfig enables the OBS-03 cleanup worker. An empty snapshot root
+// skips snapshot pruning (events, commands, idempotency, and stats are swept
+// regardless); the sweep enforces the expires_at facts writers persist.
+type RetentionConfig struct {
+	Interval     time.Duration
+	SnapshotRoot string
+	Policy       retention.Policy
 }
 
 // DispatchStageConfig enables the runtime worker that advances prepared race
@@ -112,8 +123,12 @@ type Runtime struct {
 	confirmations *confirmcoordinator.Coordinator
 	scheduler     *schedulercycle.Cycle
 	dispatchStage *dispatchstage.Stage
+	snapshotRoot  string
 	cancel        context.CancelFunc
-	workers       sync.WaitGroup
+	// retentionCancel 停止保留策略 worker；与 qui 的 cancel 独立，
+	// 因为保留清理不依赖 qui 集成是否启用。
+	retentionCancel context.CancelFunc
+	workers         sync.WaitGroup
 }
 
 // New opens and validates the database before exposing HTTP traffic. A fresh
@@ -209,14 +224,78 @@ func New(ctx context.Context, config Config) (*Runtime, error) {
 	mux := http.NewServeMux()
 	mux.Handle("/api/v1/", api)
 	mux.Handle("/", webembed.Handler())
-	runtime := &Runtime{Database: database, Auth: auth, Handler: mux, Metrics: metrics.New(), Recovery: recovery, hub: hub}
+	snapshotRoot := ""
+	if config.Retention != nil {
+		snapshotRoot = config.Retention.SnapshotRoot
+	}
+	runtime := &Runtime{Database: database, Auth: auth, Handler: mux, Metrics: metrics.New(), Recovery: recovery, hub: hub, snapshotRoot: snapshotRoot}
 	if config.Qui != nil {
 		if err := runtime.startQui(ctx, *config.Qui, config.Scheduler, config.Qui.DispatchStage, now); err != nil {
 			return nil, err
 		}
 	}
+	if config.Retention != nil {
+		runtime.startRetention(config.Retention, now)
+	}
 	closeDatabase = false
 	return runtime, nil
+}
+
+// startRetention runs one cleanup sweep immediately (clearing any backlog from
+// previous runs) and then on the configured interval. It runs independently of
+// the qui integration: events, commands, idempotency, and stats exist whether
+// or not a downloader is configured.
+func (runtime *Runtime) startRetention(config *RetentionConfig, now func() time.Time) {
+	workerContext, cancel := context.WithCancel(context.Background())
+	runtime.retentionCancel = cancel
+	interval := config.Interval
+	if interval <= 0 {
+		interval = time.Hour
+	}
+	policy := config.Policy
+	runtime.workers.Add(1)
+	go func() {
+		defer runtime.workers.Done()
+		sweep := func() {
+			if _, err := runtime.RunRetentionSweep(workerContext, policy, now); err != nil {
+				return
+			}
+		}
+		sweep()
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-workerContext.Done():
+				return
+			case <-ticker.C:
+				sweep()
+			}
+		}
+	}()
+}
+
+// RunRetentionSweep performs one OBS-03 cleanup pass and counts what it
+// removed. Label values are fixed kinds, keeping the metrics family bounded.
+func (runtime *Runtime) RunRetentionSweep(ctx context.Context, policy retention.Policy, now func() time.Time) (retention.Result, error) {
+	result, err := retention.Sweep(ctx, runtime.Database, runtime.snapshotRoot, policy, now())
+	if err != nil {
+		return result, err
+	}
+	for kind, count := range map[string]int64{
+		"events":       result.Events,
+		"system":       result.SystemEvents,
+		"commands":     result.Commands,
+		"idempotency":  result.IdempotencyRecords,
+		"snapshots":    result.Snapshots,
+		"stats_raw":    result.StatsRaw,
+		"stats_hourly": result.StatsHourly,
+	} {
+		if count > 0 {
+			runtime.Metrics.Add("vertex_retention_deleted_total", map[string]string{"kind": kind}, uint64(count))
+		}
+	}
+	return result, nil
 }
 
 // Close stops owned read-only workers before releasing the runtime database.
@@ -227,6 +306,9 @@ func (runtime *Runtime) Close() error {
 	}
 	if runtime.cancel != nil {
 		runtime.cancel()
+	}
+	if runtime.retentionCancel != nil {
+		runtime.retentionCancel()
 	}
 	runtime.workers.Wait()
 	if runtime.watcher != nil {

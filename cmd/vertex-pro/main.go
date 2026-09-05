@@ -20,6 +20,7 @@ import (
 	"github.com/vertex-pro/vertex-pro/internal/db"
 	"github.com/vertex-pro/vertex-pro/internal/observability"
 	"github.com/vertex-pro/vertex-pro/internal/profileverify"
+	"github.com/vertex-pro/vertex-pro/internal/retention"
 	"github.com/vertex-pro/vertex-pro/internal/secrets"
 )
 
@@ -66,9 +67,10 @@ func runServe(logger *slog.Logger, arguments []string) error {
 	}
 
 	config := app.Config{
-		Database: db.Config{Path: *databasePath},
-		Hosts:    splitList(*allowedHosts),
-		Origins:  splitList(*allowedOrigins),
+		Database:  db.Config{Path: *databasePath},
+		Hosts:     splitList(*allowedHosts),
+		Origins:   splitList(*allowedOrigins),
+		Retention: &app.RetentionConfig{Interval: time.Hour, SnapshotRoot: *snapshotRoot, Policy: retention.DefaultPolicy()},
 	}
 	if strings.TrimSpace(*quiURL) != "" {
 		build := buildidentity.Current()
