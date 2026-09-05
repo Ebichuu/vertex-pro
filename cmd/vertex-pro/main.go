@@ -355,6 +355,8 @@ func runReadiness(arguments []string) error {
 		return err
 	}
 	checks := diagnostics.VerifyChecks(context.Background(), database, runner, len(runner.Migrations))
+	minFree := flags.Uint64("min-free-bytes", 1<<30, "disk watermark in bytes; readiness reports a reason when free space drops below it")
+	checks = append(checks, diagnostics.DiskFreeCheck(*databasePath, *minFree))
 	payload, err := json.MarshalIndent(map[string]any{"command": "readiness", "ready": diagnostics.AllOK(checks), "reasons": checks}, "", "  ")
 	if err != nil {
 		return err
@@ -383,7 +385,9 @@ func runSupportBundle(arguments []string) error {
 	if err != nil {
 		return err
 	}
-	bundle, err := diagnostics.BuildSupportBundle(context.Background(), report, database, nil)
+	diskCheck := diagnostics.DiskFreeCheck(*databasePath, 0)
+	bundle, err := diagnostics.BuildSupportBundle(context.Background(), report, database, nil, []diagnostics.Check{diskCheck})
+
 	if err != nil {
 		return err
 	}

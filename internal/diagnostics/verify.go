@@ -114,18 +114,20 @@ func Counts(ctx context.Context, database *sql.DB) (map[string]int64, error) {
 // 维护者的完整支持包；digest 覆盖除自身外的全部字段。
 type SupportBundle struct {
 	Report    Report           `json:"report"`
+	Checks    []Check          `json:"checks,omitempty"`
 	Counts    map[string]int64 `json:"counts"`
 	Retention map[string]any   `json:"retention,omitempty"`
 	Digest    string           `json:"digest"`
 }
 
-// BuildSupportBundle 组装支持包：数据库行数失败不静默，错误原样上报。
-func BuildSupportBundle(ctx context.Context, report Report, database *sql.DB, retentionSummary map[string]any) (SupportBundle, error) {
+// BuildSupportBundle 组装支持包：extraChecks（如磁盘水位）一并纳入 digest；
+// 数据库行数失败不静默，错误原样上报。
+func BuildSupportBundle(ctx context.Context, report Report, database *sql.DB, retentionSummary map[string]any, extraChecks []Check) (SupportBundle, error) {
 	counts, err := Counts(ctx, database)
 	if err != nil {
 		return SupportBundle{}, err
 	}
-	bundle := SupportBundle{Report: report, Counts: counts, Retention: retentionSummary}
+	bundle := SupportBundle{Report: report, Checks: extraChecks, Counts: counts, Retention: retentionSummary}
 	payload, err := json.Marshal(bundle)
 	if err != nil {
 		return SupportBundle{}, fmt.Errorf("marshal support bundle: %w", err)
@@ -133,4 +135,22 @@ func BuildSupportBundle(ctx context.Context, report Report, database *sql.DB, re
 	sum := sha256.Sum256(payload)
 	bundle.Digest = "sha256:" + hex.EncodeToString(sum[:])
 	return bundle, nil
+}
+
+// DiskFreeCheck 是 HARD-11 的磁盘水位检查：可用空间低于水位时检查失败，
+// 并把可回收的保留数据规模一并报告（readiness 原因可直接引用）。
+func DiskFreeCheck(path string, minFreeBytes uint64) Check {
+	check := Check{Name: "disk_free"}
+	free, err := FreeDiskBytes(path)
+	if err != nil {
+		check.Detail = observability.RedactString(err.Error())
+		return check
+	}
+	check.Detail = fmt.Sprintf("%d bytes free, watermark %d bytes", free, minFreeBytes)
+	if minFreeBytes > 0 && free < minFreeBytes {
+		check.Detail += "; below watermark - run a retention sweep"
+		return check
+	}
+	check.OK = true
+	return check
 }

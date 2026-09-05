@@ -2,6 +2,7 @@ package diagnostics
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -79,7 +80,7 @@ func TestCountsAndSupportBundle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	bundle, err := BuildSupportBundle(t.Context(), report, database, map[string]any{"events": "7d"})
+	bundle, err := BuildSupportBundle(t.Context(), report, database, map[string]any{"events": "7d"}, []Check{{Name: "disk_free", OK: true}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,5 +90,20 @@ func TestCountsAndSupportBundle(t *testing.T) {
 	}
 	if bundle.Digest == "" || !json.Valid([]byte(payload)) {
 		t.Fatalf("bundle invalid: %s", payload)
+	}
+}
+
+func TestDiskFreeCheckReportsWatermark(t *testing.T) {
+	path := t.TempDir()
+	check := DiskFreeCheck(path, 0)
+	if !check.OK || check.Detail == "" {
+		t.Fatalf("disk check = %+v", check)
+	}
+	check = DiskFreeCheck(path, 1<<50)
+	if check.OK {
+		t.Fatal("watermark above any free space must fail")
+	}
+	if !strings.Contains(check.Detail, "below watermark") {
+		t.Fatalf("detail = %q", check.Detail)
 	}
 }
