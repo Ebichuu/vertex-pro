@@ -22,6 +22,15 @@ const (
 
 const redactedValue = "<redacted>"
 
+// Redacted is the placeholder substituted for redacted values.
+const Redacted = redactedValue
+
+// SensitiveKey reports whether a log or configuration key carries secret
+// content by name (tokens, cookies, passkeys, credentials, announce URLs).
+func SensitiveKey(key string) bool {
+	return isSensitiveKey(strings.ToLower(key))
+}
+
 var sensitiveQueryPattern = regexp.MustCompile(`(?i)([?&](?:token|access_token|api[_-]?key|passkey|password|secret|cookie|authorization|proxy[_-]?key|announce)[^=]*=)[^&#\s"]+`)
 
 // userinfoPattern 按 RC8 §20.1 移除 URL userinfo 凭据：scheme://user:pass@host

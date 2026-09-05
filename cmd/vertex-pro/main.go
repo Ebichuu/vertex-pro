@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -18,6 +19,7 @@ import (
 	"github.com/vertex-pro/vertex-pro/internal/app"
 	"github.com/vertex-pro/vertex-pro/internal/buildidentity"
 	"github.com/vertex-pro/vertex-pro/internal/db"
+	"github.com/vertex-pro/vertex-pro/internal/diagnostics"
 	"github.com/vertex-pro/vertex-pro/internal/observability"
 	"github.com/vertex-pro/vertex-pro/internal/profileverify"
 	"github.com/vertex-pro/vertex-pro/internal/retention"
@@ -40,7 +42,10 @@ func main() {
 			os.Exit(1)
 		}
 	case "doctor":
-		fmt.Println("vertex-pro doctor: OK")
+		if err := runDoctor(logger, os.Args[2:]); err != nil {
+			logger.Error("doctor failed", "error", err)
+			os.Exit(1)
+		}
 	case "version":
 		fmt.Println(version)
 	default:
@@ -48,6 +53,53 @@ func main() {
 		fmt.Fprintln(os.Stderr, "usage: vertex-pro [serve|doctor|version]")
 		os.Exit(2)
 	}
+}
+
+// runDoctor prints the OBS-04 diagnostics bundle: redacted config summary,
+// build identity, and live status checks as one digest-stamped JSON document.
+func runDoctor(logger *slog.Logger, arguments []string) error {
+	flags := flag.NewFlagSet("doctor", flag.ContinueOnError)
+	databasePath := flags.String("database", envOrDefault("VERTEX_PRO_DATABASE", "vertex-pro.db"), "SQLite database path")
+	allowedHosts := flags.String("allowed-hosts", "localhost,127.0.0.1,[::1]", "comma-separated allowed HTTP hosts")
+	allowedOrigins := flags.String("allowed-origins", "http://localhost:8080,http://127.0.0.1:8080,http://[::1]:8080", "comma-separated allowed browser origins")
+	quiURL := flags.String("qui-url", strings.TrimSpace(os.Getenv("VERTEX_PRO_QUI_URL")), "qui base URL; empty disables qui integration")
+	enableDispatch := flags.Bool("enable-dispatch", envBool("VERTEX_PRO_ENABLE_DISPATCH"), "dispatch enablement flag")
+	if err := flags.Parse(arguments); err != nil {
+		return err
+	}
+
+	var database *sql.DB
+	if path := strings.TrimSpace(*databasePath); path != "" {
+		if _, err := os.Stat(path); err != nil {
+			// 不存在的数据库不做创建——doctor 是只读诊断工具。
+			logger.Error("doctor could not find the database file", "path", path)
+		} else {
+			opened, err := db.Open(context.Background(), db.Config{Path: path})
+			if err != nil {
+				logger.Error("doctor could not open the database", "error", err)
+			} else {
+				database = opened
+				defer database.Close()
+			}
+		}
+	}
+
+	bundle, err := diagnostics.Build(version, buildidentity.Current(), map[string]any{
+		"database_path":   *databasePath,
+		"allowed_hosts":   *allowedHosts,
+		"allowed_origins": *allowedOrigins,
+		"qui_base_url":    *quiURL,
+		"enable_dispatch": *enableDispatch,
+	}, database, time.Now())
+	if err != nil {
+		return err
+	}
+	payload, err := json.MarshalIndent(bundle, "", "  ")
+	if err != nil {
+		return err
+	}
+	fmt.Println(string(payload))
+	return nil
 }
 
 func runServe(logger *slog.Logger, arguments []string) error {
