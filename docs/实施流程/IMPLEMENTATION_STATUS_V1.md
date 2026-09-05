@@ -58,7 +58,7 @@ PENDING -> IN_PROGRESS -> IN_REVIEW -> DONE
 | D | qui、Profile、Sync | `12/12 DONE` | Gate D / G1 基础 | `PASS`（G1 Gate 评审另行进行） |
 | E | RSS、Torrent、并行准备 | `13/13 DONE` | Gate E | `PASS` |
 | F | 规则与 Query Builder | `12/12 DONE` | Gate F | `PASS` |
-| G | Placement 与容量 | `0/14 DONE; 14 IN_PROGRESS` | Gate G / G2 基础 | `PENDING` |
+| G | Placement 与容量 | `14/14 DONE` | Gate G / G2 基础 | `PASS`（G2 Gate 评审另行进行） |
 | H | Add、确认与恢复 | `0/14 DONE; 14 IN_PROGRESS` | Gate H | `PENDING` |
 | I | API、认证与 SSE | `0/12 DONE; 12 IN_PROGRESS` | Gate I | `PENDING` |
 | J | 前端页面 | `0/13 DONE; 10 IN_PROGRESS; 3 PENDING` | Gate J | `PENDING` |
@@ -66,8 +66,8 @@ PENDING -> IN_PROGRESS -> IN_REVIEW -> DONE
 | L | 加固与运维 | `0/12 DONE; 12 PENDING` | Gate L | `PENDING` |
 | M | RC 与冻结 | `0/7 DONE; 7 PENDING` | Gate M / G3 | `PENDING` |
 
-总体状态：`65/149 DONE`；`56 IN_PROGRESS`；`28 PENDING`。
-Gate A–F 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 12/12、E 13/13、F 12/12）；正式施工项推进至阶段 G `CAP-01`；功能开发触达：阶段 J `UI-10`（local-only）。
+总体状态：`79/149 DONE`；`42 IN_PROGRESS`；`28 PENDING`。
+Gate A–G 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 12/12、E 13/13、F 12/12、G 14/14）；正式施工项推进至阶段 H `ADD-01`；功能开发触达：阶段 J `UI-10`（local-only）。
 
 ### 2026-08-30 状态校准
 
@@ -130,6 +130,7 @@ Gate A–F 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 1
 - Gate D 评审通过（PASS，见第 4 节 Gate 记录）：三 Profile fixture 确定性 Sync 与未验证 fail closed 两条判据均有当前证据支撑。G1 Gate 的正式评审与生产运行时的 Profile 激活消费另行进行（对应 REL-01 及用户卡点清单第 3 项），不阻塞 Gate D。施工前沿推进至阶段 E `RSS-01`。
 - 阶段 E 收口：RSS-01..06、TOR-01..04、RACE-01..03 共 13 项在 `ac0ff92` 源码重验（`bb64fe4`）——rssservice/rssfetch/rsscheduler/rssbaseline/rsssource/rsspreview/torrentdownload/torrentparse/torrentidentity/torrentlink/racejobstore/raceprep/racegate 包测试全 PASS；RACE-02 的 supervisor 实现位于 `internal/raceprep`（`internal/race` 为空目录，git 不跟踪）。Gate E 评审通过（PASS），阶段 E 13/13 完成，施工前沿推进至阶段 F `RULE-01`。
 - 阶段 F 收口：RULE-01..12 在 `ac0ff92` 源码重验（`cff31ec`）——rules/ruleversion/ruleaggregate/ruledryrun/ruleservice 包测试与前端 24 项规则组件测试（编辑器 8、列表 6、预览 2、dry-run 4、编辑页 4）全 PASS，全套 vitest 81/81；RULE-12 上游差异记录与 verify-license 一致。Gate F 评审通过（PASS），阶段 F 12/12 完成，施工前沿推进至阶段 G `CAP-01`。
+- 阶段 G 收口：CAP-01..14 在 `ac0ff92` 源码重验（`8a24a85`）——storageverify/capacitysnapshot/capacityprojection/capacityreconciler/placement/reservation/candidatefilter/availability/amountleft/taskbinding/terminalrelease/authoritativeremoval/finalrecheck/g2oracle 包测试全 PASS；CAP-01/02/04/08 的 live qB 只读证据引用保持不变。Gate G 评审通过（PASS），阶段 G 14/14 完成；G2 Gate（容量与恢复故障验证）属于阶段 0B 实验室执行范围，随 REL-02 进行。施工前沿推进至阶段 H `ADD-01`。
 
 > 总数由本表的 149 个正式实施项计算。若施工手册新增、删除或改名实施项，必须同 PR 更新本表并由合同检查验证集合一致。
 
@@ -236,20 +237,20 @@ Gate A–F 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 1
 
 | ID | 内容 | Depends on | Status | Owner | PR/Merge | Evidence |
 |---|---|---|---|---|---|---|
-| `CAP-01` | StorageTarget 与证据 | DB-05, QUI-10 | IN_PROGRESS | Codex | live-read-only | `docs/evidence/cap-01/storage-target-check.json` / sha256:b614c335c3543990fa7d7104ebc0ad64bdb2784b42b72f34daf90739680d81d1; live operator device/mount verification: `docs/evidence/qui-12/live-qb504-storage-readonly.json` / sha256:19711b22b561db666f0e5ed643d600d81974cbf2198c5d08721224e0b940c716 |
-| `CAP-02` | 容量快照 | CAP-01, QUI-09 | IN_PROGRESS | Codex | live-read-only | `docs/evidence/cap-02/capacity-snapshot-check.json` / sha256:cce142eb0e4f136f79820f86c8377c7389716ca96b9464cc82139f27dbc0367b; live physical-free validation: `docs/evidence/qui-12/live-qb504-storage-readonly.json` / sha256:19711b22b561db666f0e5ed643d600d81974cbf2198c5d08721224e0b940c716 |
-| `CAP-03` | 容量投影 | CAP-02, DB-05 | IN_PROGRESS | Codex | local-only | `docs/evidence/cap-03/capacity-projection-check.json` / sha256:1024fe9837727d56466930ddc70e5c83c6aa07f6a9f310a3a74871cffd61c432 |
-| `CAP-04` | amount_left 证据 | QUI-07, DB-05 | IN_PROGRESS | Codex | live-read-only | `docs/evidence/cap-04/amount-left-check.json` / sha256:d2895cf73ee6aa64704f116a6c5c01cb3050928881f3dbfd169b605e69abb10c; retained live task amount_left known: `docs/evidence/qui-12/live-qb504-go-already-present-transaction.json` / sha256:ff166f517620f9edad06406c90cfd37ac82181312d738624cf97119feafb1e2a |
-| `CAP-05` | Task binding owner | CAP-04, DB-05,08 | IN_PROGRESS | Codex | local-only | `docs/evidence/cap-05/task-binding-owner-check.json` / sha256:4e8025ec1d119f1924837689f0b1ef7d5223bd346b41bb45995489ced287d6d7 |
-| `CAP-06` | CandidateFilter | CAP-01, QUI-10, RULE-05 | IN_PROGRESS | Codex | local-only | `docs/evidence/cap-06/candidate-filter-check.json` / sha256:1a568c6f5b450268b5ad19b301981c21f7bda4abf86ecbf9034186ff4fd1f248 |
-| `CAP-07` | AVAILABLE 判定 | CAP-02,03,06 | IN_PROGRESS | Codex | local-only | `docs/evidence/cap-07/available-check.json` / sha256:ad2cfc0a7943e81114b473a321db8e2be5ce2bb8b69fb9df21105dbe729eb8d9 |
-| `CAP-08` | Reservation 事务 | CAP-03,05,07, DB-06,09 | IN_PROGRESS | Codex | live-identity/isolated-db | `docs/evidence/cap-08/reservation-transaction-check.json` / sha256:199bca81550fc5cd43004562b1bca091ca0e3b38fe0295448d7b6101ef573986; live Identity ReserveAtomic → AlreadyPresent: `docs/evidence/qui-12/live-qb504-go-recovery-summary.json` / sha256:f96286c471fb44ffce912c8f5dd1fb55b7b9546593eee683453a326592be9bc1 |
-| `CAP-09` | Final recheck | CAP-08, RACE-03 | IN_PROGRESS | Codex | local-only | `docs/evidence/cap-09/final-recheck-check.json` / sha256:5e49cbde898054f867b0e1ccabc01e61cac49cce519adb3b8c0d131c3ac139af |
-| `CAP-10` | Placement 评分 | CAP-06,07 | IN_PROGRESS | Codex | local-only | `docs/evidence/cap-10/placement-score-check.json` / sha256:c053bfb23ac324f9d980c744dd4ae09893160a65962a3e36139df293c5c51581 |
-| `CAP-11` | 完成终态释放 | CAP-04,05,08 | IN_PROGRESS | Codex | local-only | `docs/evidence/cap-11/terminal-release-check.json` / sha256:805389bd31fd7f567a32eae97f11105c6432ae83a09d2b536afe8c869390e634 |
-| `CAP-12` | 权威删除终态 | CAP-04,05,08 | IN_PROGRESS | Codex | local-only | `docs/evidence/cap-12/authoritative-removal-check.json` / sha256:5ad0129fd2b795426092d68f2e1935cb51dc8124603b73d23c910897769c4def |
-| `CAP-13` | Capacity reconciler | CAP-01..12, QUI-08,09 | IN_PROGRESS | Codex | local-only | `docs/evidence/cap-13/capacity-reconciler-check.json` / sha256:3af47a2ead08fbb1d2f5a7592982c019b86ebbe50b0fbdf68364cd8472602786 |
-| `CAP-14` | G2 oracle 工具 | CAP-01..13, DB-10 | IN_PROGRESS | Codex | local-only | `docs/evidence/cap-14/g2-oracle-check.json` / sha256:ec98de064becad57a34ad1a95c11db6eff8aae6956f961d92053d6281973f053 |
+| `CAP-01` | StorageTarget 与证据 | DB-05, QUI-10 | DONE | Codex | `8a24a85` | `docs/evidence/cap-01/storage-target-check.json` / sha256:45fbfdf8a8d5dab5dc7be78bb6693135b1a4f992216c120363de219e511a98ad; live operator device/mount verification: `docs/evidence/qui-12/live-qb504-storage-readonly.json` / sha256:19711b22b561db666f0e5ed643d600d81974cbf2198c5d08721224e0b940c716 |
+| `CAP-02` | 容量快照 | CAP-01, QUI-09 | DONE | Codex | `8a24a85` | `docs/evidence/cap-02/capacity-snapshot-check.json` / sha256:f0e121c45fb826048aa5c68de384a45f1ffecd93db1e5f17dc99a53599aa10c9; live physical-free validation: `docs/evidence/qui-12/live-qb504-storage-readonly.json` / sha256:19711b22b561db666f0e5ed643d600d81974cbf2198c5d08721224e0b940c716 |
+| `CAP-03` | 容量投影 | CAP-02, DB-05 | DONE | Codex | `8a24a85` | `docs/evidence/cap-03/capacity-projection-check.json` / sha256:8d8eb342f6eb39dbf06aafea3fac1ac552bb95abc6187f0bca8c61e068d14f58 |
+| `CAP-04` | amount_left 证据 | QUI-07, DB-05 | DONE | Codex | `8a24a85` | `docs/evidence/cap-04/amount-left-check.json` / sha256:502ad63164f0f589cfd46e24d6e822a2b5bfe3df1012313f58783cafaef4c959; retained live task amount_left known: `docs/evidence/qui-12/live-qb504-go-already-present-transaction.json` / sha256:ff166f517620f9edad06406c90cfd37ac82181312d738624cf97119feafb1e2a |
+| `CAP-05` | Task binding owner | CAP-04, DB-05,08 | DONE | Codex | `8a24a85` | `docs/evidence/cap-05/task-binding-owner-check.json` / sha256:be322e8fad0b87a4d82fc7cf045f3762c0040e3093cdffb1d314f5dea94a0ca6 |
+| `CAP-06` | CandidateFilter | CAP-01, QUI-10, RULE-05 | DONE | Codex | `8a24a85` | `docs/evidence/cap-06/candidate-filter-check.json` / sha256:b72edc0127531eb48276e38c98b46b2d09cd30a5393afaf2482a0c9b5cd3f2d9 |
+| `CAP-07` | AVAILABLE 判定 | CAP-02,03,06 | DONE | Codex | `8a24a85` | `docs/evidence/cap-07/available-check.json` / sha256:27a2f90737e414d783106872f7ac98bccad55bab6c947c49c6210d35acd290c3 |
+| `CAP-08` | Reservation 事务 | CAP-03,05,07, DB-06,09 | DONE | Codex | `8a24a85` | `docs/evidence/cap-08/reservation-transaction-check.json` / sha256:333306c8cb1b6d66f5e7983c1139a07e12aa1f05d57a067497a2876f81277acf; live Identity ReserveAtomic → AlreadyPresent: `docs/evidence/qui-12/live-qb504-go-recovery-summary.json` / sha256:f96286c471fb44ffce912c8f5dd1fb55b7b9546593eee683453a326592be9bc1 |
+| `CAP-09` | Final recheck | CAP-08, RACE-03 | DONE | Codex | `8a24a85` | `docs/evidence/cap-09/final-recheck-check.json` / sha256:7c652c9330636007118f9b17b05cd7f12d8e18472ef9aaac50a82e912ea128f1 |
+| `CAP-10` | Placement 评分 | CAP-06,07 | DONE | Codex | `8a24a85` | `docs/evidence/cap-10/placement-score-check.json` / sha256:e7c42f03100ad7dee5fbbc357329e541aaa95c6af73a828f4d33b27c79a17ee5 |
+| `CAP-11` | 完成终态释放 | CAP-04,05,08 | DONE | Codex | `8a24a85` | `docs/evidence/cap-11/terminal-release-check.json` / sha256:f07e5e14de1d60082f1fb8fe55d26c15b8a012939de60764cbdc8259fbfd3893 |
+| `CAP-12` | 权威删除终态 | CAP-04,05,08 | DONE | Codex | `8a24a85` | `docs/evidence/cap-12/authoritative-removal-check.json` / sha256:3532bdf42a9da6dfe82c0c1b735b1e5e7a73bc6ad182b5b360f0fb343aa67fa4 |
+| `CAP-13` | Capacity reconciler | CAP-01..12, QUI-08,09 | DONE | Codex | `8a24a85` | `docs/evidence/cap-13/capacity-reconciler-check.json` / sha256:4a3cbd12be9a4d070cf915e8e4f7793281b6d74dfdd9806aeb722afafa0c5870 |
+| `CAP-14` | G2 oracle 工具 | CAP-01..13, DB-10 | DONE | Codex | `8a24a85` | `docs/evidence/cap-14/g2-oracle-check.json` / sha256:2e1e174be42864adcf06b04cfa5a45d9a2bed20248f6d757246846763a6b6506 |
 
 ### H. Add、确认与恢复
 
@@ -363,7 +364,7 @@ Gate A–F 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 1
 | Gate D | PASS | 三 Profile fixture 确定性 Sync；未验证 fail closed | `bc177b6` | Codex（记录人；仓库所有者复核待 owner 确认） | 2026-09-05 逐项核验：三 Profile 12 份金色 fixture 已归档且逐文件 SHA-256 校验（qui-12/fixtures），SyncWatcher/syncmerge 对 fixture 确定性重建全 PASS（含 live qB 5.0.4 与三 Profile lab 战役）；业务代码 fail closed——quihealth 判定真值表测试、Profile 非 VERIFIED 时 dispatchorchestrator 拒绝派发（0 网络调用）、生产写操作默认关闭 |
 | Gate E | PASS | RSS/Identity/并行准备乱序与恢复 | `bb64fe4` | Codex（记录人；仓库所有者复核待 owner 确认） | 2026-09-05 逐项核验：rsscheduler jitter/退避/停用/重启恢复（FakeClock 确定性）、rsssource 同站重复与字段变化去重、rssbaseline 首轮不竞速、raceprep 并行准备 supervisor 并发与取消、torrentparse 安全解析与大小上限、racegate 聚合门槛与 racejobstore 重启存续全部 PASS；schedulercycle 端到端测试覆盖乱序容忍与重复轮询去重（internal/app） |
 | Gate F | PASS | 简单/高级规则、dry-run、许可追踪 | `cff31ec` | Codex（记录人；仓库所有者复核待 owner 确认） | 2026-09-05 逐项核验：三值 Evaluator（UNKNOWN 永不匹配、fail closed）与多规则确定性聚合包测试 PASS；RuleVersion 不可变与 dry-run API PASS；前端 qui-style 编辑器（简单/高级模式、字段适配）24 项组件测试 PASS；上游差异记录经 verify-license 与 UPSTREAM_LOCK 校验 PASS |
-| Gate G | PENDING | 并发容量、Reflection、G2 oracle | — | — | — |
+| Gate G | PASS | 并发容量、Reflection、G2 oracle | `8a24a85` | Codex（记录人；仓库所有者复核待 owner 确认） | 2026-09-05 逐项核验：Reservation 并发事务（live Identity ReserveAtomic→AlreadyPresent 既有证据 + 包测试）、容量 epoch/owner 正反例、CandidateFilter/AVAILABLE fail-closed 真值表、终态 Reflection 释放与权威删除、capacity reconciler 与 G2 oracle 工具全部 PASS；Profile 未 VERIFIED 时 Placement 拒绝（dispatchorchestrator 测试） |
 | Gate H | PENDING | Add/UNKNOWN/首次绑定/恢复故障矩阵 | — | — | — |
 | Gate I | PENDING | OpenAPI、幂等、SSE 与安全 | — | — | — |
 | Gate J | PENDING | Dashboard/RSS/Rules/History 用户闭环 | — | — | — |
@@ -497,3 +498,4 @@ Gate A–F 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 1
 | 2026-09-05 | QUI-01..11 在当前源码重验并刷新证据（`bc177b6`）；QUI-12 的 publish controls 开口经核实已由 P0×3 战役与 activation bindings 闭合，转 DONE；阶段 D 12/12 收口 DONE，Gate D 评审 PASS，总览推进至 40/149 | Codex |
 | 2026-09-05 | RSS/TOR/RACE 共 13 项在当前源码重验并刷新证据（`bb64fe4`），阶段 E 13/13 收口 DONE，Gate E 评审 PASS，总览推进至 53/149 | Codex |
 | 2026-09-05 | RULE-01..12 在当前源码重验并刷新证据（`cff31ec`），阶段 F 12/12 收口 DONE，Gate F 评审 PASS，总览推进至 65/149 | Codex |
+| 2026-09-05 | CAP-01..14 在当前源码重验并刷新证据（`8a24a85`），阶段 G 14/14 收口 DONE，Gate G 评审 PASS（G2 Gate 随 REL-02），总览推进至 79/149 | Codex |
