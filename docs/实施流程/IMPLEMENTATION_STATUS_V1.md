@@ -63,11 +63,11 @@ PENDING -> IN_PROGRESS -> IN_REVIEW -> DONE
 | I | API、认证与 SSE | `12/12 DONE` | Gate I | `PASS` |
 | J | 前端页面 | `10/13 DONE; 3 PENDING` | Gate J | `PENDING` |
 | K | 历史、统计与观测 | `12/12 DONE` | Gate K | `PASS` |
-| L | 加固与运维 | `1/12 DONE; 11 PENDING` | Gate L | `PENDING` |
+| L | 加固与运维 | `2/12 DONE; 10 PENDING` | Gate L | `PENDING` |
 | M | RC 与冻结 | `0/7 DONE; 7 PENDING` | Gate M / G3 | `PENDING` |
 
-总体状态：`128/149 DONE`；`21 PENDING`。
-Gate A–I 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 12/12、E 13/13、F 12/12、G 14/14、H 14/14、I 12/12）；G1 Gate 于 2026-09-06 评审通过。阶段 J 已收口 UI-01..10，阶段 K 已收口 HIS-01..02 与 STAT-01..04。剩余 21 项均为待实现新功能或 RC 冻结工作：J 的 UI-11/12/13、L 的 HARD-02..12、M 全部 7 项 RC 冻结。
+总体状态：`129/149 DONE`；`20 PENDING`。
+Gate A–I 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 12/12、E 13/13、F 12/12、G 14/14、H 14/14、I 12/12）；G1 Gate 于 2026-09-06 评审通过。阶段 J 已收口 UI-01..10，阶段 K 已收口 HIS-01..02 与 STAT-01..04。剩余 20 项均为待实现新功能或 RC 冻结工作：J 的 UI-11/12/13、L 的 HARD-02/04..12、M 全部 7 项 RC 冻结。
 
 ### 2026-09-06 状态校准
 
@@ -339,7 +339,7 @@ Gate A–I 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 1
 |---|---|---|---|---|---|---|
 | `HARD-01` | Secret/隐私扫描 | BOOT-03,09, OBS-04 | DONE | Codex | `89176166` | `docs/evidence/hard-01/check.json` / sha256:30a2729badfea05ece5929ea790dea45b63de9afc9ee43b418e460c5572b4d15 |
 | `HARD-02` | 依赖与许可证 | BOOT-02..04, RULE-12 | PENDING | — | — | — |
-| `HARD-03` | API 安全 | API-01..07 | PENDING | — | — | — |
+| `HARD-03` | API 安全 | API-01..07 | DONE | Codex | `1113b8c` | `docs/evidence/hard-03/check.json` / sha256:1b43d1978bf2a87e5852f715bd11648161a2cd6e745567f1285ab132f77cd6b2 |
 | `HARD-04` | SSRF 与出站边界 | RSS-03, TOR-01, QUI-03 | PENDING | — | — | — |
 | `HARD-05` | Parser fuzz | TOR-02, QUI-07, RULE-01 | PENDING | — | — | — |
 | `HARD-06` | 并发加固 | QUI-09, RACE-02, CAP-08, ADD-08 | PENDING | — | — | — |
@@ -519,3 +519,4 @@ Gate A–I 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 1
 | 2026-09-06 | OBS-03 完成：internal/retention 批量清理（expires_at 强制执行、快照保留每实例最新、stats 委托 statsstore.Prune）+ 每小时 worker 与 retention 计数器（`c72122a`、`206a5ba`），阶段 K 推进至 11/12，总览推进至 126/149 | Codex |
 | 2026-09-06 | OBS-04 完成：doctor 升级为 digest 戳诊断包（配置摘要脱敏/构建身份/状态检查），运行时验证 PASS（`3d3ce7f`）；阶段 K 12/12 收口 DONE，Gate K 评审 PASS，总览推进至 127/149 | Codex |
 | 2026-09-06 | HARD-01 完成：tools/secretscan 扫描器（熵值+模式+允许清单，含二进制模式与 CJK 路径处理），仓库 630 文件与发布二进制扫描 0 发现（`89176166`），L 阶段 1/12，总览推进至 128/149 | Codex |
+| 2026-09-06 | HARD-03 完成：管理员安全事件审计（initialize/登录失败/锁定/会话签发/登出写入 system_events，与状态变更同事务）、API 响应 no-store 头、webembed 路径穿越负测（`1113b8c`），L 阶段 2/12，总览推进至 129/149 | Codex |
