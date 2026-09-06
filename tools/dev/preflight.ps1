@@ -14,7 +14,7 @@ try {
         [ordered]@{ name = 'pnpm'; expected = '10.33.0'; actual = if ($pnpm) { (& $pnpm.Source --version) } else { 'NOT_FOUND' } }
     )
     $failedToolchain = @($checks | Where-Object {
-        ($_.name -eq 'go' -and $_.actual -notmatch 'go1\.26\.3') -or
+        ($_.name -eq 'go' -and $_.actual -notmatch 'go1\.26\.6') -or
         ($_.name -eq 'node' -and $_.actual -ne 'v24.14.0') -or
         ($_.name -eq 'pnpm' -and $_.actual -ne '10.33.0')
     })
