@@ -73,6 +73,7 @@ Gate A–I 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 1
 
 - G1 Gate 正式评审通过（PASS，见第 4 节 Gate 记录）：对 `docs/evidence/qui-12/verification-campaign/` 执行证据评审——manifest 所列 12 份 artifact 逐文件 SHA-256 核验一致，9 条 profile verification runs（3 Profile × 3 repetition）全部 `VERIFIED` 且 21/21 用例、外部 kill -9 用例通过、0 自动重投，3 份 activation bindings 绑定第三次重复。
 - Profile 激活的构建绑定：runs/bindings 绑定 `63161b1`；`profileverify.Resolve` 在运行时构建身份与绑定不一致时判定 `RUNTIME_BUILD_INVALID` 并保持 `EXPECTED`（fail closed，设计内行为）。生产部署须构建自 `63161b1`，或在更新 commit 上重跑 P0×3 战役生成新绑定后激活。campaign SQLite 数据库保留在仓库外受限存储，仓库内归档的 run JSON 与 bindings 为权威记录。
+- BOOT-01/02 提交后复验：52 项目录检查与 readiness 均 PASS；原始基线 `ec68450` 存在且为当前 HEAD 的祖先，CODEOWNERS 自 `f741663` 收口后未变。GitHub 官方 API 已确认 `Ebichuu` 为真实账号且为 `Ebichuu/vertex-pro` 的仓库所有者。CI 与 preflight 的 Go `1.26.6` 修正已由 `305734a` 提交，Go `1.26.6`、Node `24.14.0`、pnpm `10.33.0` 与已提交的版本约束一致；证据及 SHA-256 已同步，README 过时入口已修正。本次保留历史 Gate 判定，未重跑远程 CI、完整 preflight 或镜像构建。
 
 ### 2026-08-30 状态校准
 
@@ -150,8 +151,8 @@ Gate A–I 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 1
 
 | ID | 内容 | Depends on | Status | Owner | PR/Merge | Evidence |
 |---|---|---|---|---|---|---|
-| `BOOT-01` | 单仓库和目录合同 | — | DONE | Codex | `f741663a5f27820915c8161201acfb3831bd7369` | `docs/evidence/boot-01/layout-check.json` / sha256:588d2fa5a8654dacc796a8d7dc90e8743ea7724b04ac35343af5a7475362c37e; `docs/evidence/boot-01/readiness-check.json` / sha256:a431ac74ad91ab93527629d868b9cc8e911262cd17c08563518e381d9cab931a |
-| `BOOT-02` | 固定 Go/Node/pnpm 工具链 | BOOT-01 | DONE | Codex | `bcb9d2d` | `go.mod` / sha256:ce30f9a9ff9a9115ba5758b46a31e993a518b3ea260d23448b19e0ac57f16fb2; `pnpm-lock.yaml` / sha256:0d0f142ee439b8faec01d1f40586c27e45e7bc0b6016e034a5c659b3374015ee |
+| `BOOT-01` | 单仓库和目录合同 | — | DONE | Codex | `f741663a5f27820915c8161201acfb3831bd7369` | `docs/evidence/boot-01/layout-check.json` / sha256:588d2fa5a8654dacc796a8d7dc90e8743ea7724b04ac35343af5a7475362c37e; `docs/evidence/boot-01/readiness-check.json` / sha256:d6b8de62bfbf83921c01d25db4e0cce856928dd96cc1cec18ddfb3697dd43733 |
+| `BOOT-02` | 固定 Go/Node/pnpm 工具链 | BOOT-01 | DONE | Codex | `bcb9d2d`；版本修正 `305734a` | `go.mod` / sha256:24a0c84a1bb330dbc6e1a30ab3ed99a864fa20a73c4741e5975026d059a2c3da; `pnpm-lock.yaml` / sha256:5b04d1dc23a5343ef67cdd7f7ffbc3ceac27488cf2ec5b9655dab1c6acdc3143; 提交后复验：`docs/evidence/boot-02/toolchain-check.json` / sha256:b0da9954e3a6fd8b2266bccf8aa2974d6e119777a6a78c5d08ddc6b600735cd4 |
 | `BOOT-03` | GPL 项目文件 | BOOT-01 | DONE | Codex | `bcb9d2d` | `docs/evidence/boot-03/license-check.json` / sha256:e7c135ffe1e792bfe69570564c9b7b06c1a5250a57b27a8aaed46369130c6ca0 |
 | `BOOT-04` | 固定 qui 上游 | BOOT-03 | DONE | Codex | `bcb9d2d` | `docs/evidence/boot-04/qui-lock-check.json` / sha256:9af48b7f723b083c2f799c146ecc8c779f41d97ede73d92854989e186145926a |
 | `BOOT-05` | Make 与 CI | BOOT-01..03 | DONE | Codex | `bcb9d2d` | `docs/evidence/boot-05/preflight-check.json` / sha256:4069d2cf4e8d52bf3fb18c4838247aa3c2d36f1bc8783bf73c322596902dcfe8 |
@@ -399,8 +400,9 @@ Gate A–I 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 1
   - `powershell -NoProfile -ExecutionPolicy Bypass -File tools/contractcheck/check-boot-01-readiness.ps1`
 - Evidence:
   - `docs/evidence/boot-01/layout-check.json` / `sha256:588d2fa5a8654dacc796a8d7dc90e8743ea7724b04ac35343af5a7475362c37e`
-  - `docs/evidence/boot-01/readiness-check.json` / `sha256:a431ac74ad91ab93527629d868b9cc8e911262cd17c08563518e381d9cab931a`
-- Updated at: `2026-09-02T07:02:59Z`
+  - `docs/evidence/boot-01/readiness-check.json` / `sha256:d6b8de62bfbf83921c01d25db4e0cce856928dd96cc1cec18ddfb3697dd43733`
+- Revalidation: `2026-09-06T09:00:54Z`，工作区目录与 readiness PASS；保留原始 baseline 与 merge commit，详见证据中的 `revalidation`。原收口证据保存在 `f741663`，其 SHA-256 为 `a431ac74ad91ab93527629d868b9cc8e911262cd17c08563518e381d9cab931a`。
+- Updated at: `2026-09-06T09:00:54Z`
 
 ### ADD-05 / ADD-13 Dispatch durable boundary 与启动恢复
 
@@ -530,3 +532,4 @@ Gate A–I 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 1
 | 2026-09-06 | HARD-06 完成：Docker Linux -race 全套 101 包零数据竞争（`495a382`） | Codex |
 | 2026-09-06 | Go 工具链升级 1.26.3 → 1.26.6（消除 govulncheck 记录的全部 9 个标准库发现；preflight/race/Dockerfile 同步更新，race 在新工具链重跑零竞争）（`86c7d74`） | Codex |
 | 2026-09-06 | HARD-02 推进：vite/vitest 升级清零前端 audit，govulncheck 执行发现 9 个标准库发现（修复版本 go1.26.6），工具链升级为唯一剩余整改（IN_PROGRESS） | Codex |
+| 2026-09-06 | 复验 BOOT-01/02：目录、readiness 和已提交工具链版本一致性 PASS，GitHub 账号及仓库所有者在线核验 PASS；`305734a` 提交 CI/preflight 版本修正，同步证据摘要及 README 入口 | Codex |

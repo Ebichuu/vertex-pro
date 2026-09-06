@@ -6,5 +6,41 @@
   "baseline_commit": "ec684501e57bf7d300dcfc8a368901c47a7b14ab",
   "codeowners": "PASS",
   "status": "PASS",
-  "blocking_reasons": []
+  "blocking_reasons": [],
+  "revalidation": {
+    "checked_at": "2026-09-06T09:00:54Z",
+    "checked_commit": "305734aa2c5a951819bfd1d2ee27d4fafb5ae584",
+    "working_tree_clean": false,
+    "scope": "Local BOOT-01 revalidation; historical baseline and Gate review retained",
+    "commands": [
+      "powershell -NoProfile -ExecutionPolicy Bypass -File tools/contractcheck/check-repository-layout.ps1",
+      "powershell -NoProfile -ExecutionPolicy Bypass -File tools/contractcheck/check-boot-01-readiness.ps1"
+    ],
+    "layout_check": "PASS",
+    "required_path_count": 52,
+    "readiness_check": "PASS",
+    "baseline_is_root_commit": true,
+    "baseline_is_ancestor_of_head": true,
+    "codeowners_unchanged_since_commit": "f741663a5f27820915c8161201acfb3831bd7369",
+    "configured_owners": [
+      "@Ebichuu"
+    ],
+    "remote_url": "https://github.com/Ebichuu/vertex-pro.git",
+    "owner_matches_remote": true,
+    "github_online_verification": {
+      "status": "PASS",
+      "checked_at": "2026-09-06T08:57:45Z",
+      "sources": [
+        "https://api.github.com/users/Ebichuu",
+        "https://api.github.com/repos/Ebichuu/vertex-pro"
+      ],
+      "login": "Ebichuu",
+      "user_id": 38423026,
+      "account_type": "User",
+      "repository": "Ebichuu/vertex-pro",
+      "repository_owner": "Ebichuu",
+      "default_branch": "main"
+    },
+    "status": "PASS"
+  }
 }

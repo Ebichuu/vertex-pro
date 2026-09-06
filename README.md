@@ -4,11 +4,13 @@ Vertex Pro V1 是面向多 qBittorrent 实例的 RSS 自动投递、状态确认
 
 ## 当前阶段
 
-`BOOT-01` 已由提交 `f741663` 正式收口，当前施工入口推进到阶段 A 的 `BOOT-02`；Gate A 仍为 `PENDING`。149 个正式实施项中现有 `1 DONE / 120 IN_PROGRESS / 28 PENDING`。功能开发在 local-only 范围触达阶段 J 的 `UI-10`，但依赖、正式 Gate 和发布证据尚未闭合。
+截至 2026-09-06，149 个正式实施项中 `137 DONE / 1 IN_PROGRESS / 11 PENDING`。阶段 A-I、K 和 G1 实验室验证已通过；Gate J、Gate L、G2、C1、A24 和 G3 仍待完成。当前施工前沿是 `UI-11` Settings、`HARD-02` 依赖最终重扫和 `HARD-07` 性能基线。
 
-隔离 G1 实验室已从冻结 commit 构建 qui，并覆盖精确 qB 4.3.8、5.0.4、5.2.2。三 Profile 的核心生命周期以及归档的 `3 Profile × 6 mode` 事务/故障矩阵均为 PASS，18 次投递均只有一次 sender 调用、没有自动重投，且每次实验室最终为空。当前 Dispatch 实现又进一步修复了崩溃窗口：本地校验通过后，先在 SQLite `BEGIN IMMEDIATE` 事务中原子持久化 `ADD_SENT / STARTED / POSSIBLE_EFFECT`，再进行唯一一次网络发送，最后单独记录响应事实；若进程在发送前后中断，启动恢复会把遗留 `ADD_SENT` 提升为 `UNKNOWN` 并禁止重放同一 Attempt。明确未发送的结果关闭为 `ADD_FAILED / FAILED_NO_EFFECT`，安全重试只能走两阶段重排并创建新 Attempt，不能把旧 Attempt 退回 `NOT_STARTED`。
+G1 已完成三 Profile（qB 4.3.8、5.0.4、5.2.2）的固定 qui 真实链路、21/21 用例、外部 kill -9 恢复和连续三次验证。验证报告与 activation binding 绑定构建 `63161b1`；生产运行时必须使用该构建，或在新 commit 上重跑 P0×3 后再激活 Profile。
 
-上述归档矩阵早于新的“发送前 durable marker”证据字段，当前 Docker Desktop daemon 又未运行，因此尚未在这一源码版本上重跑；外部进程 `kill -9`、`profile_verification_runs` 持久化、固定 harness image、clean commit 上 P0 连续三次稳定运行也仍缺失。三个 Profile 继续保持 `EXPECTED`，G1 保持 `PENDING`，生产 mutation 默认关闭；即使显式设置 `VERTEX_PRO_ENABLE_DISPATCH=true`，Profile 非 `VERIFIED` 时仍 fail closed。RSS→规则→Placement→Reservation→Dispatch→FirstConfirm 的生产调度链也尚未接通。
+RSS→规则→Placement→Reservation→Dispatch→FirstConfirm/对账的生产调度链已接通，但 qB 写操作仍遵循 `VERTEX_PRO_ENABLE_DISPATCH` 显式开启、Profile 验证通过才允许的 fail-closed 规则。当前主分支还不能声称 `FROZEN-V1`；G2、C1、A24 和 RC 冻结流程仍未完成。
+
+镜像只通过 GitHub Actions 构建和发布。
 
 产品边界、状态机和安全不变量以 `docs/产品方案设计/VERTEX_PRO_COMPLETE_REDESIGN_V1_RC8_FINAL.md` 为准；施工顺序以 `docs/实施流程/VERTEX_PRO_V1_CODE_IMPLEMENTATION_PLAYBOOK.md` 为准；具体进度以 `docs/实施流程/IMPLEMENTATION_STATUS_V1.md` 为准。
 
@@ -64,4 +66,4 @@ $env:VERTEX_PRO_STORAGE_EVIDENCE_FILE = "$env:LOCALAPPDATA\VertexPro\live-storag
 go run ./tools/qustorageprobe
 ```
 
-`BOOT-01` 已完成；下一项按进度表执行 `BOOT-02`，固定 Go、Node、pnpm 工具链。
+阶段 A 的 `BOOT-01..09` 均已完成，Gate A 为 `PASS`。当前工具链固定为 Go `1.26.6`、Node `24.14.0`、pnpm `10.33.0`；后续任务以本文“当前阶段”和实施状态表为准。

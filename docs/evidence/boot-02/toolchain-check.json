@@ -1,0 +1,92 @@
+{
+  "check": "BOOT-02 toolchain version alignment",
+  "checked_at": "2026-09-06T09:00:54Z",
+  "checked_commit": "305734aa2c5a951819bfd1d2ee27d4fafb5ae584",
+  "working_tree_clean": false,
+  "scope": "Local versions and committed pin consistency; no remote CI run or image build performed",
+  "status": "PASS",
+  "toolchain": [
+    {
+      "name": "go",
+      "expected": "1.26.6",
+      "actual": "go version go1.26.6 windows/amd64"
+    },
+    {
+      "name": "node",
+      "expected": "24.14.0",
+      "actual": "v24.14.0"
+    },
+    {
+      "name": "pnpm",
+      "expected": "10.33.0",
+      "actual": "10.33.0"
+    }
+  ],
+  "checks": {
+    "go_matches_module": true,
+    "node_matches_tool_versions": true,
+    "pnpm_matches_tool_versions": true,
+    "package_manager_matches_pnpm": true,
+    "ci_go_matches_local": true,
+    "ci_node_matches_local": true,
+    "ci_pnpm_matches_local": true,
+    "docker_go_matches_local": true,
+    "docker_node_matches_local": true,
+    "preflight_go_expected_matches_local": true,
+    "preflight_go_matcher_matches_local": true,
+    "lockfile_exists": true,
+    "ci_uses_frozen_lockfile": true,
+    "committed_inputs_match_working_tree": true
+  },
+  "inputs": [
+    {
+      "path": "go.mod",
+      "sha256": "24a0c84a1bb330dbc6e1a30ab3ed99a864fa20a73c4741e5975026d059a2c3da"
+    },
+    {
+      "path": ".tool-versions",
+      "sha256": "1937dbc5418f68be506e85107398313a2ff315a19c939d3866d97d8fc8693923"
+    },
+    {
+      "path": "package.json",
+      "sha256": "df2ed24a9ae3d109b55d66434dd50b4764cc513b4ad6326fb9e0024a727d3d3a"
+    },
+    {
+      "path": "web/package.json",
+      "sha256": "62bdd20ee8244053c60151f39c1fc67b0f114fc763439cdfcc93e18acfc6d8d3"
+    },
+    {
+      "path": "pnpm-lock.yaml",
+      "sha256": "5b04d1dc23a5343ef67cdd7f7ffbc3ceac27488cf2ec5b9655dab1c6acdc3143"
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "sha256": "e87d2bfb6a5275f0887686f7048b8c9e5f7e46d98ce9b04f3272304a5cbc4328"
+    },
+    {
+      "path": "tools/dev/preflight.ps1",
+      "sha256": "de2dd1cdea1f6e2ad020eac21db9a3d064909c66a97590c3ee0c2f37431f18dc"
+    },
+    {
+      "path": "deploy/docker/Dockerfile",
+      "sha256": "2614585add5e25e754077281a23ed1695392639a61ba036dd7a842f7beaabe33"
+    }
+  ],
+  "pending_commit_paths": [],
+  "limitations": [
+    "Frozen-lockfile installation and full preflight were not rerun for this documentation revalidation.",
+    "Historical Gate A and BOOT-02 closure records are retained; this result does not claim a new Gate review."
+  ],
+  "image_build_policy": "GitHub Actions only",
+  "commit_attempt": {
+    "status": "COMMITTED",
+    "commit": "305734aa2c5a951819bfd1d2ee27d4fafb5ae584",
+    "subject": "fix(boot): align CI and preflight with Go 1.26.6",
+    "paths": [
+      ".github/workflows/ci.yml",
+      "tools/dev/preflight.ps1"
+    ],
+    "command_executed": true
+  },
+  "input_hash_basis": "SHA-256 of the Git blob bytes at checked_commit; Windows checkout CRLF conversion is excluded."
+}
