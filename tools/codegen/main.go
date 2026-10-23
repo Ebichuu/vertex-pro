@@ -86,7 +86,7 @@ func loadSources(root string) (sourceData, []string, error) {
 		if err != nil {
 			return sourceData{}, nil, err
 		}
-		contents[index] = string(content)
+		contents[index] = normalizeContractSource(content)
 	}
 	var openAPI map[string]any
 	if err := json.Unmarshal([]byte(contents[0]), &openAPI); err != nil {
@@ -100,6 +100,10 @@ func loadSources(root string) (sourceData, []string, error) {
 		userStatus: parseStatuses(contents[3]),
 		states:     parseStates(contents[4]),
 	}, contents, nil
+}
+
+func normalizeContractSource(content []byte) string {
+	return strings.ReplaceAll(string(content), "\r\n", "\n")
 }
 
 func parseCodes(content string) []string {
