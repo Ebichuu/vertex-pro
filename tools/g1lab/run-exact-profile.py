@@ -178,7 +178,11 @@ def main():
         request('/api/auth/setup', {'username': 'admin', 'password': password})
         request('/api/auth/login', {'username': 'admin', 'password': password})
         version = request('/api/version')['version']
-        require(QUI_COMMIT[:8] in version, 'Running qui version does not match required commit')
+        # This production image reports "develop" in its HTTP version. Bind the
+        # running container to the immutable image whose OCI revision was checked
+        # above; retain the honest display version as a separate evidence field.
+        running_image = json.loads(command('docker', 'inspect', qui_id))[0]['Image']
+        require(running_image == image_info['Id'] and isinstance(version, str) and version.strip(), 'Running qui image identity or display version is invalid')
         qb_id = dc('ps', '-q', 'qb')
         qb_password = None
         for _ in range(45):
