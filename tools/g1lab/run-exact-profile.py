@@ -135,6 +135,23 @@ def main():
     write_json(output / 'identity.json', {'vertex_commit': revision, 'qui_commit': QUI_COMMIT, 'qui_image': qui_image, 'qb_binary_url': binary_url, 'qb_binary_digest': 'sha256:' + QB_SHA, 'qb_build_fingerprint': expected_fingerprint, 'harness_image_digest': harness_digest, 'networks_internal': True})
     try:
         dc('up', '-d', '--no-build', 'qb', 'qui')
+        # A process can exit after compose reports Started. Record only state and
+        # pre-auth qui startup messages, never qB logs or container environment.
+        qui_id = dc('ps', '-a', '-q', 'qui')
+        for _ in range(15):
+            state = json.loads(command('docker', 'inspect', qui_id))[0]
+            ports = state['NetworkSettings']['Ports'].get('7476/tcp') or []
+            if state['State']['Running'] and ports:
+                break
+            if not state['State']['Running']:
+                startup = subprocess.run(['docker', 'logs', qui_id], text=True, capture_output=True, timeout=15)
+                messages = '\n'.join(line for line in (startup.stdout + startup.stderr).splitlines()
+                                     if not re.search(r'password|secret|token|api.?key|session', line, re.I))
+                print('qui startup: ' + messages[-5000:], file=sys.stderr)
+                raise RuntimeError('Isolated qui exited before authentication; exit=' + str(state['State']['ExitCode']))
+            time.sleep(1)
+        else:
+            raise RuntimeError('Isolated qui running without a published loopback port; network=' + json.dumps({k: v.get('IPAddress') for k, v in state['NetworkSettings']['Networks'].items()}))
         address = dc('port', 'qui', '7476')
         require(re.fullmatch(r'127\.0\.0\.1:\d+', address), 'Lab port is not loopback bound')
         base = 'http://' + address
