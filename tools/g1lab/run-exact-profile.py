@@ -8,6 +8,7 @@ import base64
 import datetime as dt
 import hashlib
 import http.cookiejar
+import ipaddress
 import json
 import os
 from pathlib import Path
@@ -126,7 +127,7 @@ def main():
     hardening = {'read_only': True, 'security_opt': ['no-new-privileges:true'], 'cap_drop': ['ALL']}
     compose = {'name': project, 'services': {
         'qb': {**hardening, 'image': qb_tag, 'tmpfs': ['/config:uid=10001,gid=10001', '/tmp:uid=10001,gid=10001'], 'networks': ['qb']},
-        'qui': {**hardening, 'image': qui_image, 'user': '10001:10001', 'entrypoint': ['/bin/sh', '-ec'], 'command': ['/usr/local/bin/qui generate-config --config-dir /config; exec /usr/local/bin/qui serve --config-dir /config --data-dir /config'], 'environment': {'QUI__HOST': '0.0.0.0', 'QUI__PORT': '7476'}, 'tmpfs': ['/config:uid=10001,gid=10001', '/tmp:uid=10001,gid=10001'], 'ports': ['127.0.0.1::7476'], 'networks': ['qb', 'proxy']},
+        'qui': {**hardening, 'image': qui_image, 'user': '10001:10001', 'entrypoint': ['/bin/sh', '-ec'], 'command': ['/usr/local/bin/qui generate-config --config-dir /config; exec /usr/local/bin/qui serve --config-dir /config --data-dir /config'], 'environment': {'QUI__HOST': '0.0.0.0', 'QUI__PORT': '7476'}, 'tmpfs': ['/config:uid=10001,gid=10001', '/tmp:uid=10001,gid=10001'], 'networks': ['qb', 'proxy']},
         'harness': {**hardening, 'image': harness_tag, 'tmpfs': ['/tmp:uid=10001,gid=10001'], 'networks': ['proxy'], 'profiles': ['probe']}
     }, 'networks': {'qb': {'internal': True}, 'proxy': {'internal': True}}}
     write_json(compose_file, compose)
@@ -140,8 +141,8 @@ def main():
         qui_id = dc('ps', '-a', '-q', 'qui')
         for _ in range(15):
             state = json.loads(command('docker', 'inspect', qui_id))[0]
-            ports = state['NetworkSettings']['Ports'].get('7476/tcp') or []
-            if state['State']['Running'] and ports:
+            internal_ip = state['NetworkSettings']['Networks'].get(project + '_proxy', {}).get('IPAddress')
+            if state['State']['Running'] and internal_ip:
                 break
             if not state['State']['Running']:
                 startup = subprocess.run(['docker', 'logs', qui_id], text=True, capture_output=True, timeout=15)
@@ -151,12 +152,14 @@ def main():
                 raise RuntimeError('Isolated qui exited before authentication; exit=' + str(state['State']['ExitCode']))
             time.sleep(1)
         else:
-            raise RuntimeError('Isolated qui running without a published loopback port; network=' + json.dumps({k: v.get('IPAddress') for k, v in state['NetworkSettings']['Networks'].items()}))
-        address = dc('port', 'qui', '7476')
-        require(re.fullmatch(r'127\.0\.0\.1:\d+', address), 'Lab port is not loopback bound')
-        base = 'http://' + address
+            raise RuntimeError('Isolated qui has no address on the campaign proxy network')
+        # Internal-only bridges do not publish ports on current Docker engines.
+        # The ephemeral Linux host reaches qui's bridge address for setup, while
+        # both container networks remain internal and no host port is exposed.
+        require(ipaddress.ip_address(internal_ip).is_private, 'Lab bridge address is not private')
+        base = 'http://' + internal_ip + ':7476'
         jar = http.cookiejar.CookieJar()
-        opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), urllib.request.HTTPCookieProcessor(jar))
         def request(path, body=None):
             data = None if body is None else json.dumps(body).encode()
             req = urllib.request.Request(base + path, data, {'Content-Type': 'application/json', 'Accept': 'application/json', 'Origin': base})
