@@ -3,6 +3,8 @@ package ruleservice
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"strings"
 	"time"
 
 	"github.com/vertex-pro/vertex-pro/internal/ruleaggregate"
@@ -40,7 +42,7 @@ func MatchFor(rule Rule, defaultInstanceID string) (ruleaggregate.Match, error) 
 	if err := json.Unmarshal(rule.Definition, &envelope); err != nil {
 		return ruleaggregate.Match{}, fmt.Errorf("invalid rule definition: %w", err)
 	}
-	match := ruleaggregate.Match{RuleID: rule.ID, RuleRevision: rule.Revision, Priority: rule.Priority, TargetMode: "FIXED_INSTANCE", TargetInstanceID: defaultInstanceID, ParticipationWindow: time.Hour}
+	match := ruleaggregate.Match{RuleID: rule.ID, RuleName: rule.Name, RuleRevision: rule.Revision, Priority: rule.Priority, TargetMode: "FIXED_INSTANCE", TargetInstanceID: defaultInstanceID, ParticipationWindow: time.Hour}
 	if len(envelope.Actions) == 0 || string(envelope.Actions) == "null" {
 		return match, nil
 	}
@@ -64,10 +66,24 @@ func MatchFor(rule Rule, defaultInstanceID string) (ruleaggregate.Match, error) 
 		AllowedProfiles    []string          `json:"allowed_profiles"`
 		StorageLabels      []string          `json:"storage_labels"`
 		Window             int               `json:"participation_window_minutes"`
+		StartInactive      *bool             `json:"start_inactive"`
+		UploadLimitBytes   int64             `json:"upload_limit_bytes"`
+		MaxJobs            int               `json:"max_jobs"`
+		SeedTimeSeconds    int64             `json:"seed_time_seconds"`
+		DeleteMode         string            `json:"delete_mode"`
 		SequentialDownload *bool             `json:"sequential_download"`
 	}
-	if err := json.Unmarshal(raw, &actions); err != nil {
+	raw = json.RawMessage(strings.TrimSpace(string(raw)))
+	if len(raw) == 0 || raw[0] != '{' {
+		return ruleaggregate.Match{}, fmt.Errorf("invalid rule actions: expected an object")
+	}
+	decoder := json.NewDecoder(strings.NewReader(string(raw)))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&actions); err != nil {
 		return ruleaggregate.Match{}, fmt.Errorf("invalid rule actions: %w", err)
+	}
+	if err := decoder.Decode(new(any)); err != io.EOF {
+		return ruleaggregate.Match{}, fmt.Errorf("invalid rule actions: trailing data")
 	}
 	if actions.TargetMode != "" {
 		match.TargetMode = actions.TargetMode
@@ -91,7 +107,36 @@ func MatchFor(rule Rule, defaultInstanceID string) (ruleaggregate.Match, error) 
 	if actions.SequentialDownload != nil {
 		match.AddParams["sequential_download"] = fmt.Sprint(*actions.SequentialDownload)
 	}
-	if actions.Window < 0 {
+	if actions.MaxJobs < 0 || actions.MaxJobs > 100000 || actions.UploadLimitBytes < 0 || actions.UploadLimitBytes > 1000000000000 || actions.SeedTimeSeconds < 0 || actions.SeedTimeSeconds > 315360000 {
+		return match, fmt.Errorf("invalid rule limits")
+	}
+	if actions.SeedTimeSeconds > 0 && actions.DeleteMode != "TORRENT_ONLY" && actions.DeleteMode != "WITH_FILES" {
+		return match, fmt.Errorf("invalid deletion mode; choose whether to keep files")
+	}
+	if actions.SeedTimeSeconds == 0 && actions.DeleteMode != "" {
+		return match, fmt.Errorf("invalid deletion policy without seeding time")
+	}
+	match.MaxJobs, match.SeedTimeSeconds, match.DeleteMode = actions.MaxJobs, actions.SeedTimeSeconds, actions.DeleteMode
+	if actions.StartInactive != nil {
+		match.AddParams["start_inactive"] = fmt.Sprint(*actions.StartInactive)
+	}
+	match.AddParams["upload_limit_bytes"] = fmt.Sprint(actions.UploadLimitBytes)
+	for key, value := range match.AddParams {
+		switch key {
+		case "start_inactive", "sequential_download":
+			if value != "true" && value != "false" {
+				return match, fmt.Errorf("invalid boolean add action")
+			}
+		case "save_path_policy":
+			if value != "INSTANCE_DEFAULT" && value != "CATEGORY_SUBDIRECTORY" {
+				return match, fmt.Errorf("invalid save path policy")
+			}
+		case "upload_limit_bytes":
+		default:
+			return match, fmt.Errorf("invalid unsupported add action")
+		}
+	}
+	if actions.Window < 0 || actions.Window > 525600 {
 		return ruleaggregate.Match{}, fmt.Errorf("invalid rule participation window")
 	}
 	if actions.Window > 0 {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/vertex-pro/vertex-pro/internal/sitecredentials"
 	"io"
 	"net/http"
 	"net/url"
@@ -19,9 +20,11 @@ const (
 )
 
 type Request struct {
-	URL          string
-	ETag         string
-	LastModified string
+	CredentialRef    string
+	CredentialOrigin string
+	URL              string
+	ETag             string
+	LastModified     string
 }
 
 type Response struct {
@@ -106,7 +109,11 @@ func (fetcher Fetcher) Fetch(ctx context.Context, input Request) (Response, erro
 		request.Header.Set("If-Modified-Since", input.LastModified)
 	}
 
-	response, err := fetcher.client.Do(request)
+	credentialClient, err := sitecredentials.Apply(request, fetcher.client, input.CredentialRef, input.CredentialOrigin)
+	if err != nil {
+		return Response{}, err
+	}
+	response, err := credentialClient.Do(request)
 	if err != nil {
 		return Response{}, fmt.Errorf("fetch feed: %w", err)
 	}

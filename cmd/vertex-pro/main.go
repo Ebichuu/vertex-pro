@@ -377,6 +377,7 @@ func runVerify(arguments []string) error {
 func runReadiness(arguments []string) error {
 	flags := flag.NewFlagSet("readiness", flag.ContinueOnError)
 	databasePath := flags.String("database", envOrDefault("VERTEX_PRO_DATABASE", "vertex-pro.db"), "SQLite database path")
+	minFree := flags.Uint64("min-free-bytes", 1<<30, "disk watermark in bytes; readiness reports a reason when free space drops below it")
 	if err := flags.Parse(arguments); err != nil {
 		return err
 	}
@@ -390,7 +391,6 @@ func runReadiness(arguments []string) error {
 		return err
 	}
 	checks := diagnostics.VerifyChecks(context.Background(), database, runner, len(runner.Migrations))
-	minFree := flags.Uint64("min-free-bytes", 1<<30, "disk watermark in bytes; readiness reports a reason when free space drops below it")
 	checks = append(checks, diagnostics.DiskFreeCheck(*databasePath, *minFree))
 	payload, err := json.MarshalIndent(map[string]any{"command": "readiness", "ready": diagnostics.AllOK(checks), "reasons": checks}, "", "  ")
 	if err != nil {

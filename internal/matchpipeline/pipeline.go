@@ -8,6 +8,7 @@ package matchpipeline
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -152,6 +153,11 @@ func Process(ctx context.Context, deps Deps, item Item) (Outcome, error) {
 		RuleSnapshot:          snapshot, ContentSize: contentSize,
 	})
 	if err != nil {
+		if errors.Is(err, racejob.ErrBatchLimit) {
+			outcome.Matched = false
+			outcome.SkippedReason = "RULE_BATCH_LIMIT_REACHED"
+			return outcome, nil
+		}
 		return Outcome{}, fmt.Errorf("create race job: %w", err)
 	}
 	outcome.Job = jobResult.Job

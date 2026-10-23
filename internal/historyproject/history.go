@@ -142,7 +142,17 @@ func (Projection) Project(ctx context.Context, database *sql.DB) ([]Entry, error
 	if database == nil {
 		return nil, errors.New("database is required")
 	}
-	rows, err := database.QueryContext(ctx, `SELECT j.job_id, j.job_state, j.rule_state, j.torrent_state, j.placement_state, j.observation_state, COALESCE(j.effective_target_instance_id,''), j.created_at, COALESCE(i.title,''), COALESCE(s.name,''), COALESCE(a.attempt_no,0), COALESCE(a.started_at,''), COALESCE(a.confirmed_at,''), COALESCE(a.finished_at,''), COALESCE(h.deletion_source,''), COALESCE(h.deleted_at,'') FROM race_jobs j LEFT JOIN identities i ON i.canonical_hash = j.identity_key LEFT JOIN placement_attempts a ON a.job_id = j.job_id AND a.attempt_no = (SELECT MAX(attempt_no) FROM placement_attempts WHERE job_id = j.job_id) LEFT JOIN identity_sources src ON src.identity_id = i.identity_id LEFT JOIN sites s ON s.site_id = src.site_id LEFT JOIN history_deletion_facts h ON h.job_id = j.job_id ORDER BY j.created_at DESC, j.job_id DESC`)
+	rows, err := database.QueryContext(ctx, `SELECT j.job_id,j.job_state,j.rule_state,j.torrent_state,j.placement_state,j.observation_state,
+COALESCE(NULLIF(j.effective_target_instance_id,''),a.instance_id,''),j.created_at,
+COALESCE(NULLIF(i.title,''),NULLIF(o.title,''),rs.title,''),COALESCE(s.name,''),COALESCE(a.attempt_no,0),COALESCE(a.started_at,''),COALESCE(a.confirmed_at,''),
+COALESCE(NULLIF(o.completed_at,''),CASE WHEN j.observation_state='COMPLETED' THEN a.finished_at ELSE '' END,''),COALESCE(h.deletion_source,CASE WHEN o.deleted_at!='' THEN 'UNKNOWN_ORIGIN' END,''),COALESCE(h.deleted_at,o.deleted_at,''),COALESCE(o.state,'')
+FROM race_jobs j LEFT JOIN identities i ON i.canonical_hash=j.identity_key
+LEFT JOIN placement_attempts a ON a.job_id=j.job_id AND a.attempt_no=(SELECT MAX(attempt_no) FROM placement_attempts WHERE job_id=j.job_id)
+LEFT JOIN rss_sources rs ON rs.site_id||'/'||rs.source_key=j.source_id
+LEFT JOIN sites s ON s.site_id=COALESCE(rs.site_id,(SELECT MIN(site_id) FROM identity_sources WHERE identity_id=i.identity_id))
+LEFT JOIN history_deletion_facts h ON h.fact_id=(SELECT fact_id FROM history_deletion_facts WHERE job_id=j.job_id ORDER BY deleted_at DESC LIMIT 1)
+LEFT JOIN job_observations o ON o.job_id=j.job_id
+ORDER BY j.created_at DESC,j.job_id DESC`)
 	if err != nil {
 		return nil, fmt.Errorf("query history: %w", err)
 	}
@@ -150,13 +160,13 @@ func (Projection) Project(ctx context.Context, database *sql.DB) ([]Entry, error
 	entries := make([]Entry, 0)
 	for rows.Next() {
 		var entry Entry
-		var jobState, ruleState, torrentState, placementState, observationState string
-		if err := rows.Scan(&entry.JobID, &jobState, &ruleState, &torrentState, &placementState, &observationState, &entry.InstanceID, &entry.DiscoveredAt, &entry.Title, &entry.SiteName, &entry.AttemptCount, &entry.AddedAt, &entry.ConfirmedAt, &entry.FinishedAt, &entry.DeletionSource, &entry.DeletedAt); err != nil {
+		var jobState, ruleState, torrentState, placementState, observationState, liveState string
+		if err := rows.Scan(&entry.JobID, &jobState, &ruleState, &torrentState, &placementState, &observationState, &entry.InstanceID, &entry.DiscoveredAt, &entry.Title, &entry.SiteName, &entry.AttemptCount, &entry.AddedAt, &entry.ConfirmedAt, &entry.FinishedAt, &entry.DeletionSource, &entry.DeletedAt, &liveState); err != nil {
 			return nil, fmt.Errorf("scan history: %w", err)
 		}
 		// 实例可用性由 Placement 的 WAITING_CAPACITY 显式表达；
 		// 健康探测接续（OBS-02）后再并入该事实。
-		facts := Facts{JobState: jobState, RuleState: ruleState, TorrentState: torrentState, PlacementState: placementState, ObservationState: observationState, InstanceAvailable: true}
+		facts := Facts{JobState: jobState, RuleState: ruleState, TorrentState: torrentState, PlacementState: placementState, ObservationState: observationState, InstanceAvailable: true, TorrentObservation: liveState}
 		if entry.DeletedAt != "" {
 			facts.DeletionFact = "CONFIRMED"
 		}

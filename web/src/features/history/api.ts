@@ -40,7 +40,7 @@ export function parseHistoryDetail(raw: unknown, jobId: string): HistoryDetail {
     const event = object(value)
     const occurredAt = time(event?.occurred_at)
     if (!event || !occurredAt) return []
-    const stage = ['发现', '准备', '添加', '确认', '上传', '删除', '已存在', '失败', '待确认', '状态变更'].includes(String(event.stage)) ? String(event.stage) : '状态变更'
+    const stage = ['发现', '准备', '添加', '确认', '下载', '上传', '删除', '已存在', '失败', '待确认', '状态变更'].includes(String(event.stage)) ? String(event.stage) : '状态变更'
     const id = typeof event.event_id === 'number' || typeof event.event_id === 'string' ? String(event.event_id) : `event-${index}`
     // Raw transitions are diagnostic facts; they do not prove download success.
     for (const [key, label] of [['from_state', '原状态'], ['to_state', '目标状态'], ['reason_code', '原因码']] as const) {
@@ -49,6 +49,10 @@ export function parseHistoryDetail(raw: unknown, jobId: string): HistoryDetail {
     const warning = stage === '失败' || stage === '待确认'
     const waiting = ['RESERVED', 'ADD_SENT', 'AWAITING_CONFIRMATION'].includes(String(event.to_state))
     const labels: Record<string, string> = {
+      DOWNLOADING: '下载器正在下载',
+      SEEDING: '下载完成，正在做种',
+      COMPLETED: '下载已完成',
+      DELETED: '连续同步确认任务已移除',
       RESERVED: '准备向下载器添加',
       ADD_SENT: '已发起添加请求，等待确认',
       AWAITING_CONFIRMATION: '正在等待下载器确认',

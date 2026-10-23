@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/vertex-pro/vertex-pro/internal/sitecredentials"
 	"io"
 	"net/http"
 	"net/url"
@@ -34,7 +35,9 @@ type Config struct {
 }
 
 type Request struct {
-	URL string
+	CredentialRef    string
+	CredentialOrigin string
+	URL              string
 }
 
 type Artifact struct {
@@ -120,7 +123,11 @@ func (downloader *Downloader) Download(ctx context.Context, input Request) (Arti
 	}
 	request.Header.Set("Accept", "application/x-bittorrent, application/octet-stream;q=0.9")
 	request.Header.Set("User-Agent", downloader.userAgent)
-	response, err := downloader.client.Do(request)
+	credentialClient, err := sitecredentials.Apply(request, downloader.client, input.CredentialRef, input.CredentialOrigin)
+	if err != nil {
+		return Artifact{}, err
+	}
+	response, err := credentialClient.Do(request)
 	if err != nil {
 		return Artifact{}, fmt.Errorf("download artifact: %w", err)
 	}

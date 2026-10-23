@@ -95,6 +95,9 @@ func (d Deps) updateRule(response http.ResponseWriter, request *http.Request) {
 		writeRuleError(response, request, err)
 		return
 	}
+	if input.Enabled != nil && !*input.Enabled && !d.confirmPolicyDisable(response, request) {
+		return
+	}
 	response.Header().Set("ETag", ruleETag(rule.Revision))
 	httpapi.WriteJSON(response, http.StatusOK, rulePayload(rule))
 }
@@ -128,6 +131,8 @@ func writeRuleRequestError(response http.ResponseWriter, request *http.Request, 
 
 func writeRuleError(response http.ResponseWriter, request *http.Request, err error) {
 	switch {
+	case errors.Is(err, ruleservice.ErrSiteNotFound):
+		httpapi.WriteError(response, request, "NOT_FOUND", "rule site not found")
 	case errors.Is(err, ruleservice.ErrNotFound):
 		httpapi.WriteError(response, request, "NOT_FOUND", "rule not found")
 	case errors.Is(err, ruleservice.ErrConflict):

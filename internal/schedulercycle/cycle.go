@@ -22,12 +22,14 @@ import (
 
 // FeedRef is one feed to poll.
 type FeedRef struct {
-	SiteID       string
-	FeedID       string
-	URL          string
-	BaselineOnly bool
-	ETag         string
-	LastModified string
+	CredentialRef    string
+	CredentialOrigin string
+	SiteID           string
+	FeedID           string
+	URL              string
+	BaselineOnly     bool
+	ETag             string
+	LastModified     string
 }
 
 // Cycle carries the collaborators for repeated poll cycles.
@@ -74,7 +76,7 @@ func (cycle *Cycle) Run(ctx context.Context, feed FeedRef) (Result, error) {
 	if feed.SiteID == "" || feed.URL == "" {
 		return Result{}, fmt.Errorf("site id and feed url are required")
 	}
-	response, err := cycle.fetcher.Fetch(ctx, rssfetch.Request{URL: feed.URL, ETag: feed.ETag, LastModified: feed.LastModified})
+	response, err := cycle.fetcher.Fetch(ctx, rssfetch.Request{CredentialRef: feed.CredentialRef, CredentialOrigin: feed.CredentialOrigin, URL: feed.URL, ETag: feed.ETag, LastModified: feed.LastModified})
 	if err != nil {
 		return Result{}, fmt.Errorf("fetch feed: %w", err)
 	}
@@ -113,7 +115,7 @@ func (cycle *Cycle) Run(ctx context.Context, feed FeedRef) (Result, error) {
 		return result, nil
 	}
 	for _, source := range dedupeResult.New {
-		item, err := cycle.identify(ctx, source)
+		item, err := cycle.identify(ctx, source, feed)
 		if err != nil {
 			result.Failed++
 			result.Failures = append(result.Failures, fmt.Sprintf("%s: %v", source.SourceKey, err))
@@ -142,8 +144,8 @@ func (cycle *Cycle) Run(ctx context.Context, feed FeedRef) (Result, error) {
 	return result, nil
 }
 
-func (cycle *Cycle) identify(ctx context.Context, source rsssource.Source) (matchpipeline.Item, error) {
-	artifact, err := cycle.downloader.Download(ctx, torrentdownload.Request{URL: source.URL})
+func (cycle *Cycle) identify(ctx context.Context, source rsssource.Source, feed FeedRef) (matchpipeline.Item, error) {
+	artifact, err := cycle.downloader.Download(ctx, torrentdownload.Request{URL: source.URL, CredentialRef: feed.CredentialRef, CredentialOrigin: feed.CredentialOrigin})
 	if err != nil {
 		return matchpipeline.Item{}, fmt.Errorf("download artifact: %w", err)
 	}

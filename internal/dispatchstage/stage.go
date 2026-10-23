@@ -37,6 +37,8 @@ type StorageConfig struct {
 	StorageTargetID   string
 	Path              string
 	Verification      storageverify.Evidence
+	Labels            []string
+	PathEvidence      map[string]storageverify.Evidence
 	SafetyMarginBytes int64
 }
 
@@ -51,13 +53,15 @@ type Config struct {
 	ReconcileWindow time.Duration
 	// Collect holds the instance sync lock until release, so the reservation
 	// and durable Add marker use the same snapshot as the identity recheck.
-	Collect func(context.Context) (Evidence, func(), error)
+	Collect      func(context.Context) (Evidence, func(), error)
+	EnsurePolicy func(context.Context, ruleaggregate.Match) (string, error)
 }
 
 type Stage struct {
-	database *sql.DB
-	config   Config
-	mu       sync.Mutex
+	database    *sql.DB
+	config      Config
+	mu          sync.Mutex
+	coordinator *Coordinator
 }
 
 func New(database *sql.DB, config Config) (*Stage, error) {
@@ -92,6 +96,10 @@ type jobRow struct {
 // ensure reference rows, and dispatch through the orchestrator. Per-job
 // failures are recorded and do not abort the stage.
 func (stage *Stage) Run(ctx context.Context) ([]dispatchorchestrator.Result, []string, error) {
+	if stage.coordinator != nil {
+		stage.coordinator.mu.Lock()
+		defer stage.coordinator.mu.Unlock()
+	}
 	stage.mu.Lock()
 	defer stage.mu.Unlock()
 	jobs, err := stage.listDiscoveredJobs(ctx)
@@ -101,7 +109,13 @@ func (stage *Stage) Run(ctx context.Context) ([]dispatchorchestrator.Result, []s
 	results := make([]dispatchorchestrator.Result, 0, len(jobs))
 	failures := make([]string, 0)
 	for _, job := range jobs {
-		result, err := stage.dispatchJob(ctx, job)
+		var result *dispatchorchestrator.Result
+		var err error
+		if stage.coordinator != nil {
+			result, err = stage.coordinator.dispatch(ctx, stage, job)
+		} else {
+			result, err = stage.dispatchJob(ctx, job)
+		}
 		if err != nil {
 			failures = append(failures, fmt.Sprintf("%s: %v", job.jobID, err))
 			// Keep only a non-sensitive code in the user-visible job. A source
@@ -117,7 +131,7 @@ func (stage *Stage) Run(ctx context.Context) ([]dispatchorchestrator.Result, []s
 }
 
 func (stage *Stage) listDiscoveredJobs(ctx context.Context) ([]jobRow, error) {
-	rows, err := stage.database.QueryContext(ctx, `SELECT j.job_id, j.source_id, j.identity_key FROM race_jobs j JOIN job_rule_snapshots r ON r.job_id=j.job_id WHERE j.job_state IN ('DISCOVERED','READY','WAITING_CAPACITY') AND j.current_attempt_id IS NULL AND j.identity_key IS NOT NULL AND j.identity_key != '' AND json_extract(r.aggregation_json,'$.Winner.TargetMode')='FIXED_INSTANCE' AND json_extract(r.aggregation_json,'$.Winner.TargetInstanceID')=? ORDER BY j.created_at,j.job_id`, stage.config.Storage.InstanceID)
+	rows, err := stage.database.QueryContext(ctx, `SELECT j.job_id, j.source_id, j.identity_key FROM race_jobs j JOIN job_rule_snapshots r ON r.job_id=j.job_id WHERE j.job_state IN ('DISCOVERED','READY','WAITING_CAPACITY') AND j.current_attempt_id IS NULL AND j.identity_key IS NOT NULL AND j.identity_key != '' AND ((json_extract(r.aggregation_json,'$.Winner.TargetMode')='FIXED_INSTANCE' AND json_extract(r.aggregation_json,'$.Winner.TargetInstanceID')=?) OR json_extract(r.aggregation_json,'$.Winner.TargetMode')='INSTANCE_GROUP') ORDER BY j.created_at,j.job_id`, stage.config.Storage.InstanceID)
 	if err != nil {
 		return nil, fmt.Errorf("list discovered jobs: %w", err)
 	}
@@ -134,11 +148,22 @@ func (stage *Stage) listDiscoveredJobs(ctx context.Context) ([]jobRow, error) {
 }
 
 func (stage *Stage) dispatchJob(ctx context.Context, job jobRow) (*dispatchorchestrator.Result, error) {
+	enabled, err := stage.ruleEnabled(ctx, job.jobID)
+	if err != nil {
+		return nil, err
+	}
+	if !enabled {
+		return nil, nil
+	}
 	source, err := stage.loadSource(ctx, job.sourceID)
 	if err != nil {
 		return nil, err
 	}
-	artifact, err := stage.config.Downloader.Download(ctx, torrentdownload.Request{URL: source.URL})
+	var credential, origin string
+	if err := stage.database.QueryRowContext(ctx, `SELECT credential_ref,base_url FROM sites WHERE site_id=?`, source.SiteID).Scan(&credential, &origin); err != nil {
+		return nil, err
+	}
+	artifact, err := stage.config.Downloader.Download(ctx, torrentdownload.Request{URL: source.URL, CredentialRef: credential, CredentialOrigin: origin})
 	if err != nil {
 		return nil, fmt.Errorf("re-download artifact: %w", err)
 	}
@@ -159,11 +184,31 @@ func (stage *Stage) dispatchJob(ctx context.Context, job jobRow) (*dispatchorche
 	if err := json.Unmarshal([]byte(raw), &decision); err != nil {
 		return nil, err
 	}
-	if decision.Rejected || originalSize != parsed.TotalSize || decision.Winner.TargetMode != "FIXED_INSTANCE" || decision.Winner.TargetInstanceID != stage.config.Storage.InstanceID {
+	if decision.Rejected || originalSize != parsed.TotalSize || (decision.Winner.TargetMode != "INSTANCE_GROUP" && (decision.Winner.TargetMode != "FIXED_INSTANCE" || decision.Winner.TargetInstanceID != stage.config.Storage.InstanceID)) {
 		return nil, fmt.Errorf("rule decision does not authorize this target")
 	}
-	if len(decision.StorageLabels) > 0 || len(decision.AllowedProfiles) > 0 || decision.Winner.SavePath != "" || decision.Winner.AddParams["save_path_policy"] == "CATEGORY_SUBDIRECTORY" || decision.Winner.AddParams["sequential_download"] == "true" {
-		return nil, fmt.Errorf("rule actions require unsupported placement evidence")
+	if decision.Winner.TargetMode == "INSTANCE_GROUP" {
+		var rawMembers string
+		if err := stage.database.QueryRowContext(ctx, `SELECT members_json FROM instance_groups WHERE group_id=?`, decision.Winner.TargetGroupID).Scan(&rawMembers); err != nil {
+			return nil, err
+		}
+		var members []string
+		if err := json.Unmarshal([]byte(rawMembers), &members); err != nil {
+			return nil, err
+		}
+		authorized := false
+		for _, id := range members {
+			if id == stage.config.Storage.InstanceID {
+				authorized = true
+			}
+		}
+		if !authorized {
+			return nil, fmt.Errorf("target is not a member of the selected group")
+		}
+	}
+	params, err := stage.actionParams(decision)
+	if err != nil {
+		return nil, err
 	}
 	evidence, release, err := stage.config.Collect(ctx)
 	if release != nil {
@@ -172,6 +217,9 @@ func (stage *Stage) dispatchJob(ctx context.Context, job jobRow) (*dispatchorche
 	if err != nil {
 		return nil, fmt.Errorf("collect placement evidence: %w", err)
 	}
+	if err := stage.validateSavePath(params.SavePath, evidence); err != nil {
+		return nil, err
+	}
 	capacity, err := stage.prepareCapacity(ctx, evidence)
 	if err != nil {
 		return nil, err
@@ -179,9 +227,26 @@ func (stage *Stage) dispatchJob(ctx context.Context, job jobRow) (*dispatchorche
 	if _, exists := evidence.Snapshot.Torrents[job.identityKey]; exists {
 		return nil, stage.recordAlreadyPresent(ctx, job, evidence, capacity)
 	}
-	addRequest, err := qbadd.BuildRequest(stage.config.Profile, qbadd.TorrentArtifact{Filename: parsed.Name + ".torrent", Content: artifact.Body}, qbadd.AddParams{StartInactive: true, SavePath: stage.config.Storage.Path, Category: decision.Winner.Category, Tags: decision.Tags})
+	if decision.Winner.SeedTimeSeconds > 0 {
+		if stage.config.EnsurePolicy == nil {
+			return nil, fmt.Errorf("qui policy service unavailable")
+		}
+		tag, err := stage.config.EnsurePolicy(ctx, decision.Winner)
+		if err != nil {
+			return nil, fmt.Errorf("qui policy provisioning failed")
+		}
+		params.Tags = append(append([]string{}, params.Tags...), tag)
+	}
+	addRequest, err := qbadd.BuildRequest(stage.config.Profile, qbadd.TorrentArtifact{Filename: parsed.Name + ".torrent", Content: artifact.Body}, params)
 	if err != nil {
 		return nil, fmt.Errorf("build add request: %w", err)
+	}
+	enabled, err = stage.ruleEnabled(ctx, job.jobID)
+	if err != nil {
+		return nil, err
+	}
+	if !enabled {
+		return nil, nil
 	}
 	now := stage.config.Now()
 	result, err := dispatchorchestrator.Run(ctx, stage.database, dispatchorchestrator.Request{
@@ -213,6 +278,19 @@ func (stage *Stage) dispatchJob(ctx context.Context, job jobRow) (*dispatchorche
 		return nil, err
 	}
 	return &result, nil
+}
+
+func (stage *Stage) ruleEnabled(ctx context.Context, jobID string) (bool, error) {
+	var enabled int
+	err := stage.database.QueryRowContext(ctx, `SELECT COUNT(*) FROM job_rule_snapshots snap
+		JOIN race_jobs j ON j.job_id=snap.job_id
+		JOIN sites source_site ON source_site.site_id=substr(j.source_id,1,instr(j.source_id,'/')-1)
+		JOIN rules r ON r.rule_id=json_extract(snap.aggregation_json,'$.Winner.RuleID')
+		LEFT JOIN sites rule_site ON rule_site.site_id=r.site_id
+		WHERE snap.job_id=? AND source_site.enabled=1 AND source_site.archived=0
+		AND r.enabled=1 AND r.archived=0
+		AND (r.site_id IS NULL OR (rule_site.enabled=1 AND rule_site.archived=0))`, jobID).Scan(&enabled)
+	return enabled > 0, err
 }
 
 func (stage *Stage) prepareJob(job jobRow) func(context.Context, *sql.DB) error {

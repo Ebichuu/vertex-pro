@@ -69,3 +69,57 @@ func TestLiveCapacityRejectsIncompleteOrUnrelatedEvidence(t *testing.T) {
 		})
 	}
 }
+
+func TestDispatchRuleGateTracksSiteAndRuleDisable(t *testing.T) {
+	ctx := context.Background()
+	database, err := db.Open(ctx, db.Config{Path: filepath.Join(t.TempDir(), "rules.db")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer database.Close()
+	runner, _ := db.DefaultRunner()
+	if err := runner.Apply(ctx, database); err != nil {
+		t.Fatal(err)
+	}
+	for _, query := range []string{
+		`INSERT INTO sites(site_id,name,base_url,enabled,created_at,updated_at) VALUES('site','Site','https://example.test',1,'now','now')`,
+		`INSERT INTO rules(rule_id,site_id,name,enabled,definition_json,created_at,updated_at) VALUES('rule','site','Rule',1,'{}','now','now')`,
+		`INSERT INTO race_jobs(job_id,source_id,job_state,participation_deadline,observation_deadline,created_at,updated_at) VALUES('job','site/source','DISCOVERED','later','later','now','now')`,
+		`INSERT INTO job_rule_snapshots(job_id,aggregation_json,content_size,created_at) VALUES('job','{"Winner":{"RuleID":"rule"}}',1024,'now')`,
+	} {
+		if _, err := database.ExecContext(ctx, query); err != nil {
+			t.Fatal(err)
+		}
+	}
+	stage := Stage{database: database}
+	check := func(want bool) {
+		t.Helper()
+		got, err := stage.ruleEnabled(ctx, "job")
+		if err != nil || got != want {
+			t.Fatalf("enabled=%v err=%v want=%v", got, err, want)
+		}
+	}
+	check(true)
+	if _, err := database.Exec(`UPDATE rules SET site_id=NULL WHERE rule_id='rule'`); err != nil {
+		t.Fatal(err)
+	}
+	check(true)
+	if _, err := database.Exec(`UPDATE sites SET enabled=0 WHERE site_id='site'`); err != nil {
+		t.Fatal(err)
+	}
+	check(false)
+	if _, err := database.Exec(`UPDATE sites SET enabled=1 WHERE site_id='site'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := database.Exec(`UPDATE sites SET archived=1 WHERE site_id='site'`); err != nil {
+		t.Fatal(err)
+	}
+	check(false)
+	if _, err := database.Exec(`UPDATE sites SET archived=0 WHERE site_id='site'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := database.Exec(`UPDATE rules SET enabled=0 WHERE rule_id='rule'`); err != nil {
+		t.Fatal(err)
+	}
+	check(false)
+}

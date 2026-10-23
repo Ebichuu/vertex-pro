@@ -3,6 +3,7 @@ package resourcesapi
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/vertex-pro/vertex-pro/internal/apiidempotency"
 	"github.com/vertex-pro/vertex-pro/internal/httpapi"
+	"github.com/vertex-pro/vertex-pro/internal/observability"
 	"github.com/vertex-pro/vertex-pro/internal/rsspreview"
 	"github.com/vertex-pro/vertex-pro/internal/rssservice"
 )
@@ -68,7 +70,7 @@ func (d Deps) createFeed(response http.ResponseWriter, request *http.Request) {
 	location := "/api/v1/feeds/" + url.PathEscape(feed.ID)
 	response.Header().Set("Location", location)
 	response.Header().Set("ETag", feedETag(feed))
-	httpapi.WriteJSON(response, http.StatusCreated, feedPayload(feed))
+	httpapi.WriteJSON(response, http.StatusCreated, d.feedRuntimePayload(request, feed))
 }
 
 func (d Deps) getFeed(response http.ResponseWriter, request *http.Request) {
@@ -83,7 +85,7 @@ func (d Deps) getFeed(response http.ResponseWriter, request *http.Request) {
 		return
 	}
 	response.Header().Set("ETag", feedETag(feed))
-	d.writeData(response, request, feedPayload(feed))
+	d.writeData(response, request, d.feedRuntimePayload(request, feed))
 }
 
 func (d Deps) updateFeed(response http.ResponseWriter, request *http.Request) {
@@ -116,7 +118,7 @@ func (d Deps) updateFeed(response http.ResponseWriter, request *http.Request) {
 		return
 	}
 	response.Header().Set("ETag", feedETag(feed))
-	d.writeData(response, request, feedPayload(feed))
+	d.writeData(response, request, d.feedRuntimePayload(request, feed))
 }
 
 func (d Deps) testFeed(response http.ResponseWriter, request *http.Request) {
@@ -186,13 +188,33 @@ func feedPreviewPayload(feed rssservice.Feed, preview rsspreview.Preview, now ti
 	entries := make([]map[string]any, 0, len(preview.Entries))
 	for _, entry := range preview.Entries {
 		entries = append(entries, map[string]any{
-			"id": entry.ID, "title": entry.Title, "link": entry.Link, "published_at": entry.Published,
+			"id": fmt.Sprintf("%x", sha256.Sum256([]byte(entry.ID))), "title": entry.Title, "link": observability.PublicURL(entry.Link), "published_at": entry.Published,
 		})
 	}
 	return map[string]any{
 		"feed_id": feed.ID, "source": "READ_ONLY_FETCH", "checked_at": now.UTC().Format(time.RFC3339Nano),
-		"feed_url": preview.FeedURL, "format": preview.Format, "entries": entries,
+		"feed_url": observability.PublicURL(preview.FeedURL), "format": preview.Format, "entries": entries,
 	}
+}
+
+func (d Deps) feedRuntimePayload(request *http.Request, feed rssservice.Feed) map[string]any {
+	payload := feedPayload(feed)
+	var success, code sql.NullString
+	var entries, matched int
+	err := d.Database.QueryRowContext(request.Context(), `SELECT last_success_at,last_error_code,last_entries,last_matched FROM feed_runtime_state WHERE feed_id=?`, feed.ID).Scan(&success, &code, &entries, &matched)
+	payload["last_success_at"] = nil
+	payload["last_error_code"] = nil
+	payload["last_entries"] = 0
+	payload["last_matched"] = 0
+	if err == nil {
+		payload["last_success_at"] = nullableString(success)
+		payload["last_error_code"] = nullableString(code)
+		payload["last_entries"] = entries
+		payload["last_matched"] = matched
+	} else if err != sql.ErrNoRows {
+		payload["last_error_code"] = "RUNTIME_STATUS_UNAVAILABLE"
+	}
+	return payload
 }
 
 func readFeedTestBody(request *http.Request) ([]byte, error) {
@@ -284,6 +306,8 @@ func parseFeedETag(value string) (string, error) {
 func writeFeedCreateError(response http.ResponseWriter, request *http.Request, err error) {
 	message := err.Error()
 	switch {
+	case errors.Is(err, rssservice.ErrSiteNotFound):
+		httpapi.WriteError(response, request, "NOT_FOUND", "feed site not found")
 	case strings.HasPrefix(message, "invalid "):
 		httpapi.WriteError(response, request, "VALIDATION_FAILED", message)
 	case strings.Contains(strings.ToUpper(message), "FOREIGN KEY"):

@@ -376,9 +376,9 @@ body { margin: 0; background: var(--surface); color: var(--text); font-family: "
 .rule-editor-page-heading h1, .rule-editor-section-heading h2 { margin: 0 0 8px; }
 .rule-editor-form { display: grid; gap: 18px; }
 .rule-editor-basics { display: grid; gap: 14px; }
-.rule-editor-basics-grid { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr) 160px; }
+.rule-editor-basics-grid { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr) 120px; }
 .rule-editor-basics-grid label, .rule-editor-action-fields > label:not(.checkbox-field) { display: grid; font-size: 13px; gap: 6px; }
-.rule-editor-basics-grid input, .rule-editor-action-fields input:not([type="checkbox"]), .rule-editor-action-fields select { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; color: var(--text); min-height: 38px; padding: 7px 9px; width: 100%; }
+.rule-editor-basics-grid input, .rule-editor-basics-grid select, .rule-editor-action-fields input:not([type="checkbox"]), .rule-editor-action-fields select { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; color: var(--text); min-height: 38px; padding: 7px 9px; width: 100%; }
 .rule-editor-workspace { align-items: start; display: grid; gap: 18px; grid-template-columns: minmax(0, 1.45fr) minmax(280px, .55fr); }
 .rule-editor-conditions, .rule-editor-actions { display: grid; gap: 14px; min-width: 0; }
 .rule-target-mode { display: grid; gap: 6px; grid-template-columns: repeat(2, minmax(0, 1fr)); }

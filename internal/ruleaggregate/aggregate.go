@@ -11,6 +11,10 @@ const AlgorithmVersion = "rule-aggregation-v1"
 
 type Match struct {
 	RuleID              string
+	RuleName            string
+	MaxJobs             int
+	SeedTimeSeconds     int64
+	DeleteMode          string
 	RuleRevision        int
 	Priority            int
 	TargetMode          string
@@ -27,6 +31,7 @@ type Match struct {
 
 type Snapshot struct {
 	RuleID       string
+	RuleName     string
 	RuleRevision int
 	Priority     int
 	IsWinner     bool
@@ -104,7 +109,7 @@ func Aggregate(matches []Match, reservedTags []string) (Result, error) {
 	result := Result{AlgorithmVersion: AlgorithmVersion, Winner: winner, Tags: tags, AllowedProfiles: profiles, StorageLabels: storageLabels, ParticipationWindow: winner.ParticipationWindow}
 	result.Matches = make([]Snapshot, len(ordered))
 	for index, match := range ordered {
-		result.Matches[index] = Snapshot{RuleID: match.RuleID, RuleRevision: match.RuleRevision, Priority: match.Priority, IsWinner: index == 0}
+		result.Matches[index] = Snapshot{RuleID: match.RuleID, RuleName: match.RuleName, RuleRevision: match.RuleRevision, Priority: match.Priority, IsWinner: index == 0}
 	}
 	return result, nil
 }

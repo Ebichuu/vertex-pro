@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/vertex-pro/vertex-pro/internal/resourceconfig"
+	"github.com/vertex-pro/vertex-pro/internal/sitecredentials"
 	"net/url"
 	"regexp"
 	"strings"
@@ -21,15 +23,17 @@ type Service struct {
 var (
 	ErrFeedNotFound         = errors.New("feed not found")
 	ErrFeedRevisionConflict = errors.New("feed revision conflict")
+	ErrSiteNotFound         = errors.New("site not found")
 )
 
 type Site struct {
-	ID        string
-	Name      string
-	BaseURL   string
-	Enabled   bool
-	CreatedAt string
-	UpdatedAt string
+	CredentialRef string
+	ID            string
+	Name          string
+	BaseURL       string
+	Enabled       bool
+	CreatedAt     string
+	UpdatedAt     string
 }
 type Feed struct {
 	ID           string
@@ -44,10 +48,11 @@ type Feed struct {
 	UpdatedAt    string
 }
 type CreateSiteInput struct {
-	ID      string
-	Name    string
-	BaseURL string
-	Enabled bool
+	CredentialRef string
+	ID            string
+	Name          string
+	BaseURL       string
+	Enabled       bool
 }
 type CreateFeedInput struct {
 	ID          string
@@ -72,6 +77,9 @@ func NewWithClock(database *sql.DB, now func() time.Time) (Service, error) {
 	return Service{database: database, now: now}, nil
 }
 func (service Service) CreateSite(ctx context.Context, input CreateSiteInput) (Site, error) {
+	if err := sitecredentials.Validate(input.CredentialRef); err != nil {
+		return Site{}, err
+	}
 	if err := validateID(input.ID, "site ID"); err != nil {
 		return Site{}, err
 	}
@@ -83,14 +91,14 @@ func (service Service) CreateSite(ctx context.Context, input CreateSiteInput) (S
 		return Site{}, err
 	}
 	now := service.now().UTC().Format(time.RFC3339Nano)
-	_, err = service.database.ExecContext(ctx, `INSERT INTO sites(site_id,name,base_url,enabled,created_at,updated_at) VALUES(?,?,?,?,?,?)`, input.ID, input.Name, base, input.Enabled, now, now)
+	_, err = service.database.ExecContext(ctx, `INSERT INTO sites(site_id,name,base_url,enabled,created_at,updated_at,credential_ref) VALUES(?,?,?,?,?,?,?)`, input.ID, input.Name, base, input.Enabled, now, now, input.CredentialRef)
 	if err != nil {
 		return Site{}, fmt.Errorf("create site: %w", err)
 	}
-	return Site{ID: input.ID, Name: input.Name, BaseURL: base, Enabled: input.Enabled, CreatedAt: now, UpdatedAt: now}, nil
+	return Site{CredentialRef: input.CredentialRef, ID: input.ID, Name: input.Name, BaseURL: base, Enabled: input.Enabled, CreatedAt: now, UpdatedAt: now}, nil
 }
 func (service Service) ListSites(ctx context.Context) ([]Site, error) {
-	rows, err := service.database.QueryContext(ctx, `SELECT site_id,name,base_url,enabled,created_at,updated_at FROM sites ORDER BY site_id`)
+	rows, err := service.database.QueryContext(ctx, `SELECT site_id,name,base_url,enabled,created_at,updated_at,credential_ref FROM sites WHERE archived=0 ORDER BY site_id`)
 	if err != nil {
 		return nil, fmt.Errorf("list sites: %w", err)
 	}
@@ -99,7 +107,7 @@ func (service Service) ListSites(ctx context.Context) ([]Site, error) {
 	for rows.Next() {
 		var v Site
 		var enabled int
-		if err := rows.Scan(&v.ID, &v.Name, &v.BaseURL, &enabled, &v.CreatedAt, &v.UpdatedAt); err != nil {
+		if err := rows.Scan(&v.ID, &v.Name, &v.BaseURL, &enabled, &v.CreatedAt, &v.UpdatedAt, &v.CredentialRef); err != nil {
 			return nil, fmt.Errorf("scan site: %w", err)
 		}
 		v.Enabled = enabled == 1
@@ -131,9 +139,14 @@ func (service Service) CreateFeed(ctx context.Context, input CreateFeedInput) (F
 		return Feed{}, errors.New("invalid poll minutes")
 	}
 	now := service.now().UTC().Format(time.RFC3339Nano)
-	_, err = service.database.ExecContext(ctx, `INSERT INTO feeds(feed_id,site_id,name,feed_url,enabled,poll_minutes,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)`, input.ID, input.SiteID, input.Name, feedURL, input.Enabled, input.PollMinutes, now, now)
+	result, err := service.database.ExecContext(ctx, `INSERT INTO feeds(feed_id,site_id,name,feed_url,enabled,poll_minutes,created_at,updated_at) SELECT ?,?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM sites WHERE site_id=? AND archived=0)`, input.ID, input.SiteID, input.Name, feedURL, input.Enabled, input.PollMinutes, now, now, input.SiteID)
 	if err != nil {
 		return Feed{}, fmt.Errorf("create feed: %w", err)
+	}
+	if count, err := result.RowsAffected(); err != nil {
+		return Feed{}, err
+	} else if count != 1 {
+		return Feed{}, ErrSiteNotFound
 	}
 	return Feed{ID: input.ID, SiteID: input.SiteID, Name: input.Name, FeedURL: feedURL, Enabled: input.Enabled, PollMinutes: input.PollMinutes, CreatedAt: now, UpdatedAt: now}, nil
 }
@@ -153,7 +166,7 @@ func (service Service) GetFeed(ctx context.Context, id string) (Feed, error) {
 	}
 	var feed Feed
 	var enabled int
-	err := service.database.QueryRowContext(ctx, `SELECT feed_id,site_id,name,feed_url,enabled,poll_minutes,etag,last_modified,created_at,updated_at FROM feeds WHERE feed_id = ?`, id).Scan(
+	err := service.database.QueryRowContext(ctx, `SELECT feed_id,site_id,name,feed_url,enabled,poll_minutes,etag,last_modified,created_at,updated_at FROM feeds WHERE archived=0 AND feed_id = ?`, id).Scan(
 		&feed.ID, &feed.SiteID, &feed.Name, &feed.FeedURL, &enabled, &feed.PollMinutes, &feed.ETag, &feed.LastModified, &feed.CreatedAt, &feed.UpdatedAt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -207,8 +220,8 @@ func (service Service) UpdateFeed(ctx context.Context, input UpdateFeedInput) (F
 	if !changed {
 		return Feed{}, errors.New("no feed fields to update")
 	}
-	now := service.now().UTC().Format(time.RFC3339Nano)
-	result, err := service.database.ExecContext(ctx, `UPDATE feeds SET name=?,feed_url=?,enabled=?,poll_minutes=?,updated_at=? WHERE feed_id=? AND updated_at=?`, feed.Name, feed.FeedURL, feed.Enabled, feed.PollMinutes, now, feed.ID, input.ExpectedUpdatedAt)
+	now := resourceconfig.NextTimestamp(service.now(), input.ExpectedUpdatedAt)
+	result, err := service.database.ExecContext(ctx, `UPDATE feeds SET name=?,feed_url=?,enabled=?,poll_minutes=?,updated_at=? WHERE archived=0 AND feed_id=? AND updated_at=?`, feed.Name, feed.FeedURL, feed.Enabled, feed.PollMinutes, now, feed.ID, input.ExpectedUpdatedAt)
 	if err != nil {
 		return Feed{}, fmt.Errorf("update feed: %w", err)
 	}
@@ -228,10 +241,10 @@ func (service Service) ListFeeds(ctx context.Context, siteID string) ([]Feed, er
 			return nil, err
 		}
 	}
-	query := `SELECT feed_id,site_id,name,feed_url,enabled,poll_minutes,etag,last_modified,created_at,updated_at FROM feeds`
+	query := `SELECT feed_id,site_id,name,feed_url,enabled,poll_minutes,etag,last_modified,created_at,updated_at FROM feeds WHERE archived=0`
 	args := []any{}
 	if siteID != "" {
-		query += ` WHERE site_id = ?`
+		query += ` AND site_id = ?`
 		args = append(args, siteID)
 	}
 	query += ` ORDER BY feed_id`

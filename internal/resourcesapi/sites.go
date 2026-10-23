@@ -12,10 +12,11 @@ import (
 )
 
 type createSiteRequest struct {
-	ID      string `json:"id"`
-	Name    string `json:"name"`
-	BaseURL string `json:"base_url"`
-	Enabled *bool  `json:"enabled"`
+	CredentialRef string `json:"credential_ref"`
+	ID            string `json:"id"`
+	Name          string `json:"name"`
+	BaseURL       string `json:"base_url"`
+	Enabled       *bool  `json:"enabled"`
 }
 
 func (d Deps) createSite(response http.ResponseWriter, request *http.Request) {
@@ -39,7 +40,7 @@ func (d Deps) createSite(response http.ResponseWriter, request *http.Request) {
 		return
 	}
 	site, err := service.CreateSite(request.Context(), rssservice.CreateSiteInput{
-		ID: input.ID, Name: input.Name, BaseURL: input.BaseURL, Enabled: enabled,
+		ID: input.ID, Name: input.Name, BaseURL: input.BaseURL, Enabled: enabled, CredentialRef: input.CredentialRef,
 	})
 	if err != nil {
 		writeSiteCreateError(response, request, err)
@@ -49,7 +50,7 @@ func (d Deps) createSite(response http.ResponseWriter, request *http.Request) {
 	response.Header().Set("Location", location)
 	response.Header().Set("ETag", fmt.Sprintf("%q", site.UpdatedAt))
 	httpapi.WriteJSON(response, http.StatusCreated, map[string]any{
-		"id": site.ID, "name": site.Name, "base_url": site.BaseURL, "enabled": site.Enabled,
+		"credential_ref": site.CredentialRef, "updated_at": site.UpdatedAt, "id": site.ID, "name": site.Name, "base_url": site.BaseURL, "enabled": site.Enabled,
 	})
 }
 

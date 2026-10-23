@@ -4,6 +4,14 @@ export type RuleTargetMode = 'FIXED_INSTANCE' | 'INSTANCE_GROUP'
 export type SavePathPolicy = 'INSTANCE_DEFAULT' | 'CATEGORY_SUBDIRECTORY'
 
 export type RuleActionDraft = {
+  startInactive?: boolean
+  uploadLimitBytes?: number
+  maxJobs?: number
+  seedTimeSeconds?: number
+  deleteMode?: string
+  savePath?: string
+  allowedProfiles?: string[]
+  storageLabels?: string[]
   targetMode: RuleTargetMode
   targetInstanceId: string
   targetGroupId: string
@@ -26,7 +34,7 @@ export type RuleEditorDraft = {
   extraActions?: Record<string, unknown>
 }
 
-export type RuleEditorErrors = Partial<Record<'name' | 'priority' | 'target' | 'participationWindowMinutes', string>>
+export type RuleEditorErrors = Partial<Record<'name' | 'priority' | 'target' | 'participationWindowMinutes' | 'limits', string>>
 
 export type RuleVersionPayload = {
   rule_id: string
@@ -42,6 +50,14 @@ export type RuleVersionPayload = {
 }
 
 type RuleActionPayload = {
+  start_inactive?: boolean
+  upload_limit_bytes?: number
+  max_jobs?: number
+  seed_time_seconds?: number
+  delete_mode?: string
+  save_path?: string
+  allowed_profiles?: string[]
+  storage_labels?: string[]
   target_mode: RuleTargetMode
   target_instance_id: string | null
   target_group_id: string | null
@@ -61,12 +77,23 @@ export function validateRuleDraft(draft: RuleEditorDraft): RuleEditorErrors {
   if (!Number.isInteger(draft.actions.participationWindowMinutes) || draft.actions.participationWindowMinutes < 1 || draft.actions.participationWindowMinutes > 1440) {
     errors.participationWindowMinutes = '参与窗口需为 1 到 1440 分钟。'
   }
+  const a = draft.actions
+  if (![a.uploadLimitBytes ?? 0, a.maxJobs ?? 0, a.seedTimeSeconds ?? 0].every(v => Number.isSafeInteger(v) && v >= 0) || (a.maxJobs ?? 0) > 100000 || (a.uploadLimitBytes ?? 0) > 1e12 || (a.seedTimeSeconds ?? 0) > 315360000) errors.limits = '限速、批次数量和做种时长需为有效的非负数。'
+  if ((a.seedTimeSeconds ?? 0) > 0 && !['TORRENT_ONLY', 'WITH_FILES'].includes(a.deleteMode ?? '')) errors.limits = '启用定时删除前，请明确是否删除下载文件。'
   return errors
 }
 
 export function toRuleVersionPayload(draft: RuleEditorDraft, revision = draft.revision + 1): RuleVersionPayload {
   const actions: RuleActionPayload = {
     ...draft.extraActions,
+    start_inactive: draft.actions.startInactive ?? false,
+    upload_limit_bytes: draft.actions.uploadLimitBytes ?? 0,
+    max_jobs: draft.actions.maxJobs ?? 0,
+    seed_time_seconds: draft.actions.seedTimeSeconds ?? 0,
+    delete_mode: (draft.actions.seedTimeSeconds ?? 0) > 0 ? draft.actions.deleteMode ?? '' : '',
+    save_path: draft.actions.savePath ?? '',
+    allowed_profiles: draft.actions.allowedProfiles ?? [],
+    storage_labels: draft.actions.storageLabels ?? [],
     target_mode: draft.actions.targetMode,
     target_instance_id: draft.actions.targetMode === 'FIXED_INSTANCE' ? draft.actions.targetInstanceId : null,
     target_group_id: draft.actions.targetMode === 'INSTANCE_GROUP' ? draft.actions.targetGroupId : null,
@@ -106,6 +133,14 @@ export function fromRuleVersionPayload(payload: RuleVersionPayload): RuleEditorD
     conditionTree,
     extraActions: actions as unknown as Record<string, unknown>,
     actions: {
+      startInactive: actions.start_inactive ?? false,
+      uploadLimitBytes: actions.upload_limit_bytes ?? 0,
+      maxJobs: actions.max_jobs ?? 0,
+      seedTimeSeconds: actions.seed_time_seconds ?? 0,
+      deleteMode: actions.delete_mode ?? '',
+      savePath: actions.save_path ?? '',
+      allowedProfiles: actions.allowed_profiles ?? [],
+      storageLabels: actions.storage_labels ?? [],
       targetMode: actions.target_mode,
       targetInstanceId: actions.target_instance_id ?? '',
       targetGroupId: actions.target_group_id ?? '',

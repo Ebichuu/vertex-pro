@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { ApiRequestError } from '../../generated/api-client'
 import {
   EMPTY_SITE_FORM,
   formatFeedHealth,
@@ -24,14 +25,36 @@ type SitesRssPageProps = {
   onCreateSite?: (form: SiteFormValues) => Promise<SiteCreationResult>
   onUpdateFeed?: (feed: Feed, patch: FeedPatch) => Promise<Feed>
   onTestFeed?: (feed: Feed) => Promise<FeedPreview>
+  onArchiveSite?: (site: Site) => Promise<void>
+  onArchiveFeed?: (feed: Feed) => Promise<void>
+  onUpdateSite?: (site: Site, enabled: boolean, credentialRef?: string) => Promise<Site>
 }
 
 function cloneSites(sites: ReadonlyArray<Site>): Site[] {
   return sites.map((site) => ({ ...site, feeds: site.feeds.map((feed) => ({ ...feed })) }))
 }
 
-export function SitesRssPage({ initialSites, onChange, onCreateSite, onUpdateFeed, onTestFeed }: SitesRssPageProps) {
+function configurationError(error: unknown, fallback: string): string {
+  return error instanceof ApiRequestError && error.body.message ? error.body.message : fallback
+}
+
+function CredentialRefInput({ site, onSave }: { site: Site; onSave: (site: Site, value: string) => Promise<void> }) {
+  const [value, setValue] = useState(site.credentialRef)
+  const [focused, setFocused] = useState(false)
+  const [saving, setSaving] = useState(false)
+  useEffect(() => { if (!focused && !saving) setValue(site.credentialRef) }, [site.credentialRef, focused, saving])
+  return <label>凭据引用<input value={value} placeholder="env:VERTEX_SITE_ZMPT" disabled={saving} onFocus={() => setFocused(true)} onChange={event => setValue(event.target.value)} onBlur={() => {
+    setFocused(false)
+    if (value === site.credentialRef) return
+    setSaving(true)
+    void onSave(site, value).finally(() => setSaving(false))
+  }} /></label>
+}
+
+export function SitesRssPage({ initialSites, onChange, onCreateSite, onUpdateFeed, onTestFeed, onUpdateSite, onArchiveSite, onArchiveFeed }: SitesRssPageProps) {
   const [sites, setSites] = useState(() => cloneSites(initialSites))
+  const sitesRef = useRef(sites)
+  useEffect(() => { sitesRef.current = cloneSites(initialSites); setSites(sitesRef.current) }, [initialSites])
   const [selectedSiteId, setSelectedSiteId] = useState(initialSites[0]?.id ?? '')
   const [form, setForm] = useState<SiteFormValues>(EMPTY_SITE_FORM)
   const [errors, setErrors] = useState<ReturnType<typeof validateSiteForm>>({})
@@ -43,6 +66,7 @@ export function SitesRssPage({ initialSites, onChange, onCreateSite, onUpdateFee
 
   const selectedSite = sites.find((site) => site.id === selectedSiteId) ?? sites[0]
   const commit = (nextSites: Site[]) => {
+    sitesRef.current = nextSites
     setSites(nextSites)
     onChange?.(nextSites)
   }
@@ -84,7 +108,7 @@ export function SitesRssPage({ initialSites, onChange, onCreateSite, onUpdateFee
         enabled: form.enabled,
         feeds: [feed],
       } }
-      commit([...sites, result.site])
+      commit([...sitesRef.current.filter(site => site.id !== result.site.id), result.site])
       setSelectedSiteId(result.site.id)
       setForm(EMPTY_SITE_FORM)
       setErrors({})
@@ -97,10 +121,28 @@ export function SitesRssPage({ initialSites, onChange, onCreateSite, onUpdateFee
     }
   }
 
-  const toggleSite = (siteId: string, enabled: boolean) => {
-    commit(sites.map((site) => site.id === siteId ? { ...site, enabled } : site))
+  const toggleSite = async (siteId: string, enabled: boolean) => {
+    const site = sites.find(item => item.id === siteId)
+    if (!site) return
+    try {
+      const updated = onUpdateSite ? await onUpdateSite(site, enabled) : { ...site, enabled }
+      commit(sitesRef.current.map(item => item.id === siteId ? updated : item))
+    } catch (error) { setNotice(configurationError(error, '站点更新失败，请刷新后重试。')) }
   }
 
+  const archive = async (site: Site, feed?: Feed) => {
+    if (!window.confirm(feed ? `删除 RSS“${feed.name}”？历史记录会保留。` : `删除站点“${site.name}”及所属 RSS 和规则？历史记录会保留。`)) return
+    try {
+      if (feed && onArchiveFeed) { await onArchiveFeed(feed); commit(sitesRef.current.map(item => item.id === site.id ? { ...item, feeds: item.feeds.filter(f => f.id !== feed.id) } : item)) }
+      else if (onArchiveSite) { await onArchiveSite(site); const remaining = sitesRef.current.filter(item => item.id !== site.id); commit(remaining); if (selectedSiteId === site.id) setSelectedSiteId(remaining[0]?.id ?? '') }
+      setPreview(null); setNotice('配置已删除，历史记录已保留。')
+    } catch (error) { setNotice(configurationError(error, '删除失败，配置可能已更新，请刷新后重试。')) }
+  }
+  const saveCredential = async (site: Site, credentialRef: string) => {
+    if (!onUpdateSite) return
+    try { const saved = await onUpdateSite(site, site.enabled, credentialRef); commit(sitesRef.current.map(item => item.id === site.id ? saved : item)); setNotice('凭据引用已保存。') }
+    catch (error) { setNotice(configurationError(error, '凭据引用保存失败，请检查格式或刷新后重试。')) }
+  }
   const toggleFeed = async (feedId: string, enabled: boolean) => {
     const feed = sites.flatMap((site) => site.feeds).find((candidate) => candidate.id === feedId)
     if (!feed) return
@@ -108,7 +150,7 @@ export function SitesRssPage({ initialSites, onChange, onCreateSite, onUpdateFee
     setNotice(null)
     try {
       const updated = onUpdateFeed ? await onUpdateFeed(feed, { enabled }) : { ...feed, enabled }
-      commit(sites.map((site) => ({ ...site, feeds: site.feeds.map((candidate) => candidate.id === feedId ? updated : candidate) })))
+      commit(sitesRef.current.map((site) => ({ ...site, feeds: site.feeds.map((candidate) => candidate.id === feedId ? updated : candidate) })))
       setNotice('RSS 已更新。')
     } catch (error) {
       setNotice(`RSS 更新失败：${String(error)}`)
@@ -138,7 +180,7 @@ export function SitesRssPage({ initialSites, onChange, onCreateSite, onUpdateFee
           <h1 id="sites-rss-title">站点与 RSS</h1>
           <p className="muted">管理站点来源、轮询节奏和只读测试结果。</p>
         </div>
-        <span className="page-badge">LOCAL ONLY</span>
+        <span className="page-badge">RSS</span>
       </header>
 
       {notice && <p className="sites-rss-notice" role="status">{notice}</p>}
@@ -161,7 +203,7 @@ export function SitesRssPage({ initialSites, onChange, onCreateSite, onUpdateFee
             {errors.feedName && <p className="field-error" role="alert">{errors.feedName}</p>}
             <label>RSS 地址<input type="url" value={form.feedUrl} onChange={(event) => updateForm('feedUrl', event.target.value)} placeholder="https://example.test/rss.xml" aria-invalid={Boolean(errors.feedUrl)} /></label>
             {errors.feedUrl && <p className="field-error" role="alert">{errors.feedUrl}</p>}
-            <label>凭据引用<span className="field-hint">只保存引用，不保存密钥</span><input value={form.credentialRef} onChange={(event) => updateForm('credentialRef', event.target.value)} placeholder="secret/site-rss" /></label>
+            <label>凭据引用<span className="field-hint">引用专用环境变量；内容为 Cookie / Authorization 的 JSON 对象</span><input value={form.credentialRef} onChange={(event) => updateForm('credentialRef', event.target.value)} placeholder="env:VERTEX_SITE_ZMPT" /></label>
             <label>轮询周期（分钟）<input type="number" min="1" max="1440" value={form.pollMinutes} onChange={(event) => updateForm('pollMinutes', event.target.value)} aria-invalid={Boolean(errors.pollMinutes)} /></label>
             {errors.pollMinutes && <p className="field-error" role="alert">{errors.pollMinutes}</p>}
           </div>
@@ -185,8 +227,8 @@ export function SitesRssPage({ initialSites, onChange, onCreateSite, onUpdateFee
           {selectedSite && <>
             <div className="site-meta">
               <div><span>站点地址</span><strong>{selectedSite.baseUrl}</strong></div>
-              <div><span>凭据引用</span><strong>{selectedSite.credentialRef || '未配置'}</strong></div>
-              <label className="checkbox-field"><input type="checkbox" checked={selectedSite.enabled} onChange={(event) => toggleSite(selectedSite.id, event.target.checked)} />站点启用</label>
+              <CredentialRefInput key={selectedSite.id} site={selectedSite} onSave={saveCredential} />
+              <label className="checkbox-field"><input type="checkbox" checked={selectedSite.enabled} onChange={(event) => toggleSite(selectedSite.id, event.target.checked)} />站点启用</label>{onArchiveSite && <button type="button" onClick={() => { void archive(selectedSite) }}>删除站点</button>}
             </div>
             <div className="sites-rss-table-wrap">
               <table className="sites-rss-table" aria-label="站点与 RSS 列表">
@@ -199,7 +241,7 @@ export function SitesRssPage({ initialSites, onChange, onCreateSite, onUpdateFee
                     <td data-label="轮询">{formatPollInterval(feed.pollMinutes)}</td>
                     <td data-label="最近拉取">{feed.lastSuccess ? feed.lastSuccess.slice(0, 10) : '未运行'}</td>
                     <td data-label="发现">{feed.discoveredCount}</td>
-                    <td data-label="操作"><button type="button" className="ghost-button" onClick={() => { void testFeed(feed) }} disabled={testingFeedId === feed.id}>{testingFeedId === feed.id ? '测试中…' : '测试 RSS'}</button></td>
+                    <td data-label="操作"><button type="button" className="ghost-button" onClick={() => { void testFeed(feed) }} disabled={testingFeedId === feed.id}>{testingFeedId === feed.id ? '测试中…' : '测试 RSS'}</button>{onArchiveFeed && <button type="button" className="ghost-button" onClick={() => { void archive(selectedSite, feed) }}>删除 RSS</button>}</td>
                   </tr>
                 })}</tbody>
               </table>

@@ -51,6 +51,18 @@ export class ApiClient {
     return this.request<T>(`/api/v1/jobs/${encodeURIComponent(id)}/acknowledge-unknown`, { method: "POST", body: JSON.stringify(opts?.body ?? {}), headers: {"Content-Type": "application/json", ...(opts?.headers ?? {})}, signal: opts?.signal }, opts?.query);
   }
 
+  async archiveFeed<T = JsonObject>(id: string, opts?: RequestOptions): Promise<T> {
+    return this.request<T>(`/api/v1/feeds/${encodeURIComponent(id)}`, { method: "DELETE", headers: opts?.headers, signal: opts?.signal }, opts?.query);
+  }
+
+  async archiveRule<T = JsonObject>(id: string, opts?: RequestOptions): Promise<T> {
+    return this.request<T>(`/api/v1/rules/${encodeURIComponent(id)}`, { method: "DELETE", headers: opts?.headers, signal: opts?.signal }, opts?.query);
+  }
+
+  async archiveSite<T = JsonObject>(id: string, opts?: RequestOptions): Promise<T> {
+    return this.request<T>(`/api/v1/sites/${encodeURIComponent(id)}`, { method: "DELETE", headers: opts?.headers, signal: opts?.signal }, opts?.query);
+  }
+
   async createFeed<T = JsonObject>(opts?: RequestOptions): Promise<T> {
     return this.request<T>(`/api/v1/feeds`, { method: "POST", body: JSON.stringify(opts?.body ?? {}), headers: {"Content-Type": "application/json", ...(opts?.headers ?? {})}, signal: opts?.signal }, opts?.query);
   }
@@ -127,6 +139,10 @@ export class ApiClient {
     return this.request<T>(`/api/v1/feeds`, { method: "GET", headers: opts?.headers, signal: opts?.signal }, opts?.query);
   }
 
+  async listInstanceGroups<T = JsonObject>(opts?: RequestOptions): Promise<T> {
+    return this.request<T>(`/api/v1/instance-groups`, { method: "GET", headers: opts?.headers, signal: opts?.signal }, opts?.query);
+  }
+
   async listInstances<T = JsonObject>(opts?: RequestOptions): Promise<T> {
     return this.request<T>(`/api/v1/instances`, { method: "GET", headers: opts?.headers, signal: opts?.signal }, opts?.query);
   }
@@ -155,6 +171,10 @@ export class ApiClient {
     return this.request<T>(`/api/v1/instances/${encodeURIComponent(id)}/probe`, { method: "POST", body: JSON.stringify(opts?.body ?? {}), headers: {"Content-Type": "application/json", ...(opts?.headers ?? {})}, signal: opts?.signal }, opts?.query);
   }
 
+  async saveInstanceGroup<T = JsonObject>(opts?: RequestOptions): Promise<T> {
+    return this.request<T>(`/api/v1/instance-groups`, { method: "POST", body: JSON.stringify(opts?.body ?? {}), headers: {"Content-Type": "application/json", ...(opts?.headers ?? {})}, signal: opts?.signal }, opts?.query);
+  }
+
   async streamEvents(opts?: RequestOptions): Promise<Response> {
     return this.fetchImpl.call(globalThis, this.buildUrl(`/api/v1/events/stream`, opts?.query), { method: "GET", headers: opts?.headers, signal: opts?.signal });
   }
@@ -173,6 +193,10 @@ export class ApiClient {
 
   async updateSettings<T = JsonObject>(opts?: RequestOptions): Promise<T> {
     return this.request<T>(`/api/v1/settings`, { method: "PUT", body: JSON.stringify(opts?.body ?? {}), headers: {"Content-Type": "application/json", ...(opts?.headers ?? {})}, signal: opts?.signal }, opts?.query);
+  }
+
+  async updateSite<T = JsonObject>(id: string, opts?: RequestOptions): Promise<T> {
+    return this.request<T>(`/api/v1/sites/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify(opts?.body ?? {}), headers: {"Content-Type": "application/json", ...(opts?.headers ?? {})}, signal: opts?.signal }, opts?.query);
   }
 
 }

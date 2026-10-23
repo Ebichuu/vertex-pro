@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   sortRules,
   type RulePatch,
@@ -12,20 +12,23 @@ type RuleListProps = {
   onChange?: (rules: RuleSummary[]) => void
   onUpdateRule?: (rule: RuleSummary, expectedRevision: number, patch: RulePatch) => RuleUpdateResult | Promise<RuleUpdateResult>
   onEdit?: (rule: RuleSummary) => void
+  onArchiveRule?: (rule: RuleSummary) => Promise<void>
   onDuplicateRule?: (rule: RuleSummary) => Promise<RuleSummary>
 }
 
 type Conflict = { ruleName: string; currentRevision: number }
 
-export function RuleList({ rules: initialRules, onChange, onUpdateRule, onEdit, onDuplicateRule }: RuleListProps) {
+export function RuleList({ rules: initialRules, onChange, onUpdateRule, onEdit, onDuplicateRule, onArchiveRule }: RuleListProps) {
   const [rules, setRules] = useState(initialRules)
+  const rulesRef = useRef(initialRules)
+  useEffect(() => { rulesRef.current = initialRules; setRules(initialRules) }, [initialRules])
   const [conflict, setConflict] = useState<Conflict | null>(null)
   const [requestError, setRequestError] = useState<string | null>(null)
   const [busyRuleId, setBusyRuleId] = useState<string | null>(null)
   const sortedRules = useMemo(() => sortRules(rules), [rules])
   const enabledCount = rules.filter((rule) => rule.enabled).length
   const totalMatches = rules.reduce((total, rule) => total + rule.matchCount, 0)
-  const commit = (nextRules: RuleSummary[]) => { setRules(nextRules); onChange?.(nextRules) }
+  const commit = (nextRules: RuleSummary[]) => { rulesRef.current = nextRules; setRules(nextRules); onChange?.(nextRules) }
 
   const applyPatch = async (rule: RuleSummary, patch: RulePatch) => {
     if (!onUpdateRule || busyRuleId !== null) return
@@ -36,10 +39,10 @@ export function RuleList({ rules: initialRules, onChange, onUpdateRule, onEdit, 
       const result = await onUpdateRule(rule, rule.revision, patch)
       if (!result.ok) {
         setConflict({ ruleName: rule.name, currentRevision: result.current.revision })
-        commit(rules.map((item) => item.id === rule.id ? result.current : item))
+        commit(rulesRef.current.map((item) => item.id === rule.id ? result.current : item))
         return
       }
-      commit(rules.map((item) => item.id === rule.id ? result.rule : item))
+      commit(rulesRef.current.map((item) => item.id === rule.id ? result.rule : item))
     } catch (error) {
       setRequestError(`规则更新失败：${ruleError(error)}`)
     } finally {
@@ -53,12 +56,19 @@ export function RuleList({ rules: initialRules, onChange, onUpdateRule, onEdit, 
     void applyPatch(rule, { priority })
   }
 
+  const archive = async (rule: RuleSummary) => {
+    if (!onArchiveRule || busyRuleId !== null || !window.confirm(`删除规则“${rule.name}”？将停用其自动策略，已有任务和历史记录会保留。`)) return
+    setBusyRuleId(rule.id); setRequestError(null)
+    try { await onArchiveRule(rule); commit(rulesRef.current.filter(item => item.id !== rule.id)) }
+    catch (error) { setRequestError(`删除失败：${ruleError(error)}`) }
+    finally { setBusyRuleId(null) }
+  }
   const copy = async (rule: RuleSummary) => {
     if (!onDuplicateRule || busyRuleId !== null) return
     setBusyRuleId(rule.id)
     setConflict(null)
     setRequestError(null)
-    try { commit([...rules, await onDuplicateRule(rule)]) }
+    try { const duplicate = await onDuplicateRule(rule); commit([...rulesRef.current.filter(item => item.id !== duplicate.id), duplicate]) }
     catch (error) { setRequestError(`规则复制失败：${ruleError(error)}`) }
     finally { setBusyRuleId(null) }
   }
@@ -74,12 +84,12 @@ export function RuleList({ rules: initialRules, onChange, onUpdateRule, onEdit, 
     {rules.length > 0 && <>
       <div className="rule-list-columns" aria-hidden="true"><span>规则</span><span>命中</span><span>目标 qB</span><span>优先级</span><span>启用</span><span>操作</span></div>
       <div className="rule-list-items">{sortedRules.map((rule) => <article className="rule-list-item" key={rule.id}>
-        <div className="rule-list-main"><strong>{rule.name}</strong><span>v{rule.revision} · 更新于 {rule.updatedAt.slice(0, 10)}</span></div>
+        <div className="rule-list-main"><strong>{rule.name}</strong><span>v{rule.revision} · 更新于 {rule.updatedAt.slice(0, 10)}{rule.policyStatus ? ` · qui 策略：${rule.policyStatus}` : ''}</span></div>
         <div className="rule-list-field"><span>命中</span><strong>{rule.matchCount}</strong></div>
         <div className="rule-list-field rule-list-target"><span>目标 qB</span><strong>{rule.target}</strong></div>
         <label className="rule-list-priority"><span>优先级</span><input key={`${rule.id}-${rule.revision}`} aria-label={`${rule.name} 优先级`} type="number" min="0" defaultValue={rule.priority} disabled={busyRuleId !== null || !onUpdateRule} onBlur={(event) => changePriority(rule, event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur() }} /></label>
         <label className="rule-list-enabled"><span>启用</span><input aria-label={`${rule.name} 启用`} type="checkbox" checked={rule.enabled} disabled={busyRuleId !== null || !onUpdateRule} onChange={() => { void applyPatch(rule, { enabled: !rule.enabled }) }} /></label>
-        <div className="rule-list-actions">{onEdit && <button type="button" className="ghost-button" onClick={() => onEdit(rule)}>编辑</button>}<button type="button" className="ghost-button" onClick={() => { void copy(rule) }} disabled={busyRuleId !== null || !onDuplicateRule}>复制</button></div>
+        <div className="rule-list-actions">{onEdit && <button type="button" className="ghost-button" onClick={() => onEdit(rule)}>编辑</button>}<button type="button" className="ghost-button" onClick={() => { void copy(rule) }} disabled={busyRuleId !== null || !onDuplicateRule}>复制</button>{onArchiveRule && <button type="button" className="ghost-button" disabled={busyRuleId !== null} onClick={() => { void archive(rule) }}>删除</button>}</div>
       </article>)}</div>
     </>}
   </section>

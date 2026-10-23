@@ -6,8 +6,10 @@ package racejobstore
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/vertex-pro/vertex-pro/internal/ruleaggregate"
 	"time"
 
 	"github.com/vertex-pro/vertex-pro/internal/db"
@@ -67,6 +69,24 @@ func (store *Store) Save(ctx context.Context, job racejob.Job) error {
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	currentAttempt := nullablePointer(job.CurrentAttemptID)
 	return db.RunImmediate(ctx, store.database, func(ctx context.Context, tx *db.ImmediateTx) error {
+		if len(job.RuleSnapshot) > 0 {
+			var decision ruleaggregate.Result
+			if err := json.Unmarshal(job.RuleSnapshot, &decision); err != nil {
+				return err
+			}
+			if decision.Winner.MaxJobs > 0 {
+				var count, existing int
+				if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM race_jobs WHERE job_id=?`, job.ID).Scan(&existing); err != nil {
+					return err
+				}
+				if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM job_rule_snapshots WHERE json_extract(aggregation_json,'$.Winner.RuleID')=?`, decision.Winner.RuleID).Scan(&count); err != nil {
+					return err
+				}
+				if existing == 0 && count >= decision.Winner.MaxJobs {
+					return racejob.ErrBatchLimit
+				}
+			}
+		}
 		result, err := tx.ExecContext(ctx, `INSERT INTO race_jobs(job_id, source_id, identity_key, job_state, rule_state, torrent_state, placement_state, observation_state, preparation_revision, current_attempt_id, participation_deadline, observation_deadline, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(job_id) DO UPDATE SET job_state=excluded.job_state, rule_state=excluded.rule_state, torrent_state=excluded.torrent_state, placement_state=excluded.placement_state, observation_state=excluded.observation_state, preparation_revision=excluded.preparation_revision, current_attempt_id=excluded.current_attempt_id, updated_at=excluded.updated_at`,
 			job.ID, job.SourceID, job.IdentityKey, job.JobState, job.RuleState, job.TorrentState, job.PlacementState, job.ObservationState, job.PreparationRevision, currentAttempt, formatTime(job.ParticipationDeadline), formatTime(job.ObservationDeadline), now, now)

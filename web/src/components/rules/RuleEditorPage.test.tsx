@@ -64,4 +64,20 @@ describe('UI-05 Rule Editor', () => {
     const groupDraft = { ...draft, actions: { ...draft.actions, targetMode: 'INSTANCE_GROUP' as const, targetInstanceId: 'qb-a', targetGroupId: 'fast' } }
     expect(fromRuleVersionPayload(toRuleVersionPayload(groupDraft, 7))).toMatchObject({ revision: 7, actions: { targetMode: 'INSTANCE_GROUP', targetInstanceId: '', targetGroupId: 'fast' } })
   })
+
+  it('saves upload limit, batch cap and timed deletion in server units', async () => {
+    const onSave = vi.fn((payload) => fromRuleVersionPayload(payload))
+    render(<RuleEditorPage initialDraft={draft} instances={instances} groups={groups} onSave={onSave} />)
+    fireEvent.change(screen.getByRole('spinbutton', { name: /上传限速/ }), { target: { value: '100' } })
+    fireEvent.change(screen.getByRole('spinbutton', { name: /累计任务上限/ }), { target: { value: '10' } })
+    fireEvent.change(screen.getByRole('spinbutton', { name: /做种超过多少小时删除/ }), { target: { value: '1' } })
+    fireEvent.click(screen.getByRole('button', { name: '保存规则' }))
+    expect(await screen.findByText('启用定时删除前，请明确是否删除下载文件。')).toBeInTheDocument()
+    expect(onSave).not.toHaveBeenCalled()
+    fireEvent.change(screen.getByRole('combobox', { name: '到期删除方式' }), { target: { value: 'TORRENT_ONLY' } })
+    expect(screen.queryByText('启用定时删除前，请明确是否删除下载文件。')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '保存规则' }))
+    expect(await screen.findByText('规则已保存为 v4。')).toBeInTheDocument()
+    expect(JSON.parse(onSave.mock.calls[0][0].action_set_json)).toMatchObject({ upload_limit_bytes: 100_000_000, max_jobs: 10, seed_time_seconds: 3600, delete_mode: 'TORRENT_ONLY', start_inactive: false })
+  })
 })

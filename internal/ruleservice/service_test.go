@@ -101,6 +101,24 @@ func TestServiceUpdateUsesRevisionGuard(t *testing.T) {
 	}
 }
 
+func TestCreateRejectsArchivedSiteAndUnknownActions(t *testing.T) {
+	database := openDatabase(t)
+	defer database.Close()
+	service, _ := New(database, nil)
+	if _, err := database.Exec(`INSERT INTO sites(site_id,name,base_url,created_at,updated_at,archived) VALUES('archived','Archived','https://example.test','now','now',1)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Create(context.Background(), CreateInput{ID: "orphan", SiteID: "archived", Name: "Orphan"}); !errors.Is(err, ErrSiteNotFound) {
+		t.Fatalf("archived site accepted: %v", err)
+	}
+	for _, actions := range []string{`{"unknown_action":true}`, `{"participation_window_minutes":525601}`} {
+		definition := json.RawMessage(`{"action_set_json":` + actions + `}`)
+		if _, err := service.Create(context.Background(), CreateInput{ID: "invalid-action", Name: "Invalid", Definition: definition}); err == nil {
+			t.Fatalf("invalid actions accepted: %s", actions)
+		}
+	}
+}
+
 func openDatabase(t *testing.T) *sql.DB {
 	t.Helper()
 	database, err := db.Open(context.Background(), db.Config{Path: filepath.Join(t.TempDir(), "ruleservice.db"), MaxOpenConns: 1, MaxIdleConns: 1})

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { createRootRoute, createRoute, createRouter, Link, Outlet, useNavigate } from '@tanstack/react-router'
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { AppShell } from '../components/shell/AppShell'
@@ -54,7 +54,8 @@ function parseSite(value: unknown): Site {
     id: siteId,
     name: raw.name,
     baseUrl: raw.base_url,
-    credentialRef: '',
+    credentialRef: typeof raw.credential_ref === 'string' ? raw.credential_ref : '',
+    updatedAt: typeof raw.updated_at === 'string' ? raw.updated_at : '',
     enabled: raw.enabled,
     feeds: rawFeeds.map((feed) => parseFeed(feed, siteId)),
   }
@@ -74,9 +75,9 @@ function parseFeed(value: unknown, fallbackSiteId: string): Feed {
     enabled: raw.enabled,
     pollMinutes: typeof raw.poll_minutes === 'number' ? raw.poll_minutes : 15,
     updatedAt: typeof raw.updated_at === 'string' ? raw.updated_at : '',
-    lastSuccess: null,
-    lastError: null,
-    discoveredCount: 0,
+    lastSuccess: typeof raw.last_success_at === 'string' ? raw.last_success_at : null,
+    lastError: typeof raw.last_error_code === 'string' && raw.last_error_code ? raw.last_error_code : null,
+    discoveredCount: typeof raw.last_entries === 'number' ? raw.last_entries : 0,
   }
 }
 
@@ -137,7 +138,7 @@ async function testFeedOnAPI(feed: Feed): Promise<FeedPreview> {
 async function createSiteOnAPI(form: CreateSiteForm, existingSiteCount: number): Promise<CreateSiteResult> {
   const siteId = siteIdForName(form.siteName, existingSiteCount)
   const sitePayload = await apiClient.createSite<unknown>({
-    body: { id: siteId, name: form.siteName.trim(), base_url: form.siteUrl.trim(), enabled: form.enabled },
+    body: { id: siteId, name: form.siteName.trim(), base_url: form.siteUrl.trim(), enabled: form.enabled, credential_ref: form.credentialRef.trim() },
     headers: csrfHeaders(),
   })
   const site = parseCreatedSite(form, sitePayload)
@@ -203,7 +204,12 @@ function Sites() {
   const query = useQuery({
     queryKey: ['sites'],
     queryFn: () => apiClient.listSites<SitesResponse>(),
+    refetchInterval: 15000,
   })
+  const siteRows = useMemo(() => query.data ? parseSites(query.data) : [], [query.data])
+  const refreshAfter = async <T,>(operation: () => Promise<T>): Promise<T> => {
+    try { return await operation() } finally { void query.refetch() }
+  }
   if (query.isPending) {
     return (
       <section aria-labelledby="sites-title" className="panel">
@@ -221,9 +227,15 @@ function Sites() {
     )
   }
   return <SitesRssPage
-    initialSites={parseSites(query.data)}
-    onCreateSite={(form) => createSiteOnAPI(form, parseSites(query.data).length)}
-    onUpdateFeed={updateFeedOnAPI}
+    initialSites={siteRows}
+    onCreateSite={(form) => refreshAfter(() => createSiteOnAPI(form, siteRows.length))}
+    onUpdateSite={(site, enabled, credentialRef) => refreshAfter(async () => {
+      const saved = await apiClient.updateSite<{updated_at: string}>(site.id, { body: { enabled, credential_ref: credentialRef }, headers: { ...csrfHeaders(), 'If-Match': `"${site.updatedAt}"` } })
+      return { ...site, enabled, credentialRef: credentialRef ?? site.credentialRef, updatedAt: saved.updated_at }
+    })}
+    onArchiveSite={site => refreshAfter(async () => { await apiClient.archiveSite(site.id, { headers: { ...csrfHeaders(), 'If-Match': `"${site.updatedAt}"` } }) })}
+    onArchiveFeed={feed => refreshAfter(async () => { await apiClient.archiveFeed(feed.id, { headers: { ...csrfHeaders(), 'If-Match': `"${feed.updatedAt}"` } }) })}
+    onUpdateFeed={(feed, patch) => refreshAfter(() => updateFeedOnAPI(feed, patch))}
     onTestFeed={testFeedOnAPI}
   />
 }

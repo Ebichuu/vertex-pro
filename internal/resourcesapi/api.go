@@ -1,6 +1,7 @@
 package resourcesapi
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 	"github.com/vertex-pro/vertex-pro/internal/historyproject"
 	"github.com/vertex-pro/vertex-pro/internal/historytimeline"
 	"github.com/vertex-pro/vertex-pro/internal/httpapi"
+	"github.com/vertex-pro/vertex-pro/internal/observability"
 	"github.com/vertex-pro/vertex-pro/internal/realtimecards"
 	"github.com/vertex-pro/vertex-pro/internal/rssservice"
 	"github.com/vertex-pro/vertex-pro/internal/ruleservice"
@@ -39,6 +41,8 @@ type Deps struct {
 	Version        string
 	// SnapshotRoot enables server-verified evidence for manual exception actions.
 	SnapshotRoot string
+	// SyncPolicies confirms that managed qui deletion policies are disabled.
+	SyncPolicies func(context.Context) error
 }
 
 // Router 返回资源端点与 acknowledge-unknown 命令端点的处理器。
@@ -65,6 +69,10 @@ func Router(deps Deps) http.Handler {
 	mux.Handle("GET /api/v1/settings/diagnostics", settingsGuard(deps, deps.downloadDiagnostics))
 	mux.Handle("GET /api/v1/sites", guard(deps.listSites))
 	mux.Handle("POST /api/v1/sites", guard(deps.createSite))
+	mux.Handle("PUT /api/v1/sites/{id}", guard(deps.updateSite))
+	mux.Handle("DELETE /api/v1/sites/{id}", guard(deps.archiveResource))
+	mux.Handle("DELETE /api/v1/feeds/{id}", guard(deps.archiveResource))
+	mux.Handle("DELETE /api/v1/rules/{id}", guard(deps.archiveResource))
 	mux.Handle("GET /api/v1/feeds", guard(deps.listFeeds))
 	mux.Handle("GET /api/v1/feeds/{id}", guard(deps.getFeed))
 	mux.Handle("POST /api/v1/feeds", guard(deps.createFeed))
@@ -79,6 +87,8 @@ func Router(deps Deps) http.Handler {
 	mux.Handle("GET /api/v1/jobs", guard(deps.listJobs))
 	mux.Handle("GET /api/v1/jobs/{id}", guard(deps.getJob))
 	mux.Handle("GET /api/v1/instances", guard(deps.listInstances))
+	mux.Handle("GET /api/v1/instance-groups", guard(deps.listGroups))
+	mux.Handle("POST /api/v1/instance-groups", guard(deps.saveGroup))
 	mux.Handle("GET /api/v1/commands/{command_id}", guard(deps.getCommand))
 	mux.Handle("GET /api/v1/stats/downloaders/summary", guard(deps.statsSummary))
 	mux.Handle("GET /api/v1/stats/downloaders/timeseries", guard(deps.statsSummary))
@@ -140,7 +150,7 @@ func (d Deps) listSites(response http.ResponseWriter, request *http.Request) {
 	}
 	feedsBySite := make(map[string][]map[string]any, len(sites))
 	for _, feed := range feeds {
-		feedsBySite[feed.SiteID] = append(feedsBySite[feed.SiteID], feedPayload(feed))
+		feedsBySite[feed.SiteID] = append(feedsBySite[feed.SiteID], d.feedRuntimePayload(request, feed))
 	}
 	items := make([]map[string]any, 0, len(sites))
 	for _, site := range sites {
@@ -149,7 +159,7 @@ func (d Deps) listSites(response http.ResponseWriter, request *http.Request) {
 			siteFeeds = []map[string]any{}
 		}
 		items = append(items, map[string]any{
-			"id": site.ID, "name": site.Name, "base_url": site.BaseURL, "enabled": site.Enabled,
+			"credential_ref": site.CredentialRef, "updated_at": site.UpdatedAt, "id": site.ID, "name": site.Name, "base_url": site.BaseURL, "enabled": site.Enabled,
 			"feeds": siteFeeds,
 		})
 	}
@@ -173,7 +183,7 @@ func (d Deps) listFeeds(response http.ResponseWriter, request *http.Request) {
 	}
 	items := make([]map[string]any, 0, len(feeds))
 	for _, feed := range feeds {
-		items = append(items, feedPayload(feed))
+		items = append(items, d.feedRuntimePayload(request, feed))
 	}
 	d.writePage(response, request, items, nil)
 }
@@ -187,7 +197,7 @@ func (d Deps) rssService() (rssservice.Service, error) {
 
 func feedPayload(feed rssservice.Feed) map[string]any {
 	return map[string]any{
-		"id": feed.ID, "site_id": feed.SiteID, "name": feed.Name, "feed_url": feed.FeedURL,
+		"id": feed.ID, "site_id": feed.SiteID, "name": feed.Name, "feed_url": observability.PublicURL(feed.FeedURL),
 		"enabled": feed.Enabled, "poll_minutes": feed.PollMinutes, "etag": nullableString(feed.ETag), "last_modified": nullableString(feed.LastModified),
 		"updated_at": feed.UpdatedAt,
 	}
@@ -217,7 +227,35 @@ func (d Deps) listRules(response http.ResponseWriter, request *http.Request) {
 	}
 	items := make([]map[string]any, 0, len(rules))
 	for _, rule := range rules {
-		items = append(items, rulePayload(rule))
+		payload := rulePayload(rule)
+		var count int
+		if err := d.Database.QueryRowContext(request.Context(), `SELECT COUNT(*) FROM job_rule_snapshots s, json_each(s.aggregation_json, '$.Matches') m WHERE json_extract(m.value, '$.RuleID')=?`, rule.ID).Scan(&count); err != nil {
+			httpapi.WriteError(response, request, "INTERNAL_ERROR", "read rule matches failed")
+			return
+		}
+		payload["match_count"] = count
+		var bindings, active, failed int
+		if err := d.Database.QueryRowContext(request.Context(), `SELECT COUNT(*),COALESCE(SUM(enabled),0),COALESCE(SUM(CASE WHEN last_error_code!='' THEN 1 ELSE 0 END),0) FROM qui_policy_bindings WHERE rule_id=?`, rule.ID).Scan(&bindings, &active, &failed); err != nil {
+			httpapi.WriteError(response, request, "INTERNAL_ERROR", "read policy status failed")
+			return
+		}
+		policyStatus := ""
+		if bindings > 0 {
+			switch {
+			case failed > 0:
+				policyStatus = "qui 策略同步失败"
+			case !rule.Enabled && active > 0:
+				policyStatus = "等待停用 qui 策略"
+			case active > 0:
+				policyStatus = "qui 删除策略已启用"
+			default:
+				policyStatus = "qui 删除策略已停用"
+			}
+		} else if match, err := ruleservice.MatchFor(rule, ""); err == nil && match.SeedTimeSeconds > 0 {
+			policyStatus = "首次投递前配置 qui 删除策略"
+		}
+		payload["policy_status"] = policyStatus
+		items = append(items, payload)
 	}
 	d.writePage(response, request, items, func(item map[string]any) string {
 		return fmt.Sprintf("%020d:%020d:%s", int64(^uint64(0)>>1)-int64(item["priority"].(int)), int64(^uint64(0)>>1)-int64(item["revision"].(int)), item["id"])

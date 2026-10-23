@@ -1,4 +1,5 @@
 export type Site = {
+  updatedAt?: string
   id: string
   name: string
   baseUrl: string

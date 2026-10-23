@@ -21,6 +21,18 @@ type Event struct {
 // Stage 把内部事件映射为用户可读的阶段名（§16.6：普通视图无内部术语）。
 func (e Event) Stage() string {
 	switch e.EventType {
+	case "observation":
+		switch e.ToState {
+		case "DELETED":
+			return "删除"
+		case "SEEDING", "COMPLETED":
+			return "上传"
+		case "DOWNLOADING":
+			return "下载"
+		case "DISCOVERED":
+			return "发现"
+		}
+		return "状态变更"
 	case "job.preparation.changed":
 		return "准备"
 	case "job.state.changed", "attempt.state.changed":
@@ -49,7 +61,10 @@ func ForJob(ctx context.Context, database *sql.DB, jobID string) ([]Event, error
 	if database == nil {
 		return nil, fmt.Errorf("database is required")
 	}
-	rows, err := database.QueryContext(ctx, `SELECT event_id, event_type, COALESCE(from_state,''), COALESCE(to_state,''), COALESCE(reason_code,''), occurred_at FROM race_events WHERE job_id = ? ORDER BY occurred_at, event_id`, jobID)
+	rows, err := database.QueryContext(ctx, `SELECT event_id,event_type,from_state,to_state,reason_code,occurred_at FROM (
+ SELECT event_id,event_type,COALESCE(from_state,'') AS from_state,COALESCE(to_state,'') AS to_state,COALESCE(reason_code,'') AS reason_code,occurred_at FROM race_events WHERE job_id=?
+ UNION ALL SELECT 1000000000000+id,'observation','',state,'SYNC_SNAPSHOT',observed_at FROM job_observation_events WHERE job_id=?
+ ) ORDER BY julianday(occurred_at),event_id`, jobID, jobID)
 	if err != nil {
 		return nil, fmt.Errorf("query timeline: %w", err)
 	}

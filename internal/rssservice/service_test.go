@@ -122,6 +122,38 @@ func TestServiceUpdatesFeedWithAtomicETag(t *testing.T) {
 	}
 }
 
+func TestFeedUpdateInvalidatesETagAndRejectsArchivedSite(t *testing.T) {
+	database := openDatabase(t)
+	defer database.Close()
+	clock := time.Date(2026, 10, 23, 0, 0, 0, 0, time.UTC)
+	service, _ := NewWithClock(database, func() time.Time { return clock })
+	site, err := service.CreateSite(context.Background(), CreateSiteInput{ID: "site", Name: "Site", BaseURL: "https://example.test", Enabled: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	feed, err := service.CreateFeed(context.Background(), CreateFeedInput{ID: "feed", SiteID: site.ID, Name: "Feed", FeedURL: "https://example.test/rss", Enabled: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	name := "Changed"
+	updated, err := service.UpdateFeed(context.Background(), UpdateFeedInput{ID: feed.ID, ExpectedUpdatedAt: feed.UpdatedAt, Name: &name})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.UpdatedAt == feed.UpdatedAt {
+		t.Fatal("feed ETag did not advance")
+	}
+	if _, err := service.UpdateFeed(context.Background(), UpdateFeedInput{ID: feed.ID, ExpectedUpdatedAt: feed.UpdatedAt, Name: &name}); !errors.Is(err, ErrFeedRevisionConflict) {
+		t.Fatalf("stale update err=%v", err)
+	}
+	if _, err := database.Exec(`UPDATE sites SET archived=1,enabled=0 WHERE site_id=?`, site.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.CreateFeed(context.Background(), CreateFeedInput{ID: "orphan", SiteID: site.ID, Name: "Orphan", FeedURL: "https://example.test/rss", Enabled: true}); !errors.Is(err, ErrSiteNotFound) {
+		t.Fatalf("archived site accepted: %v", err)
+	}
+}
+
 func stringPointer(value string) *string { return &value }
 
 func openDatabase(t *testing.T) *sql.DB {

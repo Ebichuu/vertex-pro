@@ -80,6 +80,9 @@ func (stage *Stage) prepareCapacity(ctx context.Context, evidence Evidence) (cap
 		if savedInstance != storage.InstanceID || savedPath != storage.Path {
 			return errors.New("storage target identity changed")
 		}
+		if err := stage.reconcileCompleted(ctx, tx, evidence, now); err != nil {
+			return err
+		}
 		entries := []capacityprojection.LedgerEntry{{Key: "safety-margin", Kind: capacityprojection.KindSafetyMargin, Bytes: storage.SafetyMarginBytes}}
 		owned := map[string]bool{}
 		rows, err := tx.QueryContext(ctx, `SELECT r.reservation_id,r.reserved_bytes,a.identity_key FROM capacity_reservations r JOIN placement_attempts a ON a.attempt_id=r.attempt_id WHERE a.instance_id=? AND r.reservation_state IN ('ACTIVE','REFLECTING')`, storage.InstanceID)

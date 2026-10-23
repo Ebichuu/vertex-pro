@@ -15,8 +15,9 @@ import (
 )
 
 var (
-	ErrNotFound = errors.New("rule not found")
-	ErrConflict = errors.New("rule revision conflict")
+	ErrNotFound     = errors.New("rule not found")
+	ErrConflict     = errors.New("rule revision conflict")
+	ErrSiteNotFound = errors.New("site not found")
 )
 
 var idPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`)
@@ -103,9 +104,14 @@ func (service Service) Create(ctx context.Context, input CreateInput) (Rule, err
 	}
 	now := service.clock.Now().UTC()
 	nowText := now.Format(time.RFC3339Nano)
-	_, err = service.database.ExecContext(ctx, `INSERT INTO rules(rule_id,site_id,name,enabled,priority,revision,state,definition_json,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)`, id, nullableID(input.SiteID), name, input.Enabled, input.Priority, 1, "PENDING", string(definition), nowText, nowText)
+	result, err := service.database.ExecContext(ctx, `INSERT INTO rules(rule_id,site_id,name,enabled,priority,revision,state,definition_json,created_at,updated_at) SELECT ?,?,?,?,?,?,?,?,?,? WHERE ? IS NULL OR EXISTS(SELECT 1 FROM sites WHERE site_id=? AND archived=0)`, id, nullableID(input.SiteID), name, input.Enabled, input.Priority, 1, "PENDING", string(definition), nowText, nowText, nullableID(input.SiteID), input.SiteID)
 	if err != nil {
 		return Rule{}, fmt.Errorf("create rule: %w", err)
+	}
+	if count, err := result.RowsAffected(); err != nil {
+		return Rule{}, err
+	} else if count != 1 {
+		return Rule{}, ErrSiteNotFound
 	}
 	return Rule{ID: id, SiteID: input.SiteID, Name: name, Enabled: input.Enabled, Priority: input.Priority, Revision: 1, State: "PENDING", Definition: definition, CreatedAt: now, UpdatedAt: now}, nil
 }
@@ -116,10 +122,10 @@ func (service Service) List(ctx context.Context, siteID string) ([]Rule, error) 
 			return nil, err
 		}
 	}
-	query := `SELECT rule_id,COALESCE(site_id,''),name,enabled,priority,revision,state,definition_json,created_at,updated_at FROM rules`
+	query := `SELECT rule_id,COALESCE(site_id,''),name,enabled,priority,revision,state,definition_json,created_at,updated_at FROM rules WHERE archived=0`
 	args := []any{}
 	if siteID != "" {
-		query += ` WHERE site_id = ? OR site_id IS NULL`
+		query += ` AND (site_id = ? OR site_id IS NULL)`
 		args = append(args, siteID)
 	}
 	query += ` ORDER BY priority DESC, revision DESC, rule_id ASC`
@@ -146,7 +152,7 @@ func (service Service) Get(ctx context.Context, ruleID string) (Rule, error) {
 	if err := validateID(ruleID, "rule ID"); err != nil {
 		return Rule{}, err
 	}
-	row := service.database.QueryRowContext(ctx, `SELECT rule_id,COALESCE(site_id,''),name,enabled,priority,revision,state,definition_json,created_at,updated_at FROM rules WHERE rule_id = ?`, ruleID)
+	row := service.database.QueryRowContext(ctx, `SELECT rule_id,COALESCE(site_id,''),name,enabled,priority,revision,state,definition_json,created_at,updated_at FROM rules WHERE archived=0 AND rule_id = ?`, ruleID)
 	rule, err := scanRule(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Rule{}, ErrNotFound
@@ -194,7 +200,7 @@ func (service Service) Update(ctx context.Context, ruleID string, expectedRevisi
 		}
 	}
 	now := service.clock.Now().UTC()
-	result, err := service.database.ExecContext(ctx, `UPDATE rules SET name=?,enabled=?,priority=?,revision=revision+1,definition_json=?,updated_at=? WHERE rule_id=? AND revision=?`, name, enabled, priority, string(definition), now.Format(time.RFC3339Nano), ruleID, expectedRevision)
+	result, err := service.database.ExecContext(ctx, `UPDATE rules SET name=?,enabled=?,priority=?,revision=revision+1,definition_json=?,updated_at=? WHERE archived=0 AND rule_id=? AND revision=?`, name, enabled, priority, string(definition), now.Format(time.RFC3339Nano), ruleID, expectedRevision)
 	if err != nil {
 		return Rule{}, fmt.Errorf("update rule: %w", err)
 	}
@@ -249,6 +255,11 @@ func normalizeDefinition(value json.RawMessage) (json.RawMessage, error) {
 			return nil, errors.New("rule definition must contain one JSON value")
 		}
 		return nil, errors.New("rule definition has trailing data")
+	}
+	if _, ok := object["action_set_json"]; ok {
+		if _, err := MatchFor(Rule{ID: "validate", Revision: 1, Definition: value}, "validate"); err != nil {
+			return nil, fmt.Errorf("invalid rule actions: %w", err)
+		}
 	}
 	return append(json.RawMessage(nil), value...), nil
 }

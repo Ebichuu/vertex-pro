@@ -11,6 +11,8 @@ import (
 	"time"
 )
 
+var ErrBatchLimit = errors.New("rule batch limit reached")
+
 type Clock interface{ Now() time.Time }
 type RealClock struct{}
 

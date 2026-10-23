@@ -1,9 +1,10 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { waitFor } from '@testing-library/react'
 import { duplicateRule } from '../../features/rules/rule-list'
 import { RuleList } from './RuleList'
 import { sortRules, updateRuleOptimistically, type RuleSummary } from '../../features/rules/rule-list'
+import type { RuleUpdateResult } from '../../features/rules/rule-list'
 
 afterEach(cleanup)
 let copyID = 0
@@ -64,5 +65,31 @@ describe('RuleList', () => {
 
   it('uses the winner ordering as the stable list order', () => {
     expect(sortRules([{ ...rules[0], priority: 10, id: 'b' }, { ...rules[0], priority: 10, id: 'a' }]).map((rule) => rule.id)).toEqual(['a', 'b'])
+  })
+
+  it('shows qui policy status and removes an archived rule only after success', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const onArchiveRule = vi.fn().mockResolvedValue(undefined)
+    const shown = [{ ...rules[0], policyStatus: '已同步' }]
+    render(<RuleList rules={shown} onArchiveRule={onArchiveRule} />)
+    expect(screen.getByText(/qui 策略：已同步/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '删除' }))
+    await waitFor(() => expect(onArchiveRule).toHaveBeenCalledWith(shown[0]))
+    await screen.findByText(/暂无规则/)
+    expect(confirm).toHaveBeenCalledTimes(1)
+    confirm.mockRestore()
+  })
+
+  it('keeps an in-flight edit while refreshing the policy status', async () => {
+    let finish!: (result: RuleUpdateResult) => void
+    const onUpdateRule = () => new Promise<RuleUpdateResult>(resolve => { finish = resolve })
+    const { rerender } = render(<RuleList rules={rules} onUpdateRule={onUpdateRule} />)
+    fireEvent.click(screen.getByRole('checkbox', { name: '高优先级 启用' }))
+    const refreshed = rules.map(rule => rule.id === 'rule-a' ? { ...rule, policyStatus: 'qui 删除策略已启用' } : rule)
+    rerender(<RuleList rules={refreshed} onUpdateRule={onUpdateRule} />)
+    expect(screen.getByText(/qui 删除策略已启用/)).toBeInTheDocument()
+    finish({ ok: true, rule: { ...refreshed[1], enabled: false, revision: 2 } })
+    await waitFor(() => expect(screen.getByRole('checkbox', { name: '高优先级 启用' })).not.toBeChecked())
+    expect(screen.getByText(/qui 删除策略已启用/)).toBeInTheDocument()
   })
 })

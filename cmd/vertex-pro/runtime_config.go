@@ -19,11 +19,13 @@ import (
 )
 
 type runtimeStorage struct {
-	InstanceID        string                 `json:"instance_id"`
-	TargetID          string                 `json:"storage_target_id"`
-	Path              string                 `json:"path"`
-	SafetyMarginBytes int64                  `json:"safety_margin_bytes"`
-	Verification      storageverify.Evidence `json:"verification"`
+	InstanceID        string                            `json:"instance_id"`
+	TargetID          string                            `json:"storage_target_id"`
+	Path              string                            `json:"path"`
+	SafetyMarginBytes int64                             `json:"safety_margin_bytes"`
+	Verification      storageverify.Evidence            `json:"verification"`
+	Labels            []string                          `json:"labels"`
+	PathEvidence      map[string]storageverify.Evidence `json:"path_evidence"`
 }
 
 type runtimeInstance struct {
@@ -68,7 +70,7 @@ func (s runtimeStorage) config(instanceID string) (dispatchstage.StorageConfig, 
 	if strings.TrimSpace(s.TargetID) == "" || strings.TrimSpace(s.Path) == "" || s.SafetyMarginBytes < 0 {
 		return dispatchstage.StorageConfig{}, errors.New("storage target, path and non-negative safety margin are required")
 	}
-	return dispatchstage.StorageConfig{InstanceID: instanceID, StorageTargetID: s.TargetID, Path: s.Path, Verification: s.Verification, SafetyMarginBytes: s.SafetyMarginBytes}, nil
+	return dispatchstage.StorageConfig{InstanceID: instanceID, StorageTargetID: s.TargetID, Path: s.Path, Verification: s.Verification, Labels: s.Labels, PathEvidence: s.PathEvidence, SafetyMarginBytes: s.SafetyMarginBytes}, nil
 }
 
 func readRuntimeStorage(path, instanceID string) (dispatchstage.StorageConfig, error) {

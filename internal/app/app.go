@@ -22,6 +22,7 @@ import (
 	"github.com/vertex-pro/vertex-pro/internal/qbprofile"
 	"github.com/vertex-pro/vertex-pro/internal/qui/control"
 	"github.com/vertex-pro/vertex-pro/internal/qui/proxy"
+	"github.com/vertex-pro/vertex-pro/internal/quipolicy"
 	"github.com/vertex-pro/vertex-pro/internal/racejob"
 	"github.com/vertex-pro/vertex-pro/internal/racejobstore"
 	"github.com/vertex-pro/vertex-pro/internal/realtimecards"
@@ -248,7 +249,9 @@ func New(ctx context.Context, config Config) (*Runtime, error) {
 	realtime := realtimecards.NewRegistry(hub, 30*time.Second)
 	events := &sseserver.Server{Database: database, Hub: hub}
 	web := &httpapi.WebProtection{AllowedHosts: config.Hosts, AllowedOrigins: config.Origins}
+	var runtime *Runtime
 	api := resourcesapi.Router(resourcesapi.Deps{
+		SyncPolicies:   func(ctx context.Context) error { return runtime.syncDisabledPolicies(ctx) },
 		Settings:       settingsService,
 		ActiveSettings: activeSettings.Values,
 		SessionTTL:     time.Duration(activeSettings.SessionTTLHours) * time.Hour,
@@ -268,7 +271,11 @@ func New(ctx context.Context, config Config) (*Runtime, error) {
 		Realtime: realtime,
 		RSS:      &rss,
 		FeedTest: func(ctx context.Context, feed rssservice.Feed) (rsspreview.Preview, error) {
-			result, err := feedFetcher.Fetch(ctx, rssfetch.Request{URL: feed.FeedURL})
+			var credential, origin string
+			if err := database.QueryRowContext(ctx, `SELECT credential_ref,base_url FROM sites WHERE site_id=?`, feed.SiteID).Scan(&credential, &origin); err != nil {
+				return rsspreview.Preview{}, err
+			}
+			result, err := feedFetcher.Fetch(ctx, rssfetch.Request{URL: feed.FeedURL, CredentialRef: credential, CredentialOrigin: origin})
 			if err != nil {
 				return rsspreview.Preview{}, err
 			}
@@ -286,7 +293,7 @@ func New(ctx context.Context, config Config) (*Runtime, error) {
 	if config.Retention != nil {
 		snapshotRoot = config.Retention.SnapshotRoot
 	}
-	runtime := &Runtime{Database: database, Auth: auth, Handler: mux, Metrics: metrics.New(), Recovery: recovery, hub: hub, snapshotRoot: snapshotRoot, hardenedOutbound: config.HardenedOutbound, Settings: activeSettings, rssFetcher: feedFetcher}
+	runtime = &Runtime{Database: database, Auth: auth, Handler: mux, Metrics: metrics.New(), Recovery: recovery, hub: hub, snapshotRoot: snapshotRoot, hardenedOutbound: config.HardenedOutbound, Settings: activeSettings, rssFetcher: feedFetcher}
 	runtime.realtime, runtime.now = realtime, now
 	initialized := false
 	defer func() {
@@ -317,6 +324,20 @@ func New(ctx context.Context, config Config) (*Runtime, error) {
 			return nil, err
 		}
 	}
+	var stages []*dispatchstage.Stage
+	for _, worker := range append([]*Runtime{runtime}, runtime.children...) {
+		if worker.dispatchStage != nil {
+			stages = append(stages, worker.dispatchStage)
+		}
+	}
+	dispatchstage.Connect(stages...)
+	for _, worker := range append([]*Runtime{runtime}, runtime.children...) {
+		if worker.dispatchStage != nil {
+			w := worker
+			worker.dispatchStage.SetPolicyProvisioner(quipolicy.Service{DB: database, Client: w.controlClient, Instance: w.instanceID, Now: now}.Ensure)
+		}
+	}
+
 	if config.Scheduler != nil && config.Scheduler.Enabled {
 		if err := runtime.startScheduler(config.Scheduler); err != nil {
 			return nil, err
@@ -668,7 +689,7 @@ func (runtime *Runtime) RunSchedulerCycle(ctx context.Context) error {
 }
 
 func (runtime *Runtime) databaseEnabledFeeds(ctx context.Context) ([]schedulercycle.FeedRef, error) {
-	rows, err := runtime.Database.QueryContext(ctx, `SELECT f.site_id, f.feed_id, f.feed_url,COALESCE(f.etag,''),COALESCE(f.last_modified,''),COALESCE(r.initialized,0),COALESCE(r.last_polled_at,''),f.poll_minutes FROM feeds f JOIN sites s ON s.site_id=f.site_id LEFT JOIN feed_runtime_state r ON r.feed_id=f.feed_id WHERE f.enabled = 1 AND s.enabled = 1`)
+	rows, err := runtime.Database.QueryContext(ctx, `SELECT f.site_id, f.feed_id, f.feed_url,COALESCE(f.etag,''),COALESCE(f.last_modified,''),COALESCE(r.initialized,0),COALESCE(r.last_polled_at,''),f.poll_minutes,s.credential_ref,s.base_url FROM feeds f JOIN sites s ON s.site_id=f.site_id LEFT JOIN feed_runtime_state r ON r.feed_id=f.feed_id WHERE f.enabled = 1 AND s.enabled = 1`)
 	if err != nil {
 		return nil, fmt.Errorf("list enabled feeds: %w", err)
 	}
@@ -679,7 +700,7 @@ func (runtime *Runtime) databaseEnabledFeeds(ctx context.Context) ([]schedulercy
 		var initialized bool
 		var lastPolled string
 		var interval int
-		if err := rows.Scan(&feed.SiteID, &feed.FeedID, &feed.URL, &feed.ETag, &feed.LastModified, &initialized, &lastPolled, &interval); err != nil {
+		if err := rows.Scan(&feed.SiteID, &feed.FeedID, &feed.URL, &feed.ETag, &feed.LastModified, &initialized, &lastPolled, &interval, &feed.CredentialRef, &feed.CredentialOrigin); err != nil {
 			return nil, err
 		}
 		if lastPolled != "" {
@@ -780,6 +801,12 @@ func (runtime *Runtime) tickSync(ctx context.Context, now func() time.Time) erro
 
 // tickSyncLocked requires syncMu, shared with the pre-Add critical section.
 func (runtime *Runtime) tickSyncLocked(ctx context.Context, now func() time.Time) error {
+	// Policy shutdown must still run when the downloader's snapshot is offline.
+	if runtime.controlClient != nil {
+		if err := (quipolicy.Service{DB: runtime.Database, Client: runtime.controlClient, Instance: runtime.instanceID, Now: runtime.now}).SyncDisabled(ctx); err != nil {
+			runtime.Metrics.Add("vertex_policy_sync_errors_total", map[string]string{"instance": runtime.instanceID}, 1)
+		}
+	}
 	state := "READY"
 	event, err := runtime.watcher.RunOnce(ctx)
 	if err != nil {
@@ -808,6 +835,12 @@ func (runtime *Runtime) tickSyncLocked(ctx context.Context, now func() time.Time
 		runtime.Metrics.Inc("vertex_sync_ticks_total", map[string]string{"result": "ok"})
 	}
 	_ = updateSyncState(ctx, runtime.Database, event.InstanceID, state, now())
+	if err := runtime.observeJobs(ctx, event, now()); err != nil {
+		return err
+	}
+	if err := runtime.refreshCapacity(ctx); err != nil {
+		runtime.Metrics.Add("vertex_capacity_refresh_errors_total", map[string]string{"instance": runtime.instanceID}, 1)
+	}
 	if err := runtime.RefreshMonitoring(ctx, now(), &event.Snapshot); err != nil {
 		return err
 	}

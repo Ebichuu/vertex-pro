@@ -32,7 +32,7 @@ export function RuleEditorPage({ initialDraft, instances, groups, sites = [], on
 
   const updateAction = <K extends keyof RuleActionDraft>(key: K, value: RuleActionDraft[K]) => {
     setDraft((current) => ({ ...current, actions: { ...current.actions, [key]: value } }))
-    setErrors((current) => ({ ...current, target: undefined, participationWindowMinutes: undefined }))
+    setErrors((current) => ({ ...current, target: undefined, participationWindowMinutes: undefined, limits: undefined }))
     setNotice(null)
     setSaveError(null)
   }
@@ -112,13 +112,25 @@ export function RuleEditorPage({ initialDraft, instances, groups, sites = [], on
             <label>保存路径策略<select aria-label="保存路径策略" value={draft.actions.savePathPolicy} onChange={(event) => updateAction('savePathPolicy', event.target.value as RuleActionDraft['savePathPolicy'])}><option value="INSTANCE_DEFAULT">使用 qB 默认路径</option><option value="CATEGORY_SUBDIRECTORY">按分类使用子目录</option></select></label>
             <label>参与窗口（分钟）<input type="number" min="1" max="1440" value={draft.actions.participationWindowMinutes} aria-invalid={Boolean(errors.participationWindowMinutes)} onChange={(event) => updateAction('participationWindowMinutes', Number(event.target.value))} /></label>
             {errors.participationWindowMinutes && <p className="field-error" role="alert">{errors.participationWindowMinutes}</p>}
+            <label className="checkbox-field"><input type="checkbox" checked={draft.actions.startInactive ?? false} onChange={event => updateAction('startInactive', event.target.checked)} />添加后暂停（默认立即下载）</label>
+            <label>上传限速（MB/s）<input type="number" min="0" step="0.001" value={(draft.actions.uploadLimitBytes ?? 0) / 1_000_000} onChange={event => updateAction('uploadLimitBytes', Math.round(Number(event.target.value) * 1_000_000))} /><span className="field-hint">1 MB/s = 1,000,000 bytes/s；0 不设置单种限速</span></label>
+            <label>累计任务上限<input type="number" min="0" max="100000" value={draft.actions.maxJobs ?? 0} onChange={event => updateAction('maxJobs', Number(event.target.value))} /><span className="field-hint">0 不限；按本规则累计，重启或修改规则不会重置</span></label>
+            <label>做种超过多少小时删除<input type="number" min="0" step="0.01" value={(draft.actions.seedTimeSeconds ?? 0) / 3600} onChange={event => updateAction('seedTimeSeconds', Math.round(Number(event.target.value) * 3600))} /><span className="field-hint">0 关闭；qui 每分钟检查，仅作用于本规则新任务</span></label>
+            {(draft.actions.seedTimeSeconds ?? 0) > 0 && <label>到期删除方式<select value={draft.actions.deleteMode ?? ''} onChange={event => updateAction('deleteMode', event.target.value)}><option value="">请选择</option><option value="TORRENT_ONLY">仅删除任务，保留文件</option><option value="WITH_FILES">删除任务及下载文件</option></select></label>}
+            {errors.limits && <p className="field-error" role="alert">{errors.limits}</p>}
+            <details><summary>路径与兼容性限制</summary>
+              <label>保存路径<input value={draft.actions.savePath ?? ''} onChange={event => updateAction('savePath', event.target.value)} placeholder="留空使用实例路径" /></label>
+              <p className="field-hint">自定义路径或分类子目录须先在实例配置中提供对应磁盘验证凭据。</p>
+              <label>允许的 Profile ID<input value={(draft.actions.allowedProfiles ?? []).join(',')} onChange={event => updateAction('allowedProfiles', parseTags(event.target.value))} placeholder="逗号分隔，留空不限" /></label>
+              <label>所需存储标签<input value={(draft.actions.storageLabels ?? []).join(',')} onChange={event => updateAction('storageLabels', parseTags(event.target.value))} placeholder="逗号分隔，留空不限" /></label>
+            </details>
             <label className="checkbox-field"><input type="checkbox" checked={draft.actions.sequentialDownload} onChange={(event) => updateAction('sequentialDownload', event.target.checked)} />顺序下载（白名单参数）</label>
           </div>
         </section>
       </div>
 
       <footer className="rule-editor-footer">
-        <p>保存到服务器。启用后的规则将由 RSS 调度执行；预览请使用 Dry-run。</p>
+        <p>保存到服务器。启用后由 RSS 调度执行。停用规则也会停用其 qui 定时删除策略；修改策略仅用于新任务。</p>
         <div>{onCancel && <button type="button" className="ghost-button" onClick={onCancel}>返回规则</button>}<button type="submit" className="primary-button" disabled={saving || !onSave}>{saving ? '保存中…' : '保存规则'}</button></div>
       </footer>
     </form>

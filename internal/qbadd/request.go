@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/vertex-pro/vertex-pro/internal/qbprofile"
@@ -20,10 +21,12 @@ type TorrentArtifact struct {
 }
 
 type AddParams struct {
-	SavePath      string
-	Category      string
-	Tags          []string
-	StartInactive bool
+	SavePath           string
+	Category           string
+	Tags               []string
+	StartInactive      bool
+	SequentialDownload bool
+	UploadLimitBytes   int64
 }
 
 func BuildRequest(profile qbprofile.Profile, artifact TorrentArtifact, params AddParams) (*http.Request, error) {
@@ -47,6 +50,9 @@ func BuildRequest(profile qbprofile.Profile, artifact TorrentArtifact, params Ad
 		return nil, err
 	}
 
+	if params.UploadLimitBytes < 0 {
+		return nil, errors.New("invalid upload limit")
+	}
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
 	file, err := writer.CreateFormFile("torrents", artifact.Filename)
@@ -63,6 +69,12 @@ func BuildRequest(profile qbprofile.Profile, artifact TorrentArtifact, params Ad
 	fields := map[string]string{
 		"autoTMM":             "false",
 		profile.AddStartField: startValue,
+	}
+	if params.SequentialDownload {
+		fields["sequentialDownload"] = "true"
+	}
+	if params.UploadLimitBytes > 0 {
+		fields["upLimit"] = strconv.FormatInt(params.UploadLimitBytes, 10)
 	}
 	if params.SavePath != "" {
 		fields["savepath"] = params.SavePath

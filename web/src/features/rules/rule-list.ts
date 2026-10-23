@@ -6,6 +6,7 @@
   revision: number
   matchCount: number
   target: string
+  policyStatus?: string
   updatedAt: string
 }
 
