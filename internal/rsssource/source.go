@@ -14,13 +14,15 @@ import (
 )
 
 type Entry struct {
-	GUID      string
-	URL       string
-	Title     string
-	SizeBytes *int64
+	PublishedAt string
+	GUID        string
+	URL         string
+	Title       string
+	SizeBytes   *int64
 }
 
 type Source struct {
+	PublishedAt string
 	SiteID      string
 	SourceKey   string
 	GUID        string
@@ -127,7 +129,7 @@ func normalize(siteID string, entry Entry) (Source, error) {
 		return Source{}, errors.New("source requires guid, URL, or title")
 	}
 	key := sourceKey(guid, feedURL, title, entry.SizeBytes)
-	return Source{SiteID: siteID, SourceKey: key, GUID: guid, URL: feedURL, Title: title, SizeBytes: cloneSize(entry.SizeBytes), Fingerprint: fingerprint(guid, feedURL, title, entry.SizeBytes)}, nil
+	return Source{PublishedAt: entry.PublishedAt, SiteID: siteID, SourceKey: key, GUID: guid, URL: feedURL, Title: title, SizeBytes: cloneSize(entry.SizeBytes), Fingerprint: fingerprint(guid, feedURL, title, entry.SizeBytes)}, nil
 }
 
 func sourceKey(guid, feedURL, title string, size *int64) string {

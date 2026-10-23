@@ -1,6 +1,6 @@
 // Package schedulercycle composes one production RSS poll cycle: fetch the
-// feed, deduplicate its sources, download and identify the artifacts of new
-// entries, and hand each item to the match pipeline. Dispatch itself stays in
+// feed, persist feed-specific consumers, recover pending artifact processing,
+// and hand each item to the match pipeline. Dispatch itself stays in
 // dispatchorchestrator; this package only produces matched, identified items
 // and reports what happened.
 package schedulercycle
@@ -28,6 +28,7 @@ type FeedRef struct {
 	FeedID           string
 	URL              string
 	BaselineOnly     bool
+	RecoverOnly      bool // Consume due durable work without polling the RSS feed.
 	ETag             string
 	LastModified     string
 }
@@ -36,9 +37,11 @@ type FeedRef struct {
 type Cycle struct {
 	fetcher     rssfetch.Fetcher
 	downloader  *torrentdownload.Downloader
-	dedupe      *rsssource.Dedupe
+	consumers   rsssource.ConsumerStore
 	pipeline    matchpipeline.Deps
 	maxFeedSize int64
+	now         func() time.Time
+	artifacts   artifactCache
 }
 
 // New assembles a cycle. feedLimit bounds feed bodies; download limits are
@@ -50,7 +53,15 @@ func New(fetcher rssfetch.Fetcher, downloader *torrentdownload.Downloader, dedup
 	if dedupe == nil {
 		return nil, fmt.Errorf("source dedupe is required")
 	}
-	return &Cycle{fetcher: fetcher, downloader: downloader, dedupe: dedupe, pipeline: pipeline, maxFeedSize: maxFeedSize}, nil
+	consumers, err := dedupe.Consumers()
+	if err != nil {
+		return nil, err
+	}
+	now := pipeline.Now
+	if now == nil {
+		now = time.Now
+	}
+	return &Cycle{fetcher: fetcher, downloader: downloader, consumers: consumers, pipeline: pipeline, maxFeedSize: maxFeedSize, now: now}, nil
 }
 
 // Result reports one cycle over one feed.
@@ -73,9 +84,52 @@ type Result struct {
 // Run polls one feed end to end. A per-item failure does not abort the cycle;
 // it is recorded and the cycle continues with the remaining entries.
 func (cycle *Cycle) Run(ctx context.Context, feed FeedRef) (Result, error) {
-	if feed.SiteID == "" || feed.URL == "" {
-		return Result{}, fmt.Errorf("site id and feed url are required")
+	if feed.SiteID == "" || feed.FeedID == "" || feed.URL == "" {
+		return Result{}, fmt.Errorf("site id, feed id and feed url are required")
 	}
+	result := Result{}
+	var fetchErr error
+	if !feed.RecoverOnly {
+		result, fetchErr = cycle.discover(ctx, feed)
+	}
+	if feed.BaselineOnly {
+		return result, fetchErr
+	}
+	// Pending work does not depend on receiving a changed feed body. In
+	// particular 304s and temporary RSS errors must not suppress recovery.
+	for processed := 0; processed < 100; processed++ {
+		work, err := cycle.consumers.Claim(ctx, feed.SiteID, feed.FeedID, cycle.now())
+		if err != nil {
+			return result, err
+		}
+		if work == nil {
+			break
+		}
+		attemptTimeout := min(45*time.Second, work.Deadline.Sub(cycle.now()))
+		attemptCtx, cancel := context.WithTimeout(ctx, attemptTimeout)
+		outcome, err := cycle.process(attemptCtx, feed, *work)
+		cancel()
+		code := ""
+		if err != nil {
+			code = "RSS_ITEM_PROCESSING_FAILED"
+			result.Failed++
+			result.Failures = append(result.Failures, code)
+		} else {
+			if outcome.Matched {
+				result.Matched++
+			} else {
+				result.Skipped++
+			}
+			result.Outcomes = append(result.Outcomes, outcome)
+		}
+		if err := cycle.consumers.Finish(ctx, *work, code, cycle.now()); err != nil {
+			return result, err
+		}
+	}
+	return result, fetchErr
+}
+
+func (cycle *Cycle) discover(ctx context.Context, feed FeedRef) (Result, error) {
 	response, err := cycle.fetcher.Fetch(ctx, rssfetch.Request{CredentialRef: feed.CredentialRef, CredentialOrigin: feed.CredentialOrigin, URL: feed.URL, ETag: feed.ETag, LastModified: feed.LastModified})
 	if err != nil {
 		return Result{}, fmt.Errorf("fetch feed: %w", err)
@@ -96,9 +150,9 @@ func (cycle *Cycle) Run(ctx context.Context, feed FeedRef) (Result, error) {
 		if link == "" {
 			link = entry.Link
 		}
-		entries = append(entries, rsssource.Entry{GUID: entry.ID, URL: link, Title: entry.Title, SizeBytes: entry.SizeBytes})
+		entries = append(entries, rsssource.Entry{GUID: entry.ID, URL: link, Title: entry.Title, SizeBytes: entry.SizeBytes, PublishedAt: entry.Published})
 	}
-	dedupeResult, err := cycle.dedupe.Apply(ctx, feed.SiteID, entries)
+	dedupeResult, err := cycle.consumers.Discover(ctx, feed.SiteID, feed.FeedID, entries, feed.BaselineOnly, cycle.now())
 	if err != nil {
 		return Result{}, fmt.Errorf("dedupe sources: %w", err)
 	}
@@ -111,40 +165,41 @@ func (cycle *Cycle) Run(ctx context.Context, feed FeedRef) (Result, error) {
 		ETag:       response.ETag, LastModified: response.LastModified,
 	}
 	if feed.BaselineOnly {
-		result.Skipped = len(dedupeResult.New)
-		return result, nil
-	}
-	for _, source := range dedupeResult.New {
-		item, err := cycle.identify(ctx, source, feed)
-		if err != nil {
-			result.Failed++
-			result.Failures = append(result.Failures, fmt.Sprintf("%s: %v", source.SourceKey, err))
-			continue
-		}
-		item.FeedID = feed.FeedID
-		for _, entry := range preview.Entries {
-			if entry.ID == source.GUID {
-				item.PublishedAt = parsePublished(entry.Published)
-				break
-			}
-		}
-		outcome, err := matchpipeline.Process(ctx, cycle.pipeline, item)
-		if err != nil {
-			result.Failed++
-			result.Failures = append(result.Failures, fmt.Sprintf("%s: %v", source.SourceKey, err))
-			continue
-		}
-		if outcome.Matched {
-			result.Matched++
-		} else {
-			result.Skipped++
-		}
-		result.Outcomes = append(result.Outcomes, outcome)
+		result.Skipped = len(entries)
 	}
 	return result, nil
 }
 
+func (cycle *Cycle) process(ctx context.Context, feed FeedRef, work rsssource.Consumer) (matchpipeline.Outcome, error) {
+	preview := matchpipeline.Item{Source: work.Source, FeedID: feed.FeedID, PublishedAt: parsePublished(work.Source.PublishedAt)}
+	if outcome, rejected, err := matchpipeline.Prefilter(ctx, cycle.pipeline, preview); err != nil || rejected {
+		return outcome, err
+	}
+	item, err := cycle.identify(ctx, work.Source, feed)
+	if err != nil {
+		return matchpipeline.Outcome{}, err
+	}
+	if !cycle.now().Before(work.Deadline) {
+		return matchpipeline.Outcome{}, fmt.Errorf("source processing deadline reached")
+	}
+	item.FeedID = feed.FeedID
+	item.PublishedAt = parsePublished(work.Source.PublishedAt)
+	return matchpipeline.Process(ctx, cycle.pipeline, item)
+}
+
 func (cycle *Cycle) identify(ctx context.Context, source rsssource.Source, feed FeedRef) (matchpipeline.Item, error) {
+	item, err := cycle.artifacts.get(ctx, source, feed, func() (matchpipeline.Item, error) { return cycle.downloadIdentity(ctx, source, feed) })
+	if err != nil {
+		return matchpipeline.Item{}, err
+	}
+	// Shared bytes/identity must not replace this consumer's title or publication.
+	size := *item.Source.SizeBytes
+	item.Source = source
+	item.Source.SizeBytes = &size
+	return item, nil
+}
+
+func (cycle *Cycle) downloadIdentity(ctx context.Context, source rsssource.Source, feed FeedRef) (matchpipeline.Item, error) {
 	artifact, err := cycle.downloader.Download(ctx, torrentdownload.Request{URL: source.URL, CredentialRef: feed.CredentialRef, CredentialOrigin: feed.CredentialOrigin})
 	if err != nil {
 		return matchpipeline.Item{}, fmt.Errorf("download artifact: %w", err)
@@ -163,7 +218,7 @@ func (cycle *Cycle) identify(ctx context.Context, source rsssource.Source, feed 
 	}
 	size := parsed.TotalSize
 	source.SizeBytes = &size
-	return matchpipeline.Item{Source: source, IdentityKey: identityKey}, nil
+	return matchpipeline.Item{Source: source, IdentityKey: identityKey, TorrentBody: artifact.Body}, nil
 }
 
 func parsePublished(raw string) time.Time {

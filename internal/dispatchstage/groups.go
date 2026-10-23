@@ -8,6 +8,7 @@ import (
 
 	"github.com/vertex-pro/vertex-pro/internal/dispatchorchestrator"
 	"github.com/vertex-pro/vertex-pro/internal/placement"
+	"github.com/vertex-pro/vertex-pro/internal/reservation"
 	"github.com/vertex-pro/vertex-pro/internal/ruleaggregate"
 )
 
@@ -54,6 +55,9 @@ func (c *Coordinator) dispatch(ctx context.Context, origin *Stage, job jobRow) (
 	byID := map[string]*Stage{}
 	var existing *Stage
 	for _, s := range c.stages {
+		if expired, err := reservation.ExpireParticipation(ctx, origin.database, job.jobID, origin.config.Now); err != nil || expired {
+			return nil, err
+		}
 		id := s.config.Storage.InstanceID
 		if !allowed[id] || s.config.Profile.ProfileVerificationState != "VERIFIED" {
 			continue
@@ -61,14 +65,31 @@ func (c *Coordinator) dispatch(ctx context.Context, origin *Stage, job jobRow) (
 		if _, err := s.actionParams(decision); err != nil {
 			continue
 		}
-		e, release, err := s.config.Collect(ctx)
+		collect := s.config.CollectForSelection
+		if collect == nil {
+			collect = s.config.Collect
+		}
+		e, release, err := collect(ctx)
+		if expired, expiryErr := reservation.ExpireParticipation(ctx, origin.database, job.jobID, origin.config.Now); expiryErr != nil || expired {
+			if release != nil {
+				release()
+			}
+			return nil, expiryErr
+		}
+		if err == nil {
+			// Presence survives an uncertain capacity projection. A known existing
+			// identity must not be sent to another member merely because its host
+			// has an unrelated task with unknown remaining bytes.
+			if snapshotErr := s.validateSnapshot(ctx, s.database, e); snapshotErr != nil {
+				err = snapshotErr
+			} else if _, present := e.Snapshot.Torrents[job.identityKey]; present {
+				existing = s
+			}
+		}
 		if err == nil {
 			var cap capacityFact
 			cap, err = s.prepareCapacity(ctx, e)
 			if err == nil {
-				if _, present := e.Snapshot.Torrents[job.identityKey]; present {
-					existing = s
-				}
 				candidate := s.placementInput(job.identityKey, size, cap.EffectiveFree).Candidates[0]
 				physical, valid := byteCount(e.Snapshot.ServerState["free_space_on_disk"])
 				if valid && physical > 0 {
@@ -93,6 +114,9 @@ func (c *Coordinator) dispatch(ctx context.Context, origin *Stage, job jobRow) (
 			release()
 		}
 	}
+	if expired, err := reservation.ExpireParticipation(ctx, origin.database, job.jobID, origin.config.Now); err != nil || expired {
+		return nil, err
+	}
 	if existing != nil {
 		return existing.dispatchJob(ctx, job)
 	}
@@ -101,7 +125,7 @@ func (c *Coordinator) dispatch(ctx context.Context, origin *Stage, job jobRow) (
 		return nil, err
 	}
 	if selection.Selected == nil {
-		_, err = origin.database.ExecContext(ctx, `UPDATE race_jobs SET job_state='WAITING_CAPACITY',placement_state='WAITING_CAPACITY',placement_wait_reason='GROUP_NO_ELIGIBLE_TARGET' WHERE job_id=? AND current_attempt_id IS NULL`, job.jobID)
+		_, err = origin.database.ExecContext(ctx, `UPDATE race_jobs SET job_state='WAITING_CAPACITY',placement_state='WAITING_CAPACITY',placement_wait_reason='GROUP_NO_ELIGIBLE_TARGET' WHERE job_id=? AND current_attempt_id IS NULL AND job_state IN ('DISCOVERED','READY','WAITING_CAPACITY')`, job.jobID)
 		return nil, err
 	}
 	return byID[selection.Selected.Candidate.InstanceID].dispatchJob(ctx, job)
@@ -110,4 +134,9 @@ func (c *Coordinator) dispatch(ctx context.Context, origin *Stage, job jobRow) (
 // SetPolicyProvisioner must be called before starting workers.
 func (s *Stage) SetPolicyProvisioner(fn func(context.Context, ruleaggregate.Match) (string, error)) {
 	s.config.EnsurePolicy = fn
+}
+
+// SetSelectionCollector must be called before starting workers.
+func (s *Stage) SetSelectionCollector(fn func(context.Context) (Evidence, func(), error)) {
+	s.config.CollectForSelection = fn
 }

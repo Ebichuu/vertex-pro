@@ -117,29 +117,32 @@ type QuiConfig struct {
 
 // Runtime owns resources initialized during service startup.
 type Runtime struct {
-	Settings         settings.Settings
-	rssFetcher       rssfetch.Fetcher
-	Database         *sql.DB
-	Auth             *adminauth.Service
-	Handler          http.Handler
-	Metrics          *metrics.Registry
-	Profile          *qbprofile.Profile
-	Dispatch         *dispatchflow.Runner
-	Recovery         startuprecover.Result
-	hub              *sseserver.Hub
-	watcher          *syncwatcher.Watcher
-	controlClient    *control.Client
-	realtime         *realtimecards.Registry
-	instanceID       string
-	syncMu           sync.Mutex
-	schedulerMu      sync.Mutex
-	now              func() time.Time
-	confirmations    *confirmcoordinator.Coordinator
-	scheduler        *schedulercycle.Cycle
-	dispatchStage    *dispatchstage.Stage
-	snapshotRoot     string
-	hardenedOutbound bool
-	cancel           context.CancelFunc
+	Settings      settings.Settings
+	rssFetcher    rssfetch.Fetcher
+	Database      *sql.DB
+	Auth          *adminauth.Service
+	Handler       http.Handler
+	Metrics       *metrics.Registry
+	Profile       *qbprofile.Profile
+	Dispatch      *dispatchflow.Runner
+	Recovery      startuprecover.Result
+	hub           *sseserver.Hub
+	watcher       *syncwatcher.Watcher
+	controlClient *control.Client
+	realtime      *realtimecards.Registry
+	instanceID    string
+	syncMu        sync.Mutex
+	// Protected by syncMu. Ranking may reuse this observation but never its
+	// capacity projection or the final-send authorization.
+	selectionEvidence *dispatchstage.Evidence
+	schedulerMu       sync.Mutex
+	now               func() time.Time
+	confirmations     *confirmcoordinator.Coordinator
+	scheduler         *schedulercycle.Cycle
+	dispatchStage     *dispatchstage.Stage
+	snapshotRoot      string
+	hardenedOutbound  bool
+	cancel            context.CancelFunc
 	// retentionCancel 停止保留策略 worker；与 qui 的 cancel 独立，
 	// 因为保留清理不依赖 qui 集成是否启用。
 	retentionCancel context.CancelFunc
@@ -543,6 +546,7 @@ func (runtime *Runtime) startQui(ctx context.Context, config QuiConfig, dispatch
 				return fmt.Errorf("initialize dispatch stage: %w", err)
 			}
 			runtime.dispatchStage = stage
+			stage.SetSelectionCollector(runtime.collectSelectionEvidence)
 		}
 	}
 	if config.ProfileVerificationBinding != nil {
@@ -658,20 +662,22 @@ func (runtime *Runtime) RunSchedulerCycle(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	var firstErr error
-	for _, feed := range feeds {
+	return runFeedGroups(ctx, feeds, 4, func(ctx context.Context, feed schedulercycle.FeedRef) error {
 		result, err := runtime.scheduler.Run(ctx, feed)
-		if saveErr := runtime.recordFeedPoll(ctx, feed, result, err); saveErr != nil {
-			return saveErr
+		if !feed.RecoverOnly {
+			if saveErr := runtime.recordFeedPoll(ctx, feed, result, err); saveErr != nil {
+				return saveErr
+			}
 		}
 		if err != nil {
-			runtime.Metrics.Inc("vertex_rss_feeds_total", map[string]string{"result": "error"})
-			if firstErr == nil {
-				firstErr = err
+			if !feed.RecoverOnly {
+				runtime.Metrics.Inc("vertex_rss_feeds_total", map[string]string{"result": "error"})
 			}
-			continue
+			return err
 		}
-		runtime.Metrics.Inc("vertex_rss_feeds_total", map[string]string{"result": "ok"})
+		if !feed.RecoverOnly {
+			runtime.Metrics.Inc("vertex_rss_feeds_total", map[string]string{"result": "ok"})
+		}
 		for outcome, count := range map[string]uint64{
 			"new":       uint64(result.New),
 			"updated":   uint64(result.Updated),
@@ -684,12 +690,18 @@ func (runtime *Runtime) RunSchedulerCycle(ctx context.Context) error {
 				runtime.Metrics.Add("vertex_rss_items_total", map[string]string{"outcome": outcome}, count)
 			}
 		}
-	}
-	return firstErr
+		return nil
+	})
 }
 
 func (runtime *Runtime) databaseEnabledFeeds(ctx context.Context) ([]schedulercycle.FeedRef, error) {
-	rows, err := runtime.Database.QueryContext(ctx, `SELECT f.site_id, f.feed_id, f.feed_url,COALESCE(f.etag,''),COALESCE(f.last_modified,''),COALESCE(r.initialized,0),COALESCE(r.last_polled_at,''),f.poll_minutes,s.credential_ref,s.base_url FROM feeds f JOIN sites s ON s.site_id=f.site_id LEFT JOIN feed_runtime_state r ON r.feed_id=f.feed_id WHERE f.enabled = 1 AND s.enabled = 1`)
+	now := runtime.now()
+	// Consumer timestamps have fixed nanosecond precision; preserve it for
+	// indexed lexical comparisons, including the exact retry/deadline instant.
+	stamp := now.UTC().Format("2006-01-02T15:04:05.000000000Z")
+	rows, err := runtime.Database.QueryContext(ctx, `SELECT f.site_id, f.feed_id, f.feed_url,COALESCE(f.etag,''),COALESCE(f.last_modified,''),COALESCE(r.initialized,0),COALESCE(r.last_polled_at,''),f.poll_minutes,s.credential_ref,s.base_url,
+		EXISTS(SELECT 1 FROM rss_source_consumers c WHERE c.site_id=f.site_id AND c.feed_id=f.feed_id AND c.state='PENDING' AND (c.next_attempt_at<=? OR c.deadline_at<=?))
+		FROM feeds f JOIN sites s ON s.site_id=f.site_id LEFT JOIN feed_runtime_state r ON r.feed_id=f.feed_id WHERE f.enabled = 1 AND s.enabled = 1`, stamp, stamp)
 	if err != nil {
 		return nil, fmt.Errorf("list enabled feeds: %w", err)
 	}
@@ -697,10 +709,10 @@ func (runtime *Runtime) databaseEnabledFeeds(ctx context.Context) ([]schedulercy
 	feeds := make([]schedulercycle.FeedRef, 0, 8)
 	for rows.Next() {
 		var feed schedulercycle.FeedRef
-		var initialized bool
+		var initialized, pendingDue bool
 		var lastPolled string
 		var interval int
-		if err := rows.Scan(&feed.SiteID, &feed.FeedID, &feed.URL, &feed.ETag, &feed.LastModified, &initialized, &lastPolled, &interval, &feed.CredentialRef, &feed.CredentialOrigin); err != nil {
+		if err := rows.Scan(&feed.SiteID, &feed.FeedID, &feed.URL, &feed.ETag, &feed.LastModified, &initialized, &lastPolled, &interval, &feed.CredentialRef, &feed.CredentialOrigin, &pendingDue); err != nil {
 			return nil, err
 		}
 		if lastPolled != "" {
@@ -708,8 +720,11 @@ func (runtime *Runtime) databaseEnabledFeeds(ctx context.Context) ([]schedulercy
 			if err != nil {
 				return nil, fmt.Errorf("invalid feed polling timestamp: %w", err)
 			}
-			if runtime.now().Sub(at) < time.Duration(interval)*time.Minute {
-				continue
+			if now.Sub(at) < time.Duration(interval)*time.Minute {
+				if !initialized || !pendingDue {
+					continue
+				}
+				feed.RecoverOnly = true
 			}
 		}
 		feed.BaselineOnly = !initialized
@@ -801,8 +816,17 @@ func (runtime *Runtime) tickSync(ctx context.Context, now func() time.Time) erro
 
 // tickSyncLocked requires syncMu, shared with the pre-Add critical section.
 func (runtime *Runtime) tickSyncLocked(ctx context.Context, now func() time.Time) error {
+	return runtime.syncEvidenceLocked(ctx, now, true)
+}
+
+// The pre-Add path retains fresh snapshots, confirmation and capacity facts,
+// but leaves policy shutdown, history and transfer sampling to regular ticks.
+func (runtime *Runtime) syncEvidenceLocked(ctx context.Context, now func() time.Time, background bool) error {
+	// A failed or replaced observation cannot leave a reusable old cache.
+	runtime.selectionEvidence = nil
+	observedAt := now().UTC()
 	// Policy shutdown must still run when the downloader's snapshot is offline.
-	if runtime.controlClient != nil {
+	if background && runtime.controlClient != nil {
 		if err := (quipolicy.Service{DB: runtime.Database, Client: runtime.controlClient, Instance: runtime.instanceID, Now: runtime.now}).SyncDisabled(ctx); err != nil {
 			runtime.Metrics.Add("vertex_policy_sync_errors_total", map[string]string{"instance": runtime.instanceID}, 1)
 		}
@@ -815,7 +839,13 @@ func (runtime *Runtime) tickSyncLocked(ctx context.Context, now func() time.Time
 		}
 		runtime.Metrics.Inc("vertex_sync_ticks_total", map[string]string{"result": "stale"})
 		_ = updateSyncState(ctx, runtime.Database, runtime.instanceID, "STALE", now())
-		return err
+		// A missing snapshot cannot confirm absence, but confirmation and
+		// reconciliation deadlines must still advance without releasing debt.
+		outcomes, deadlineErr := runtime.confirmations.OnSyncUnavailable(ctx, runtime.instanceID, now())
+		for _, outcome := range outcomes {
+			runtime.Metrics.Inc("vertex_unknown_confirmations_total", map[string]string{"action": outcome.Action})
+		}
+		return errors.Join(err, deadlineErr)
 	}
 	// The confirmation coordinator only touches chains created by the
 	// dispatcher; a failed cycle is retried on the next tick because every
@@ -835,14 +865,19 @@ func (runtime *Runtime) tickSyncLocked(ctx context.Context, now func() time.Time
 		runtime.Metrics.Inc("vertex_sync_ticks_total", map[string]string{"result": "ok"})
 	}
 	_ = updateSyncState(ctx, runtime.Database, event.InstanceID, state, now())
-	if err := runtime.observeJobs(ctx, event, now()); err != nil {
-		return err
+	if background {
+		if err := runtime.observeJobs(ctx, event, now()); err != nil {
+			return err
+		}
 	}
-	if err := runtime.refreshCapacity(ctx); err != nil {
-		runtime.Metrics.Add("vertex_capacity_refresh_errors_total", map[string]string{"instance": runtime.instanceID}, 1)
-	}
-	if err := runtime.RefreshMonitoring(ctx, now(), &event.Snapshot); err != nil {
-		return err
+	if background {
+		if err := runtime.refreshCapacityAt(ctx, observedAt); err != nil {
+			runtime.Metrics.Add("vertex_capacity_refresh_errors_total", map[string]string{"instance": runtime.instanceID}, 1)
+		}
+		if err := runtime.RefreshMonitoring(ctx, now(), &event.Snapshot); err != nil {
+			runtime.selectionEvidence = nil
+			return err
+		}
 	}
 	return confirmErr
 }

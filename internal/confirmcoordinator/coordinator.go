@@ -1,7 +1,7 @@
 // Package confirmcoordinator drives the confirmation and reconciliation stage
 // of the Add chain from sync watcher events. For every active sync waiter on
-// the instance it notifies the waiter when the watched identity appears in the
-// snapshot and commits the first confirmation; it then lets the unknown
+// the instance it commits confirmation and waiter closure atomically when the
+// watched identity appears; it then lets the unknown
 // reconciler sweep any UNKNOWN chains, backed by the same event snapshot.
 package confirmcoordinator
 
@@ -52,8 +52,11 @@ func New(database *sql.DB) (*Coordinator, error) {
 // present in the snapshot are notified and confirmed. Chains in UNKNOWN are
 // resolved by unknownreconciler.Sweep against the same snapshot.
 func (coordinator *Coordinator) OnSyncEvent(ctx context.Context, event Event, now time.Time) ([]Outcome, error) {
-	if event.InstanceID == "" {
-		return nil, fmt.Errorf("instance id is required")
+	if event.InstanceID == "" || now.IsZero() {
+		return nil, fmt.Errorf("instance id and time are required")
+	}
+	if err := coordinator.advanceConfirmationTimeouts(ctx, event.InstanceID, now); err != nil {
+		return nil, err
 	}
 	waiters, err := syncwaiter.RestoreActive(ctx, coordinator.database, event.InstanceID)
 	if err != nil {
@@ -71,15 +74,7 @@ func (coordinator *Coordinator) OnSyncEvent(ctx context.Context, event Event, no
 			outcomes = append(outcomes, outcome)
 			continue
 		}
-		notification, err := syncwaiter.Notify(ctx, coordinator.database, waiter.ID, syncwaiter.Notification{
-			Generation:          int64(event.Generation),
-			SnapshotRevision:    int64(event.Revision),
-			ObservedIdentityKey: waiter.IdentityKey,
-		}, now.UTC().Format(time.RFC3339))
-		if err != nil {
-			return nil, fmt.Errorf("notify waiter %s: %w", waiter.ID, err)
-		}
-		if notification.Ignored || !notification.IdentityMatched {
+		if int64(event.Generation) < waiter.Generation || (int64(event.Generation) == waiter.Generation && int64(event.Revision) <= waiter.SourceRevision) {
 			outcome.Action = "NOTIFY_IGNORED"
 			outcomes = append(outcomes, outcome)
 			continue

@@ -57,6 +57,17 @@ type NotifyResult struct {
 }
 
 func Register(ctx context.Context, database *sql.DB, request Request) (Waiter, error) {
+	return register(ctx, database, request, false)
+}
+
+// Restore reuses the durable waiter for an unfinished attempt. Its identity,
+// baseline and original deadlines survive restarts, including legacy CLOSED
+// waiters left behind by a failed confirmation.
+func Restore(ctx context.Context, database *sql.DB, request Request) (Waiter, error) {
+	return register(ctx, database, request, true)
+}
+
+func register(ctx context.Context, database *sql.DB, request Request, restore bool) (Waiter, error) {
 	if err := validateRequest(request); err != nil {
 		return Waiter{}, err
 	}
@@ -79,6 +90,22 @@ func Register(ctx context.Context, database *sql.DB, request Request) (Waiter, e
 		}
 		if attemptState == AttemptReserved && dispatchState != "NOT_STARTED" {
 			return errors.New("RESERVED_ATTEMPT_DISPATCH_FACT_INVALID")
+		}
+		if restore {
+			err := transaction.QueryRowContext(ctx, `SELECT waiter_id,attempt_id,instance_id,registered_generation,source_snapshot_revision,identity_key,confirmation_deadline,reconciliation_deadline,waiter_state FROM sync_waiters WHERE attempt_id=?`, request.AttemptID).Scan(&result.ID, &result.AttemptID, &result.InstanceID, &result.Generation, &result.SourceRevision, &result.IdentityKey, &result.ConfirmationDeadline, &result.ReconciliationDeadline, &result.State)
+			if err == nil {
+				if result.InstanceID != request.InstanceID || result.IdentityKey != request.IdentityKey || result.Generation != request.RegisteredGeneration || result.SourceRevision != request.SourceSnapshotRevision {
+					return errors.New("WAITER_RECOVERY_FACT_MISMATCH")
+				}
+				if _, err := transaction.ExecContext(ctx, `UPDATE sync_waiters SET waiter_state='ACTIVE',closed_at=NULL WHERE waiter_id=? AND waiter_state='CLOSED'`, result.ID); err != nil {
+					return fmt.Errorf("restore closed waiter: %w", err)
+				}
+				result.State = WaiterActive
+				return nil
+			}
+			if !errors.Is(err, sql.ErrNoRows) {
+				return fmt.Errorf("read recovery waiter: %w", err)
+			}
 		}
 		if _, err := transaction.ExecContext(ctx, `SELECT 1 FROM sync_snapshots WHERE instance_id = ? AND sync_generation = ? AND snapshot_revision = ? AND is_complete = 1`, request.InstanceID, request.RegisteredGeneration, request.SourceSnapshotRevision); err != nil {
 			return fmt.Errorf("check waiter source snapshot: %w", err)

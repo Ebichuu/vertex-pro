@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/vertex-pro/vertex-pro/internal/db"
 )
@@ -43,6 +44,7 @@ type Request struct {
 	FinalCandidateRecheckRevision int64
 	MaxInflight                   int64
 	Now                           string
+	Clock                         func() time.Time
 }
 
 type Result struct {
@@ -58,11 +60,24 @@ func ReserveAtomic(ctx context.Context, database *sql.DB, request Request) (Resu
 		return Result{}, err
 	}
 	result := Result{AttemptID: request.AttemptID, SubmitIntentID: request.SubmitIntentID, ReservationID: request.ReservationID, AllocationEpoch: request.AllocationEpoch}
+	var expired bool
 	err := db.RunImmediate(ctx, database, func(ctx context.Context, transaction *db.ImmediateTx) error {
+		now, err := time.Parse(time.RFC3339Nano, request.Now)
+		if request.Clock != nil {
+			now, err = request.Clock(), nil
+		}
+		if err != nil {
+			return errors.New("reservation time is invalid")
+		}
+		request.Now = now.UTC().Format(time.RFC3339Nano)
+		expired, err = ExpireParticipationTx(ctx, transaction, request.JobID, now)
+		if err != nil || expired {
+			return err
+		}
 		var jobState, ruleState, torrentState, placementState string
 		var currentAttempt sql.NullString
 		var preparationRevision int64
-		err := transaction.QueryRowContext(ctx, `SELECT job_state, rule_state, torrent_state, placement_state, preparation_revision, current_attempt_id FROM race_jobs WHERE job_id = ?`, request.JobID).Scan(&jobState, &ruleState, &torrentState, &placementState, &preparationRevision, &currentAttempt)
+		err = transaction.QueryRowContext(ctx, `SELECT job_state, rule_state, torrent_state, placement_state, preparation_revision, current_attempt_id FROM race_jobs WHERE job_id = ?`, request.JobID).Scan(&jobState, &ruleState, &torrentState, &placementState, &preparationRevision, &currentAttempt)
 		if err == sql.ErrNoRows {
 			return errors.New("RACE_JOB_NOT_FOUND")
 		}
@@ -154,6 +169,9 @@ func ReserveAtomic(ctx context.Context, database *sql.DB, request Request) (Resu
 	})
 	if err != nil {
 		return Result{}, err
+	}
+	if expired {
+		return Result{}, ErrParticipationExpired
 	}
 	return result, nil
 }

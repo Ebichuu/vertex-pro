@@ -33,14 +33,37 @@ type capacityFact struct {
 	AllocationEpoch, EffectiveFree int64
 }
 
-func (stage *Stage) prepareCapacity(ctx context.Context, evidence Evidence) (capacityFact, error) {
+type snapshotStateReader interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
+
+// Validate the evidence independently of capacity: positive identity evidence
+// remains meaningful even when another task's remaining bytes are unknown.
+func (stage *Stage) validateSnapshot(ctx context.Context, reader snapshotStateReader, evidence Evidence) error {
 	storage := stage.config.Storage
 	now := stage.config.Now().UTC()
 	if !evidence.Record.Complete || evidence.Record.InstanceID != storage.InstanceID || evidence.Record.Digest == "" || evidence.Record.Revision == 0 || evidence.Record.Generation == 0 || evidence.Snapshot.Torrents == nil {
-		return capacityFact{}, errors.New("complete instance snapshot required")
+		return errors.New("complete instance snapshot required")
 	}
 	if evidence.CollectedAt.IsZero() || now.Before(evidence.CollectedAt) || now.Sub(evidence.CollectedAt) > 30*time.Second {
-		return capacityFact{}, errors.New("placement snapshot is stale")
+		return errors.New("placement snapshot is stale")
+	}
+	var state, digest string
+	var generation, revision int64
+	if err := reader.QueryRowContext(ctx, `SELECT sync_state,sync_generation,snapshot_revision,snapshot_digest FROM sync_instance_state WHERE instance_id=?`, storage.InstanceID).Scan(&state, &generation, &revision, &digest); err != nil {
+		return err
+	}
+	if state != "READY" || uint64(generation) != evidence.Record.Generation || uint64(revision) != evidence.Record.Revision || digest != evidence.Record.Digest {
+		return errors.New("sync changed before placement")
+	}
+	return nil
+}
+
+func (stage *Stage) prepareCapacity(ctx context.Context, evidence Evidence) (capacityFact, error) {
+	storage := stage.config.Storage
+	now := stage.config.Now().UTC()
+	if err := stage.validateSnapshot(ctx, stage.database, evidence); err != nil {
+		return capacityFact{}, err
 	}
 	defaultPath, _ := evidence.Preferences["save_path"].(string)
 	tempEnabled, known := evidence.Preferences["temp_path_enabled"].(bool)
@@ -62,14 +85,10 @@ func (stage *Stage) prepareCapacity(ctx context.Context, evidence Evidence) (cap
 	}
 	result := capacityFact{ID: "epoch-" + storage.StorageTargetID, AllocationEpoch: 1}
 	err := db.RunImmediate(ctx, stage.database, func(ctx context.Context, tx *db.ImmediateTx) error {
-		var state, digest string
-		var generation, revision int64
-		if err := tx.QueryRowContext(ctx, `SELECT sync_state,sync_generation,snapshot_revision,snapshot_digest FROM sync_instance_state WHERE instance_id=?`, storage.InstanceID).Scan(&state, &generation, &revision, &digest); err != nil {
+		if err := stage.validateSnapshot(ctx, tx, evidence); err != nil {
 			return err
 		}
-		if state != "READY" || uint64(generation) != evidence.Record.Generation || uint64(revision) != evidence.Record.Revision || digest != evidence.Record.Digest {
-			return errors.New("sync changed before placement")
-		}
+		generation, revision, digest := evidence.Record.Generation, evidence.Record.Revision, evidence.Record.Digest
 		if _, err := tx.ExecContext(ctx, `INSERT INTO storage_targets(storage_target_id,instance_id,path,storage_verification_state,created_at,updated_at) VALUES(?,?,?,'VERIFIED',?,?) ON CONFLICT(storage_target_id) DO UPDATE SET storage_verification_state='VERIFIED',updated_at=excluded.updated_at WHERE instance_id=excluded.instance_id AND path=excluded.path`, storage.StorageTargetID, storage.InstanceID, storage.Path, now.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano)); err != nil {
 			return err
 		}
@@ -162,6 +181,7 @@ func (stage *Stage) recordAlreadyPresent(ctx context.Context, job jobRow, e Evid
 		return errors.New("existing torrent liability is unknown")
 	}
 	request := reservation.Request{JobID: job.jobID, AttemptID: "attempt-" + job.jobID, SubmitIntentID: "intent-" + job.jobID, ReservationID: "reservation-" + job.jobID, IdentityKey: job.identityKey, InstanceID: s.InstanceID, StorageTargetID: s.StorageTargetID, CapacityEpochID: c.ID, AllocationEpoch: c.AllocationEpoch, CapacityRevision: int64(e.Record.Revision), SnapshotGeneration: int64(e.Record.Generation), SnapshotRevision: int64(e.Record.Revision), SnapshotDigest: e.Record.Digest, RequestFingerprint: "fp-" + job.jobID, TargetFingerprint: "target-" + s.StorageTargetID, PreAddIdentityFact: reservation.IdentityPresent, PreAddQBTorrentID: torrent.ID, FinalCandidateRecheckRevision: int64(e.Record.Revision), MaxInflight: 1, Now: now.Format(time.RFC3339Nano)}
+	request.Clock = stage.config.Now
 	if _, err := reservation.ReserveAtomic(ctx, stage.database, request); err != nil {
 		return err
 	}

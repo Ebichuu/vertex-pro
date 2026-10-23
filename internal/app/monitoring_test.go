@@ -98,7 +98,7 @@ func TestDispatchEvidenceRequiresEnabledControlInstance(t *testing.T) {
 			if tc.allowed {
 				wantState, wantCalls = "READY", 1
 			}
-			if state != wantState || preferenceCalls.Load() != wantCalls || transferCalls.Load() != wantCalls {
+			if state != wantState || preferenceCalls.Load() != wantCalls || transferCalls.Load() != 0 {
 				t.Fatalf("state=%s preferences=%d transfers=%d", state, preferenceCalls.Load(), transferCalls.Load())
 			}
 		})

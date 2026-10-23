@@ -20,6 +20,7 @@ import (
 	"github.com/vertex-pro/vertex-pro/internal/racejobstore"
 	"github.com/vertex-pro/vertex-pro/internal/rssfetch"
 	"github.com/vertex-pro/vertex-pro/internal/rsssource"
+	"github.com/vertex-pro/vertex-pro/internal/rsssourcedb"
 	"github.com/vertex-pro/vertex-pro/internal/ruleaggregate"
 	"github.com/vertex-pro/vertex-pro/internal/ruleservice"
 	"github.com/vertex-pro/vertex-pro/internal/torrentdownload"
@@ -61,6 +62,9 @@ func cycleDatabase(t *testing.T) *sql.DB {
 	if _, err := database.Exec(`INSERT INTO sites(site_id, name, base_url, enabled, created_at, updated_at) VALUES ('site-1','Site','https://site.example',1,strftime('%Y-%m-%dT%H:%M:%SZ','now'),strftime('%Y-%m-%dT%H:%M:%SZ','now'))`); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := database.Exec(`INSERT INTO feeds(feed_id,site_id,name,feed_url,enabled,created_at,updated_at) VALUES('feed-1','site-1','Feed','https://site.example/feed',1,'2026-01-01T00:00:00Z','2026-01-01T00:00:00Z')`); err != nil {
+		t.Fatal(err)
+	}
 	t.Cleanup(func() { _ = database.Close() })
 	return database
 }
@@ -89,7 +93,8 @@ func TestCycleFetchesDedupesIdentifiesAndMatches(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	dedupe, err := rsssource.New(rsssourceMemory())
+	store, _ := rsssourcedb.New(database)
+	dedupe, err := rsssource.New(store)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,7 +154,8 @@ func TestCycleMissingTitleDoesNotMatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	dedupe, err := rsssource.New(rsssourceMemory())
+	store, _ := rsssourcedb.New(database)
+	dedupe, err := rsssource.New(store)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -166,14 +172,10 @@ func TestCycleMissingTitleDoesNotMatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := cycle.Run(context.Background(), FeedRef{SiteID: "site-1", URL: server.URL + "/feed.xml"})
+	result, err := cycle.Run(context.Background(), FeedRef{SiteID: "site-1", FeedID: "feed-1", URL: server.URL + "/feed.xml"})
 	if err != nil || result.Entries != 0 || result.Matched != 0 {
 		t.Fatalf("empty valid feed: result=%+v err=%v", result, err)
 	}
-}
-
-func rsssourceMemory() *rsssource.MemoryStore {
-	return &rsssource.MemoryStore{}
 }
 
 func ruleserviceFor(t *testing.T, database *sql.DB) *ruleservice.Service {

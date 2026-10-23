@@ -63,7 +63,7 @@ func TestRunnerPersistsUnknownAfterNetworkDeadline(t *testing.T) {
 		assertDurableMarker(t, database)
 		<-ctx.Done()
 		return qbresponse.RawResponse{APIVersion: "2.11.2"}, ctx.Err()
-	}), time.Now)
+	}), flowFixtureNow)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +84,7 @@ func TestRunnerKnownNotSentClosesAttemptAndNeverReusesIt(t *testing.T) {
 		calls++
 		assertDurableMarker(t, database)
 		return qbresponse.RawResponse{}, &dispatchworker.NotSentError{Err: io.ErrClosedPipe}
-	}), time.Now)
+	}), flowFixtureNow)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -141,7 +141,7 @@ func TestCrashAfterSendBeforeRecordRecoversUnknownWithoutReplay(t *testing.T) {
 	runner, err := New(database, senderFunc(func(context.Context, *http.Request) (qbresponse.RawResponse, error) {
 		calls++
 		return qbresponse.RawResponse{}, nil
-	}), time.Now)
+	}), flowFixtureNow)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -279,7 +279,7 @@ waitForSignal:
 	replayRunner, err := New(recoveredDatabase, senderFunc(func(context.Context, *http.Request) (qbresponse.RawResponse, error) {
 		localReplayCalls++
 		return qbresponse.RawResponse{}, nil
-	}), time.Now)
+	}), flowFixtureNow)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -341,14 +341,14 @@ func runDispatchCrashChild(t *testing.T) {
 func TestRunnerDoesNotSendWhenDurableMarkerAlreadyExists(t *testing.T) {
 	database := flowDatabase(t)
 	request := prepareReservedFlow(t, database)
-	if _, err := dispatchcommit.Begin(context.Background(), database, dispatchcommit.BeginRequest{AttemptID: "attempt-1", SubmitIntentID: "intent-1", WaiterID: "waiter-1", Now: time.Now()}); err != nil {
+	if _, err := dispatchcommit.Begin(context.Background(), database, dispatchcommit.BeginRequest{AttemptID: "attempt-1", SubmitIntentID: "intent-1", WaiterID: "waiter-1", Now: flowFixtureNow()}); err != nil {
 		t.Fatal(err)
 	}
 	calls := 0
 	runner, err := New(database, senderFunc(func(context.Context, *http.Request) (qbresponse.RawResponse, error) {
 		calls++
 		return qbresponse.RawResponse{}, nil
-	}), time.Now)
+	}), flowFixtureNow)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -370,7 +370,7 @@ func TestRunnerRejectsMalformedRequestBeforeDurableMarker(t *testing.T) {
 	runner, err := New(database, senderFunc(func(context.Context, *http.Request) (qbresponse.RawResponse, error) {
 		calls++
 		return qbresponse.RawResponse{}, nil
-	}), time.Now)
+	}), flowFixtureNow)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -401,7 +401,7 @@ func TestRunnerCommitsSyntheticResponseFacts(t *testing.T) {
 			runner, err := New(database, senderFunc(func(context.Context, *http.Request) (qbresponse.RawResponse, error) {
 				assertDurableMarker(t, database)
 				return testCase.raw, nil
-			}), time.Now)
+			}), flowFixtureNow)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -508,4 +508,8 @@ func assertAttempt(t *testing.T, database *sql.DB, wantState, wantDispatch, want
 	if attemptState != wantState || jobState != wantState || dispatchState != wantDispatch || sideEffect != wantSideEffect || currentAttempt.Valid != wantPointer {
 		t.Fatalf("attempt=%s/%s/%s job=%s pointer=%v", attemptState, dispatchState, sideEffect, jobState, currentAttempt)
 	}
+}
+
+func flowFixtureNow() time.Time {
+	return time.Date(2026, 9, 1, 16, 0, 0, 0, time.UTC)
 }

@@ -38,6 +38,7 @@ func TestAutomationWorkersRouteTwoInstancesAndSurviveRestart(t *testing.T) {
 	entries := []string{"old-baseline"}
 	tasks := map[string]map[string]map[string]any{"2": {}, "7": {}}
 	adds := map[string]int{}
+	downloads := map[string]int{}
 	rids := map[string]int{}
 	var invalidAdd, unrelatedCalls int
 	free := int64(1 << 30)
@@ -57,6 +58,7 @@ func TestAutomationWorkersRouteTwoInstancesAndSurviveRestart(t *testing.T) {
 			return
 		}
 		if strings.HasSuffix(r.URL.Path, ".torrent") {
+			downloads[r.URL.Path]++
 			w.Header().Set("Content-Type", "application/x-bittorrent")
 			w.Write(automationTorrent(strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/"), ".torrent")))
 			return
@@ -234,6 +236,14 @@ func TestAutomationWorkersRouteTwoInstancesAndSurviveRestart(t *testing.T) {
 	defer mu.Unlock()
 	if adds["2"] != 2 || adds["7"] != 1 || invalidAdd != 0 || unrelatedCalls != 0 {
 		t.Fatalf("adds=%v invalid=%d unrelated=%d", adds, invalidAdd, unrelatedCalls)
+	}
+	if len(downloads) != 5 {
+		t.Fatalf("unexpected torrent downloads: %v", downloads)
+	}
+	for name, count := range downloads {
+		if count != 1 {
+			t.Fatalf("torrent %s downloaded %d times; expected one across matching, dispatch and restart", name, count)
+		}
 	}
 }
 

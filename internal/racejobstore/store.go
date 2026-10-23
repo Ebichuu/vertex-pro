@@ -101,6 +101,11 @@ func (store *Store) Save(ctx context.Context, job racejob.Job) error {
 				return fmt.Errorf("save rule snapshot: %w", err)
 			}
 		}
+		if len(job.TorrentBody) > 0 {
+			if err := saveArtifact(ctx, tx, job.ID, job.TorrentBody, now); err != nil {
+				return err
+			}
+		}
 		return nil
 	})
 }

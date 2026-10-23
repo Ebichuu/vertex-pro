@@ -76,6 +76,9 @@ func TestRecoverHoldsCrashAfterDurableDispatchMarkerWithoutReplay(t *testing.T) 
 	database := openMigrated(t)
 	seedChain(t, database, "1", "RESERVED", "NOT_STARTED", true, "ACTIVE")
 	now := time.Date(2026, 9, 2, 7, 0, 0, 0, time.UTC)
+	if _, err := database.Exec(`UPDATE race_jobs SET participation_deadline=?,observation_deadline=? WHERE job_id='job-1'`, now.Add(time.Hour).Format(time.RFC3339), now.Add(time.Hour).Format(time.RFC3339)); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := dispatchcommit.Begin(context.Background(), database, dispatchcommit.BeginRequest{
 		AttemptID: "attempt-1", SubmitIntentID: "intent-1", WaiterID: "waiter-1", Now: now,
 	}); err != nil {

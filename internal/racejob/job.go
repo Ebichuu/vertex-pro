@@ -25,6 +25,7 @@ type Input struct {
 	ObservationDeadline   time.Time
 	RuleSnapshot          []byte
 	ContentSize           int64
+	TorrentBody           []byte `json:"-"`
 }
 
 type Job struct {
@@ -44,6 +45,7 @@ type Job struct {
 	UpdatedAt             time.Time
 	RuleSnapshot          []byte
 	ContentSize           int64
+	TorrentBody           []byte `json:"-"`
 }
 
 type Result struct {
@@ -100,15 +102,20 @@ func (creator *Creator) Create(ctx context.Context, input Input) (Result, error)
 		if existing.IdentityKey != input.IdentityKey {
 			return Result{}, errors.New("source already belongs to another identity")
 		}
+		existing.TorrentBody = nil
 		return Result{Job: existing, Duplicate: true}, nil
 	}
 	now := creator.clock.Now().UTC()
 	job := Job{ID: deterministicID(input.SourceID), SourceID: input.SourceID, IdentityKey: input.IdentityKey, JobState: "DISCOVERED", RuleState: "PENDING", TorrentState: "PENDING", PlacementState: "PENDING", ObservationState: "NOT_STARTED", ParticipationDeadline: participation, ObservationDeadline: observation, CreatedAt: now, UpdatedAt: now}
 	job.RuleSnapshot = append([]byte(nil), input.RuleSnapshot...)
 	job.ContentSize = input.ContentSize
+	job.TorrentBody = append([]byte(nil), input.TorrentBody...)
 	if err := creator.store.Save(ctx, job); err != nil {
 		return Result{}, fmt.Errorf("save race job: %w", err)
 	}
+	// Outcomes can live for a whole scheduler cycle. The store owns the artifact;
+	// retaining its bytes in each result would bypass the bounded fetch cache.
+	job.TorrentBody = nil
 	return Result{Job: job, Created: true}, nil
 }
 
@@ -126,6 +133,7 @@ func (store *MemoryStore) LoadBySource(_ context.Context, sourceID string) (Job,
 	store.mu.Lock()
 	defer store.mu.Unlock()
 	job, ok := store.jobs[sourceID]
+	job.TorrentBody = nil
 	return job, ok, nil
 }
 func (store *MemoryStore) Save(_ context.Context, job Job) error {

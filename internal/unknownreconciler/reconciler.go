@@ -10,7 +10,6 @@ import (
 
 	"github.com/vertex-pro/vertex-pro/internal/db"
 	"github.com/vertex-pro/vertex-pro/internal/firstconfirm"
-	"github.com/vertex-pro/vertex-pro/internal/syncwaiter"
 )
 
 const (
@@ -152,9 +151,6 @@ func reconcileOne(ctx context.Context, database *sql.DB, provider SnapshotProvid
 			Now:                    now,
 		}); err != nil {
 			return Outcome{}, fmt.Errorf("confirm unknown attempt %s: %w", item.attemptID, err)
-		}
-		if _, err := syncwaiter.Close(ctx, database, item.waiterID, now.UTC().Format(time.RFC3339)); err != nil {
-			return Outcome{}, fmt.Errorf("close waiter %s: %w", item.waiterID, err)
 		}
 		outcome.Outcome = OutcomeConfirmed
 		return outcome, nil

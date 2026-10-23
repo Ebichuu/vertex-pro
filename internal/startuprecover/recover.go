@@ -58,6 +58,7 @@ type chain struct {
 	waiterState   sql.NullString
 	preGeneration sql.NullInt64
 	preRevision   sql.NullInt64
+	startedAt     string
 }
 
 // Recover 在进程启动时对持久化投递链做确定性重排：校验 Reservation 与
@@ -107,7 +108,7 @@ func validateInput(input Input) error {
 }
 
 func loadChains(ctx context.Context, database *sql.DB) ([]chain, error) {
-	rows, err := database.QueryContext(ctx, `SELECT a.attempt_id, a.job_id, a.instance_id, a.identity_key, a.attempt_state, a.dispatch_state, COALESCE(a.side_effect_fact,''), j.job_state, j.current_attempt_id, s.submit_intent_id, s.dispatch_state, w.waiter_id, w.waiter_state, s.pre_add_sync_generation, s.pre_add_snapshot_revision FROM placement_attempts a JOIN race_jobs j ON j.job_id = a.job_id LEFT JOIN submit_intents s ON s.attempt_id = a.attempt_id LEFT JOIN sync_waiters w ON w.attempt_id = a.attempt_id ORDER BY a.attempt_id`)
+	rows, err := database.QueryContext(ctx, `SELECT a.attempt_id, a.job_id, a.instance_id, a.identity_key, a.attempt_state, a.dispatch_state, COALESCE(a.side_effect_fact,''), j.job_state, j.current_attempt_id, s.submit_intent_id, s.dispatch_state, w.waiter_id, w.waiter_state, s.pre_add_sync_generation, s.pre_add_snapshot_revision, a.started_at FROM placement_attempts a JOIN race_jobs j ON j.job_id = a.job_id LEFT JOIN submit_intents s ON s.attempt_id = a.attempt_id LEFT JOIN sync_waiters w ON w.attempt_id = a.attempt_id ORDER BY a.attempt_id`)
 	if err != nil {
 		return nil, fmt.Errorf("list chains: %w", err)
 	}
@@ -115,7 +116,7 @@ func loadChains(ctx context.Context, database *sql.DB) ([]chain, error) {
 	chains := make([]chain, 0)
 	for rows.Next() {
 		var item chain
-		if err := rows.Scan(&item.attemptID, &item.jobID, &item.instanceID, &item.identityKey, &item.attemptState, &item.attemptDispa, &item.sideEffect, &item.jobState, &item.currentPtr, &item.intentID, &item.intentDispa, &item.waiterID, &item.waiterState, &item.preGeneration, &item.preRevision); err != nil {
+		if err := rows.Scan(&item.attemptID, &item.jobID, &item.instanceID, &item.identityKey, &item.attemptState, &item.attemptDispa, &item.sideEffect, &item.jobState, &item.currentPtr, &item.intentID, &item.intentDispa, &item.waiterID, &item.waiterState, &item.preGeneration, &item.preRevision, &item.startedAt); err != nil {
 			return nil, fmt.Errorf("scan chain: %w", err)
 		}
 		chains = append(chains, item)
@@ -231,8 +232,13 @@ func ensureWaiter(ctx context.Context, database *sql.DB, item chain, input Input
 	if !item.preGeneration.Valid || !item.preRevision.Valid {
 		return fmt.Errorf("chain %s lacks frozen baseline snapshot facts", item.attemptID)
 	}
-	timestamp := input.Now.UTC()
-	_, err := syncwaiter.Register(ctx, database, syncwaiter.Request{
+	// A missing waiter uses the durable attempt start, never the restart time.
+	// Existing waiters retain their exact original deadlines in Restore.
+	timestamp, err := time.Parse(time.RFC3339Nano, item.startedAt)
+	if err != nil {
+		return fmt.Errorf("parse attempt start for %s: %w", item.attemptID, err)
+	}
+	waiter, err := syncwaiter.Restore(ctx, database, syncwaiter.Request{
 		WaiterID:               "waiter-recovered-" + item.attemptID,
 		AttemptID:              item.attemptID,
 		InstanceID:             item.instanceID,
@@ -246,6 +252,6 @@ func ensureWaiter(ctx context.Context, database *sql.DB, item chain, input Input
 	if err != nil {
 		return fmt.Errorf("re-register waiter for %s: %w", item.attemptID, err)
 	}
-	result.RestoredWaiters = append(result.RestoredWaiters, "waiter-recovered-"+item.attemptID)
+	result.RestoredWaiters = append(result.RestoredWaiters, waiter.ID)
 	return nil
 }

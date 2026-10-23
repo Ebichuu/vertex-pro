@@ -48,9 +48,17 @@ func (runtime *Runtime) startScheduler(config *SchedulerConfig) error {
 
 func (runtime *Runtime) collectDispatchEvidence(ctx context.Context) (dispatchstage.Evidence, func(), error) {
 	runtime.syncMu.Lock()
+	return runtime.collectDispatchEvidenceLocked(ctx)
+}
+
+func (runtime *Runtime) collectDispatchEvidenceLocked(ctx context.Context) (dispatchstage.Evidence, func(), error) {
 	release := runtime.syncMu.Unlock
+	runtime.selectionEvidence = nil
 	collectedAt := runtime.now().UTC()
-	if err := runtime.tickSyncLocked(ctx, runtime.now); err != nil {
+	if err := runtime.requireEnabledInstance(ctx); err != nil {
+		return dispatchstage.Evidence{}, release, err
+	}
+	if err := runtime.syncEvidenceLocked(ctx, runtime.now, false); err != nil {
 		return dispatchstage.Evidence{}, release, err
 	}
 	preferences, err := runtime.proxyClient.Preferences(ctx)
@@ -65,5 +73,49 @@ func (runtime *Runtime) collectDispatchEvidence(ctx context.Context) (dispatchst
 	if err != nil {
 		return dispatchstage.Evidence{}, release, err
 	}
-	return dispatchstage.Evidence{Snapshot: current, Record: record, Preferences: preferences, CollectedAt: collectedAt}, release, nil
+	evidence := dispatchstage.Evidence{Snapshot: current, Record: record, Preferences: preferences, CollectedAt: collectedAt}
+	runtime.selectionEvidence = &evidence
+	return evidence, release, nil
+}
+
+// Only ranking may reuse evidence. Keep the instance lock through the caller's
+// local projection, and verify that no newer/stale sync replaced the cache.
+func (runtime *Runtime) collectSelectionEvidence(ctx context.Context) (dispatchstage.Evidence, func(), error) {
+	runtime.syncMu.Lock()
+	if e := runtime.selectionEvidence; e != nil {
+		now := runtime.now().UTC()
+		if !e.CollectedAt.IsZero() && !now.Before(e.CollectedAt) && now.Sub(e.CollectedAt) <= 30*time.Second {
+			var state, digest string
+			var generation, revision uint64
+			err := runtime.Database.QueryRowContext(ctx, `SELECT sync_state,sync_generation,snapshot_revision,snapshot_digest FROM sync_instance_state WHERE instance_id=?`, runtime.instanceID).Scan(&state, &generation, &revision, &digest)
+			if err != nil {
+				runtime.selectionEvidence = nil
+				return dispatchstage.Evidence{}, runtime.syncMu.Unlock, err
+			}
+			if state == "READY" && e.Record.Complete && e.Record.InstanceID == runtime.instanceID &&
+				e.Record.Generation == generation && e.Record.Revision == revision && e.Record.Digest == digest {
+				return *e, runtime.syncMu.Unlock, nil
+			}
+		}
+	}
+	return runtime.collectDispatchEvidenceLocked(ctx)
+}
+
+func (runtime *Runtime) requireEnabledInstance(ctx context.Context) error {
+	if runtime.controlClient == nil {
+		return fmt.Errorf("qui control client unavailable")
+	}
+	instances, err := runtime.controlClient.Instances(ctx)
+	if err != nil {
+		return err
+	}
+	for _, instance := range instances {
+		if instance.ID == runtime.instanceID && instance.Enabled {
+			return nil
+		}
+	}
+	if err := updateSyncState(ctx, runtime.Database, runtime.instanceID, "OFFLINE", runtime.now()); err != nil {
+		return err
+	}
+	return fmt.Errorf("configured qui instance is disabled or missing")
 }

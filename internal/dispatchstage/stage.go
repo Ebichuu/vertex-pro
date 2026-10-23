@@ -1,6 +1,6 @@
 // Package dispatchstage advances prepared race jobs into dispatch: it
 // persists the operator-provided storage/capacity reference rows, prepares
-// discovered jobs, re-downloads each artifact, rebuilds the Add request from
+// discovered jobs, reuses each frozen artifact, rebuilds the Add request from
 // the detected profile, and hands the chain to dispatchorchestrator. It never
 // bypasses the orchestrator's fail-closed gates.
 package dispatchstage
@@ -9,6 +9,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -20,6 +21,7 @@ import (
 	"github.com/vertex-pro/vertex-pro/internal/placement"
 	"github.com/vertex-pro/vertex-pro/internal/qbadd"
 	"github.com/vertex-pro/vertex-pro/internal/qbprofile"
+	"github.com/vertex-pro/vertex-pro/internal/racejobstore"
 	"github.com/vertex-pro/vertex-pro/internal/reservation"
 	"github.com/vertex-pro/vertex-pro/internal/rsssource"
 	"github.com/vertex-pro/vertex-pro/internal/ruleaggregate"
@@ -53,8 +55,11 @@ type Config struct {
 	ReconcileWindow time.Duration
 	// Collect holds the instance sync lock until release, so the reservation
 	// and durable Add marker use the same snapshot as the identity recheck.
-	Collect      func(context.Context) (Evidence, func(), error)
-	EnsurePolicy func(context.Context, ruleaggregate.Match) (string, error)
+	Collect func(context.Context) (Evidence, func(), error)
+	// CollectForSelection may reuse fresh observations for ranking only. The
+	// selected target still uses Collect under its lock before any reservation.
+	CollectForSelection func(context.Context) (Evidence, func(), error)
+	EnsurePolicy        func(context.Context, ruleaggregate.Match) (string, error)
 }
 
 type Stage struct {
@@ -90,6 +95,7 @@ type jobRow struct {
 	jobID       string
 	sourceID    string
 	identityKey string
+	state       string
 }
 
 // Run advances every discovered job of the configured instance: prepare,
@@ -110,11 +116,22 @@ func (stage *Stage) Run(ctx context.Context) ([]dispatchorchestrator.Result, []s
 	failures := make([]string, 0)
 	for _, job := range jobs {
 		var result *dispatchorchestrator.Result
-		var err error
-		if stage.coordinator != nil {
+		expired, err := reservation.ExpireParticipation(ctx, stage.database, job.jobID, stage.config.Now)
+		if expired && err == nil {
+			continue
+		}
+		if err == nil && job.state == "RESERVED" {
+			// Recover stale, never-sent reservations by expiring them only;
+			// do not create a second send path for a reserved attempt.
+			continue
+		}
+		if err == nil && stage.coordinator != nil {
 			result, err = stage.coordinator.dispatch(ctx, stage, job)
-		} else {
+		} else if err == nil {
 			result, err = stage.dispatchJob(ctx, job)
+		}
+		if errors.Is(err, reservation.ErrParticipationExpired) {
+			continue
 		}
 		if err != nil {
 			failures = append(failures, fmt.Sprintf("%s: %v", job.jobID, err))
@@ -131,7 +148,7 @@ func (stage *Stage) Run(ctx context.Context) ([]dispatchorchestrator.Result, []s
 }
 
 func (stage *Stage) listDiscoveredJobs(ctx context.Context) ([]jobRow, error) {
-	rows, err := stage.database.QueryContext(ctx, `SELECT j.job_id, j.source_id, j.identity_key FROM race_jobs j JOIN job_rule_snapshots r ON r.job_id=j.job_id WHERE j.job_state IN ('DISCOVERED','READY','WAITING_CAPACITY') AND j.current_attempt_id IS NULL AND j.identity_key IS NOT NULL AND j.identity_key != '' AND ((json_extract(r.aggregation_json,'$.Winner.TargetMode')='FIXED_INSTANCE' AND json_extract(r.aggregation_json,'$.Winner.TargetInstanceID')=?) OR json_extract(r.aggregation_json,'$.Winner.TargetMode')='INSTANCE_GROUP') ORDER BY j.created_at,j.job_id`, stage.config.Storage.InstanceID)
+	rows, err := stage.database.QueryContext(ctx, `SELECT j.job_id, j.source_id, j.identity_key, j.job_state FROM race_jobs j JOIN job_rule_snapshots r ON r.job_id=j.job_id WHERE ((j.job_state IN ('DISCOVERED','READY','WAITING_CAPACITY') AND j.current_attempt_id IS NULL) OR j.job_state='RESERVED') AND j.identity_key IS NOT NULL AND j.identity_key != '' AND ((json_extract(r.aggregation_json,'$.Winner.TargetMode')='FIXED_INSTANCE' AND json_extract(r.aggregation_json,'$.Winner.TargetInstanceID')=?) OR json_extract(r.aggregation_json,'$.Winner.TargetMode')='INSTANCE_GROUP') ORDER BY j.created_at,j.job_id`, stage.config.Storage.InstanceID)
 	if err != nil {
 		return nil, fmt.Errorf("list discovered jobs: %w", err)
 	}
@@ -139,7 +156,7 @@ func (stage *Stage) listDiscoveredJobs(ctx context.Context) ([]jobRow, error) {
 	jobs := make([]jobRow, 0, 8)
 	for rows.Next() {
 		var job jobRow
-		if err := rows.Scan(&job.jobID, &job.sourceID, &job.identityKey); err != nil {
+		if err := rows.Scan(&job.jobID, &job.sourceID, &job.identityKey, &job.state); err != nil {
 			return nil, err
 		}
 		jobs = append(jobs, job)
@@ -148,6 +165,9 @@ func (stage *Stage) listDiscoveredJobs(ctx context.Context) ([]jobRow, error) {
 }
 
 func (stage *Stage) dispatchJob(ctx context.Context, job jobRow) (*dispatchorchestrator.Result, error) {
+	if expired, err := reservation.ExpireParticipation(ctx, stage.database, job.jobID, stage.config.Now); err != nil || expired {
+		return nil, err
+	}
 	enabled, err := stage.ruleEnabled(ctx, job.jobID)
 	if err != nil {
 		return nil, err
@@ -155,19 +175,29 @@ func (stage *Stage) dispatchJob(ctx context.Context, job jobRow) (*dispatchorche
 	if !enabled {
 		return nil, nil
 	}
-	source, err := stage.loadSource(ctx, job.sourceID)
+	body, frozen, err := racejobstore.LoadArtifact(ctx, stage.database, job.jobID)
 	if err != nil {
 		return nil, err
 	}
-	var credential, origin string
-	if err := stage.database.QueryRowContext(ctx, `SELECT credential_ref,base_url FROM sites WHERE site_id=?`, source.SiteID).Scan(&credential, &origin); err != nil {
-		return nil, err
+	if !frozen {
+		source, loadErr := stage.loadSource(ctx, job.sourceID)
+		if loadErr != nil {
+			return nil, loadErr
+		}
+		var credential, origin string
+		if err := stage.database.QueryRowContext(ctx, `SELECT credential_ref,base_url FROM sites WHERE site_id=?`, source.SiteID).Scan(&credential, &origin); err != nil {
+			return nil, err
+		}
+		artifact, downloadErr := stage.config.Downloader.Download(ctx, torrentdownload.Request{URL: source.URL, CredentialRef: credential, CredentialOrigin: origin})
+		body, err = artifact.Body, downloadErr
 	}
-	artifact, err := stage.config.Downloader.Download(ctx, torrentdownload.Request{URL: source.URL, CredentialRef: credential, CredentialOrigin: origin})
+	if expired, expiryErr := reservation.ExpireParticipation(ctx, stage.database, job.jobID, stage.config.Now); expiryErr != nil || expired {
+		return nil, expiryErr
+	}
 	if err != nil {
-		return nil, fmt.Errorf("re-download artifact: %w", err)
+		return nil, fmt.Errorf("load legacy artifact: %w", err)
 	}
-	parsed, parseErr := torrentparse.Parse(artifact.Body, torrentparse.DefaultLimits())
+	parsed, parseErr := torrentparse.Parse(body, torrentparse.DefaultLimits())
 	if parseErr != nil {
 		return nil, fmt.Errorf("re-parse artifact: %w", parseErr)
 	}
@@ -186,6 +216,11 @@ func (stage *Stage) dispatchJob(ctx context.Context, job jobRow) (*dispatchorche
 	}
 	if decision.Rejected || originalSize != parsed.TotalSize || (decision.Winner.TargetMode != "INSTANCE_GROUP" && (decision.Winner.TargetMode != "FIXED_INSTANCE" || decision.Winner.TargetInstanceID != stage.config.Storage.InstanceID)) {
 		return nil, fmt.Errorf("rule decision does not authorize this target")
+	}
+	if !frozen {
+		if err := racejobstore.SaveLegacyArtifact(ctx, stage.database, job.jobID, body, stage.config.Now()); err != nil {
+			return nil, err
+		}
 	}
 	if decision.Winner.TargetMode == "INSTANCE_GROUP" {
 		var rawMembers string
@@ -214,6 +249,9 @@ func (stage *Stage) dispatchJob(ctx context.Context, job jobRow) (*dispatchorche
 	if release != nil {
 		defer release()
 	}
+	if expired, expiryErr := reservation.ExpireParticipation(ctx, stage.database, job.jobID, stage.config.Now); expiryErr != nil || expired {
+		return nil, expiryErr
+	}
 	if err != nil {
 		return nil, fmt.Errorf("collect placement evidence: %w", err)
 	}
@@ -237,7 +275,7 @@ func (stage *Stage) dispatchJob(ctx context.Context, job jobRow) (*dispatchorche
 		}
 		params.Tags = append(append([]string{}, params.Tags...), tag)
 	}
-	addRequest, err := qbadd.BuildRequest(stage.config.Profile, qbadd.TorrentArtifact{Filename: parsed.Name + ".torrent", Content: artifact.Body}, params)
+	addRequest, err := qbadd.BuildRequest(stage.config.Profile, qbadd.TorrentArtifact{Filename: parsed.Name + ".torrent", Content: body}, params)
 	if err != nil {
 		return nil, fmt.Errorf("build add request: %w", err)
 	}
@@ -247,6 +285,9 @@ func (stage *Stage) dispatchJob(ctx context.Context, job jobRow) (*dispatchorche
 	}
 	if !enabled {
 		return nil, nil
+	}
+	if expired, err := reservation.ExpireParticipation(ctx, stage.database, job.jobID, stage.config.Now); err != nil || expired {
+		return nil, err
 	}
 	now := stage.config.Now()
 	result, err := dispatchorchestrator.Run(ctx, stage.database, dispatchorchestrator.Request{

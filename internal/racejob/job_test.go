@@ -12,6 +12,32 @@ type fakeClock struct{ now time.Time }
 
 func (clock fakeClock) Now() time.Time { return clock.now }
 
+func TestCreatorPersistsArtifactWithoutRetainingItInResults(t *testing.T) {
+	clock := fakeClock{now: time.Date(2026, 10, 24, 0, 0, 0, 0, time.UTC)}
+	store := &MemoryStore{}
+	creator, _ := New(store, clock)
+	input := Input{SourceID: "artifact", IdentityKey: "hash", ParticipationDeadline: clock.now.Add(time.Hour), ObservationDeadline: clock.now.Add(2 * time.Hour), TorrentBody: []byte("original")}
+	first, err := creator.Create(context.Background(), input)
+	if err != nil || !first.Created || len(first.Job.TorrentBody) != 0 {
+		t.Fatalf("creation: created=%v retained bytes=%d err=%v", first.Created, len(first.Job.TorrentBody), err)
+	}
+	if string(store.jobs[input.SourceID].TorrentBody) != "original" {
+		t.Fatal("artifact was not passed to storage")
+	}
+	input.TorrentBody[0] = 'x'
+	if string(store.jobs[input.SourceID].TorrentBody) != "original" {
+		t.Fatal("stored artifact aliases caller input")
+	}
+	duplicate, err := creator.Create(context.Background(), input)
+	if err != nil || !duplicate.Duplicate || len(duplicate.Job.TorrentBody) != 0 {
+		t.Fatalf("duplicate: duplicate=%v retained bytes=%d err=%v", duplicate.Duplicate, len(duplicate.Job.TorrentBody), err)
+	}
+	loaded, found, err := store.LoadBySource(context.Background(), input.SourceID)
+	if err != nil || !found || len(loaded.TorrentBody) != 0 {
+		t.Fatal("metadata lookup retains artifact")
+	}
+}
+
 func TestCreatorCreatesInitialDiscoveredJob(t *testing.T) {
 	clock := fakeClock{now: time.Date(2026, 8, 25, 0, 0, 0, 0, time.UTC)}
 	creator, err := New(&MemoryStore{}, clock)

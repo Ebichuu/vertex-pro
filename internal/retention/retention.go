@@ -57,6 +57,8 @@ type Result struct {
 	Commands             int64
 	IdempotencyRecords   int64
 	Snapshots            int64
+	ClosedWaiters        int64
+	TorrentArtifacts     int64
 	SnapshotFileFailures []string
 	StatsRaw             int64
 	StatsHourly          int64
@@ -98,22 +100,99 @@ func Sweep(ctx context.Context, database *sql.DB, snapshotRoot string, policy Po
 	}
 	result.Commands = commands
 
+	var snapshotErr error
 	if snapshotRoot != "" {
-		snapshots, failures, err := removeExpiredSnapshots(ctx, database, snapshotRoot, now.UTC().Add(-policy.SnapshotRetention).Format(time.RFC3339Nano), policy.batchSize())
+		closed, err := deleteTerminalWaiters(ctx, database, now.UTC().Add(-policy.SnapshotRetention).Format(time.RFC3339Nano), policy.batchSize())
+		result.ClosedWaiters = closed
 		if err != nil {
-			return result, fmt.Errorf("prune expired snapshots: %w", err)
+			snapshotErr = fmt.Errorf("prune terminal waiters: %w", err)
 		}
-		result.Snapshots = snapshots
-		result.SnapshotFileFailures = failures
+		if snapshotErr == nil {
+			snapshots, failures, err := removeExpiredSnapshots(ctx, database, snapshotRoot, now.UTC().Add(-policy.SnapshotRetention).Format(time.RFC3339Nano), policy.batchSize())
+			if err != nil {
+				snapshotErr = fmt.Errorf("prune expired snapshots: %w", err)
+			}
+			result.Snapshots = snapshots
+			result.SnapshotFileFailures = failures
+		}
 	}
 
 	stats, err := statsstore.Prune(ctx, database, now, statsstore.Retention{RawSamples: policy.StatsRawRetention, Hourly: policy.StatsHourly})
 	if err != nil {
-		return result, fmt.Errorf("prune stats: %w", err)
+		return result, errors.Join(snapshotErr, fmt.Errorf("prune stats: %w", err))
 	}
 	result.StatsRaw = stats.RawSamples
 	result.StatsHourly = stats.Hourly
-	return result, nil
+	artifacts, err := pruneTorrentArtifacts(ctx, database, now.Add(-7*24*time.Hour), policy.batchSize())
+	result.TorrentArtifacts = artifacts
+	if err != nil {
+		return result, errors.Join(snapshotErr, fmt.Errorf("prune torrent artifacts: %w", err))
+	}
+	return result, snapshotErr
+}
+
+// Keep reusable artifacts for all unresolved jobs. Only settled jobs older than
+// the diagnostic window are pruned; UNKNOWN and failed/retryable chains remain.
+func pruneTorrentArtifacts(ctx context.Context, database *sql.DB, cutoff time.Time, batchSize int) (int64, error) {
+	var total int64
+	for {
+		var count int64
+		err := db.RunImmediate(ctx, database, func(ctx context.Context, tx *db.ImmediateTx) error {
+			result, err := tx.ExecContext(ctx, `DELETE FROM job_torrent_artifacts WHERE job_id IN (
+			 SELECT a.job_id FROM job_torrent_artifacts a JOIN race_jobs j ON j.job_id=a.job_id
+			 WHERE (j.job_state IN ('EXPIRED','HASH_SEEN','RECONCILED_CONFIRMED','ALREADY_PRESENT')
+			 OR (j.job_state='RECONCILED_NO_EFFECT' AND unixepoch(j.participation_deadline)<unixepoch(?)))
+			 AND unixepoch(j.updated_at)<unixepoch(?)
+			 AND NOT EXISTS(SELECT 1 FROM placement_attempts p JOIN capacity_reservations r ON r.attempt_id=p.attempt_id WHERE p.job_id=j.job_id AND r.reservation_state!='RELEASED')
+			 ORDER BY a.job_id LIMIT ?)`, cutoff.UTC().Format(time.RFC3339Nano), cutoff.UTC().Format(time.RFC3339Nano), batchSize)
+			if err != nil {
+				return err
+			}
+			count, err = result.RowsAffected()
+			return err
+		})
+		if err != nil {
+			return total, err
+		}
+		total += count
+		if count < int64(batchSize) {
+			return total, nil
+		}
+	}
+}
+
+// A closed notification is not necessarily a confirmed delivery. Keep its
+// baseline until the attempt is terminal, all debt has been released, and the
+// diagnostic retention period has elapsed. Missing/corrupt chains fail closed.
+func deleteTerminalWaiters(ctx context.Context, database *sql.DB, cutoff string, batchSize int) (int64, error) {
+	var total int64
+	for {
+		var count int64
+		err := db.RunImmediate(ctx, database, func(ctx context.Context, tx *db.ImmediateTx) error {
+			result, err := tx.ExecContext(ctx, `DELETE FROM sync_waiters WHERE waiter_id IN (
+				SELECT w.waiter_id FROM sync_waiters w JOIN placement_attempts a ON a.attempt_id=w.attempt_id
+				WHERE w.waiter_state='CLOSED' AND unixepoch(w.closed_at)<unixepoch(?)
+				AND a.attempt_state IN ('ADD_FAILED','ALREADY_PRESENT','RECONCILED_NO_EFFECT','HASH_SEEN','RECONCILED_CONFIRMED')
+				AND EXISTS (SELECT 1 FROM capacity_reservations r WHERE r.attempt_id=a.attempt_id AND r.reservation_state='RELEASED')
+				AND NOT EXISTS (SELECT 1 FROM capacity_reservations r WHERE r.attempt_id=a.attempt_id AND r.reservation_state!='RELEASED')
+				AND NOT EXISTS (SELECT 1 FROM capacity_task_bindings b WHERE
+					(b.storage_target_id=a.storage_target_id AND (b.identity_key=a.identity_key OR b.qb_torrent_id=a.qb_torrent_id))
+					OR b.reservation_id IN (SELECT r.reservation_id FROM capacity_reservations r WHERE r.attempt_id=a.attempt_id))
+				ORDER BY w.waiter_id LIMIT ?)`, cutoff, batchSize)
+			if err != nil {
+				return err
+			}
+			count, err = result.RowsAffected()
+			return err
+		})
+		if err != nil {
+			return total, err
+		}
+		total += count
+		if count < int64(batchSize) {
+			return total, nil
+		}
+	}
 }
 
 // deleteExpiredBatched removes rows whose expires_at has passed in LIMIT-ed
@@ -206,8 +285,10 @@ func removeExpiredSnapshots(ctx context.Context, database *sql.DB, root, cutoff 
 	total := int64(0)
 	failures := []string{}
 	removedPaths := make([]string, 0, batchSize)
+	var sweepErr error
 	for {
 		deleted := int64(0)
+		batchPaths := make([]string, 0, batchSize)
 		err := db.RunImmediate(ctx, database, func(ctx context.Context, transaction *db.ImmediateTx) error {
 			rows, err := transaction.QueryContext(ctx, `SELECT s.rowid, s.snapshot_path FROM sync_snapshots s
 				WHERE s.is_complete = 1 AND s.created_at < ? AND s.rowid NOT IN (
@@ -218,6 +299,14 @@ func removeExpiredSnapshots(ctx context.Context, database *sql.DB, root, cutoff 
 						ORDER BY k.sync_generation DESC, k.snapshot_revision DESC, k.rowid DESC
 						LIMIT 1
 					)
+				)
+				AND NOT EXISTS (SELECT 1 FROM sync_waiters w WHERE w.instance_id=s.instance_id AND w.registered_generation=s.sync_generation AND w.source_snapshot_revision=s.snapshot_revision)
+				AND NOT EXISTS (
+					SELECT 1 FROM submit_intents i JOIN placement_attempts a ON a.attempt_id=i.attempt_id
+					WHERE i.instance_id=s.instance_id AND i.pre_add_sync_generation=s.sync_generation AND i.pre_add_snapshot_revision=s.snapshot_revision
+					AND (a.attempt_state IN ('RESERVED','ADD_SENT','AWAITING_CONFIRMATION','UNKNOWN','EXPIRED_UNKNOWN')
+					OR EXISTS (SELECT 1 FROM capacity_reservations r WHERE r.attempt_id=a.attempt_id AND r.reservation_state!='RELEASED')
+					OR EXISTS (SELECT 1 FROM capacity_task_bindings b WHERE b.storage_target_id=a.storage_target_id AND (b.identity_key=a.identity_key OR b.qb_torrent_id=a.qb_torrent_id)))
 				)
 				ORDER BY s.rowid LIMIT ?`, cutoff, batchSize)
 			if err != nil {
@@ -248,15 +337,17 @@ func removeExpiredSnapshots(ctx context.Context, database *sql.DB, root, cutoff 
 				if _, err := transaction.ExecContext(ctx, `DELETE FROM sync_snapshots WHERE rowid = ?`, item.rowid); err != nil {
 					return err
 				}
-				removedPaths = append(removedPaths, item.path)
+				batchPaths = append(batchPaths, item.path)
 			}
 			deleted = int64(len(candidates))
 			return nil
 		})
 		if err != nil {
-			return total, failures, err
+			sweepErr = err
+			break
 		}
 		total += deleted
+		removedPaths = append(removedPaths, batchPaths...)
 		if deleted < int64(batchSize) {
 			break
 		}
@@ -279,7 +370,7 @@ func removeExpiredSnapshots(ctx context.Context, database *sql.DB, root, cutoff 
 			failures = append(failures, relative)
 		}
 	}
-	return total, failures, nil
+	return total, failures, sweepErr
 }
 
 // safeJoin mirrors the snapshot store's path containment rules: the cleaned

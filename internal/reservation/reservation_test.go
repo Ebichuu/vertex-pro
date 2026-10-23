@@ -111,7 +111,7 @@ func seedReservationFixtures(t *testing.T, database *sql.DB, jobID string) {
 	if _, err := database.Exec(`INSERT INTO capacity_epochs(capacity_epoch_id, storage_target_id, allocation_epoch, capacity_state, physical_free_bytes, effective_free_bytes, snapshot_generation, snapshot_revision, snapshot_digest, created_at) VALUES ('epoch-1', 'target-1', 1, 'TRUSTED', 1000, 900, 1, 1, 'digest-1', ?) ON CONFLICT(capacity_epoch_id) DO NOTHING`, now); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := database.Exec(`INSERT INTO race_jobs(job_id, source_id, identity_key, job_state, rule_state, torrent_state, placement_state, preparation_revision, participation_deadline, observation_deadline, created_at, updated_at) VALUES (?, 'source-1', 'identity-1', 'READY', 'MATCHED', 'READY', 'PREPARED', 3, ?, ?, ?, ?)`, jobID, now, now, now, now); err != nil {
+	if _, err := database.Exec(`INSERT INTO race_jobs(job_id, source_id, identity_key, job_state, rule_state, torrent_state, placement_state, preparation_revision, participation_deadline, observation_deadline, created_at, updated_at) VALUES (?, 'source-1', 'identity-1', 'READY', 'MATCHED', 'READY', 'PREPARED', 3, ?, ?, ?, ?)`, jobID, "2026-08-25T01:00:00Z", "2026-08-25T01:00:00Z", now, now); err != nil {
 		t.Fatal(err)
 	}
 }

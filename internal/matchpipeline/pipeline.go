@@ -28,6 +28,7 @@ type Item struct {
 	Publisher   string
 	PublishedAt time.Time
 	FeedID      string
+	TorrentBody []byte
 }
 
 // MatchFactory converts a matched rule into an aggregate match. Target and
@@ -151,6 +152,7 @@ func Process(ctx context.Context, deps Deps, item Item) (Outcome, error) {
 		ParticipationDeadline: now().Add(aggregated.ParticipationWindow),
 		ObservationDeadline:   now().Add(aggregated.ParticipationWindow),
 		RuleSnapshot:          snapshot, ContentSize: contentSize,
+		TorrentBody: item.TorrentBody,
 	})
 	if err != nil {
 		if errors.Is(err, racejob.ErrBatchLimit) {

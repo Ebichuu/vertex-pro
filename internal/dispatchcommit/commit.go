@@ -11,6 +11,7 @@ import (
 	"github.com/vertex-pro/vertex-pro/internal/addfacts"
 	"github.com/vertex-pro/vertex-pro/internal/db"
 	"github.com/vertex-pro/vertex-pro/internal/dispatchworker"
+	"github.com/vertex-pro/vertex-pro/internal/reservation"
 )
 
 const (
@@ -27,6 +28,7 @@ type BeginRequest struct {
 	SubmitIntentID string
 	WaiterID       string
 	Now            time.Time
+	Clock          func() time.Time
 }
 
 type BeginResult struct {
@@ -61,6 +63,7 @@ func Begin(ctx context.Context, database *sql.DB, request BeginRequest) (BeginRe
 		return BeginResult{}, err
 	}
 	result := BeginResult{AttemptID: request.AttemptID, State: AttemptAddSent}
+	var expired bool
 	err := db.RunImmediate(ctx, database, func(ctx context.Context, transaction *db.ImmediateTx) error {
 		var attemptState, attemptDispatch, sideEffect, jobID, jobState string
 		var currentAttempt sql.NullString
@@ -101,6 +104,13 @@ func Begin(ctx context.Context, database *sql.DB, request BeginRequest) (BeginRe
 		if waiterState != "ACTIVE" {
 			return errors.New("SYNC_WAITER_NOT_ACTIVE")
 		}
+		if request.Clock != nil {
+			request.Now = request.Clock()
+		}
+		expired, err = reservation.ExpireParticipationTx(ctx, transaction, jobID, request.Now)
+		if err != nil || expired {
+			return err
+		}
 
 		timestamp := request.Now.UTC().Format(time.RFC3339Nano)
 		if changed, err := execOne(ctx, transaction, `UPDATE submit_intents SET dispatch_state='STARTED', dispatch_started_at=? WHERE submit_intent_id=? AND attempt_id=? AND dispatch_state='NOT_STARTED'`, timestamp, request.SubmitIntentID, request.AttemptID); err != nil {
@@ -125,6 +135,9 @@ func Begin(ctx context.Context, database *sql.DB, request BeginRequest) (BeginRe
 	})
 	if err != nil {
 		return BeginResult{}, err
+	}
+	if expired {
+		return BeginResult{}, reservation.ErrParticipationExpired
 	}
 	return result, nil
 }

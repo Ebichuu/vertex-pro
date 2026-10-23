@@ -2,15 +2,18 @@ package app
 
 import (
 	"context"
+	"time"
+
 	"github.com/vertex-pro/vertex-pro/internal/dispatchstage"
 	"github.com/vertex-pro/vertex-pro/internal/snapshot"
 )
 
-func (r *Runtime) refreshCapacity(ctx context.Context) error {
+// Callers hold syncMu, or run before workers start. observedAt is the start
+// of the successful sync, not the time the cached evidence is subsequently read.
+func (r *Runtime) refreshCapacityAt(ctx context.Context, observedAt time.Time) error {
 	if r.dispatchStage == nil {
 		return nil
 	}
-	at := r.now().UTC()
 	preferences, err := r.proxyClient.Preferences(ctx)
 	if err != nil {
 		return err
@@ -23,5 +26,7 @@ func (r *Runtime) refreshCapacity(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return r.dispatchStage.RefreshCapacity(ctx, dispatchstage.Evidence{Snapshot: current, Record: record, Preferences: preferences, CollectedAt: at})
+	evidence := dispatchstage.Evidence{Snapshot: current, Record: record, Preferences: preferences, CollectedAt: observedAt}
+	r.selectionEvidence = &evidence
+	return r.dispatchStage.RefreshCapacity(ctx, evidence)
 }

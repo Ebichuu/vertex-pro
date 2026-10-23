@@ -65,7 +65,7 @@ func Confirm(ctx context.Context, database *sql.DB, request Request) (Result, er
 			}
 			if existingID == request.QBTorrentID && existingGen == fmt.Sprint(request.SyncGeneration) && existingRev == fmt.Sprint(request.SnapshotRevision) && existingDigest == request.EvidenceDigest {
 				result.Idempotent = true
-				return nil
+				return closeWaiter(ctx, transaction, request)
 			}
 			return fmt.Errorf("%w: conflicting confirmation", ErrNotConfirmable)
 		}
@@ -130,12 +130,22 @@ func Confirm(ctx context.Context, database *sql.DB, request Request) (Result, er
 		if _, err := transaction.ExecContext(ctx, `INSERT INTO race_events(job_id, attempt_id, event_type, from_state, to_state, reason_code, safe_metadata_json, occurred_at) VALUES (?, ?, 'attempt.state.changed', ?, ?, 'IDENTITY_CONFIRMED', '{}', ?)`, request.JobID, request.AttemptID, attemptState, confirmTarget, request.Now.UTC().Format(time.RFC3339)); err != nil {
 			return fmt.Errorf("insert confirmation event: %w", err)
 		}
-		return nil
+		return closeWaiter(ctx, transaction, request)
 	})
 	if err != nil {
 		return Result{}, err
 	}
 	return result, nil
+}
+
+// Confirmation and waiter closure must commit together. In particular, a
+// failed binding/event write must leave the waiter available for replay.
+func closeWaiter(ctx context.Context, transaction *db.ImmediateTx, request Request) error {
+	_, err := transaction.ExecContext(ctx, `UPDATE sync_waiters SET waiter_state='CLOSED', closed_at=? WHERE attempt_id=? AND waiter_state='ACTIVE'`, request.Now.UTC().Format(time.RFC3339Nano), request.AttemptID)
+	if err != nil {
+		return fmt.Errorf("close confirmed waiter: %w", err)
+	}
+	return nil
 }
 
 func validate(request Request) error {

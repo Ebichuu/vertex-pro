@@ -85,6 +85,7 @@ func Run(ctx context.Context, database *sql.DB, request Request) (Result, error)
 		return Result{}, &RejectionError{Reason: rejection}
 	}
 
+	request.Reservation.Clock = now
 	reserved, err := reservation.ReserveAtomic(ctx, database, request.Reservation)
 	if err != nil {
 		return Result{}, fmt.Errorf("reserve capacity: %w", err)

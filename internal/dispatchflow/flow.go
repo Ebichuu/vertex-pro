@@ -87,6 +87,7 @@ func (runner *Runner) Run(ctx context.Context, request Request) (Result, error) 
 		SubmitIntentID: request.SubmitIntentID,
 		WaiterID:       request.WaiterID,
 		Now:            runner.now().UTC(),
+		Clock:          runner.now,
 	})
 	if err != nil {
 		return Result{}, err

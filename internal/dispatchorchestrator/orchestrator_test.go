@@ -161,6 +161,7 @@ func TestRunDispatchesAfterPlacementReservationAndWaiter(t *testing.T) {
 		},
 		Prepare: prepareChain("identity-key"),
 		Sender:  redirectSender{target: target, calls: &calls},
+		Now:     func() time.Time { return time.Date(2026, 9, 3, 10, 0, 0, 0, time.UTC) },
 	})
 	if err != nil {
 		t.Fatal(err)
