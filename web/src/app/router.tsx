@@ -248,6 +248,7 @@ function History() {
     initialPageParam: '',
     queryFn: ({ pageParam }) => apiClient.listJobs<HistoryPageData>({ query: { user_status: statusFilter || undefined, limit: '50', cursor: pageParam || undefined } }),
     getNextPageParam: (lastPage) => lastPage.next_cursor || undefined,
+    refetchInterval: (activeQuery) => 15_000 * Math.max(1, activeQuery.state.data?.pages.length ?? 1),
   })
   if (query.isPending) {
     return (

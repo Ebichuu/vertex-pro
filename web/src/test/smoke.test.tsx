@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { describe, expect, it, afterEach, vi } from 'vitest'
 import { queryClient } from '../app/query-client'
@@ -52,6 +52,47 @@ describe('Vertex Pro application shell', () => {
     expect(screen.getByText('高级诊断')).toBeInTheDocument()
     expect(screen.queryByText('LOCAL ONLY')).not.toBeInTheDocument()
   })
+
+  it('refreshes loaded history pages in place while the view stays open', async () => {
+    let currentStatus = 'ADDING'
+    let firstPageRequests = 0
+    let secondPageRequests = 0
+    server.use(http.get('/api/v1/jobs', ({ request }) => {
+      const cursor = new URL(request.url).searchParams.get('cursor')
+      if (cursor === 'page-2') secondPageRequests += 1
+      else firstPageRequests += 1
+      const id = cursor === 'page-2' ? 'job-2' : 'job-1'
+      return HttpResponse.json({
+        items: [{
+          id, title: `种子 ${id}`, site: '测试站点', downloader: 'qb-test',
+          user_status: currentStatus,
+          user_status_label: currentStatus === 'ADDING' ? '正在添加' : '做种中',
+          discovered_at: '2026-10-23T01:00:00Z',
+        }],
+        next_cursor: cursor === 'page-2' ? '' : 'page-2',
+      })
+    }))
+    render(<QueryClientProvider client={queryClient}><App /></QueryClientProvider>)
+    await router.navigate({ to: '/history' })
+    expect(await screen.findByText('种子 job-1')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '加载更多' }))
+    expect(await screen.findByText('种子 job-2')).toBeInTheDocument()
+    const table = screen.getByRole('table', { name: '投递历史' })
+    expect(within(table).getAllByText('正在添加')).toHaveLength(2)
+
+    currentStatus = 'SEEDING'
+    await new Promise<void>(resolve => { setTimeout(resolve, 18_000) })
+    expect(firstPageRequests).toBe(1)
+    expect(secondPageRequests).toBe(1)
+    await waitFor(() => {
+      expect(within(table).getAllByText('做种中')).toHaveLength(2)
+      expect(firstPageRequests).toBeGreaterThanOrEqual(2)
+      expect(secondPageRequests).toBeGreaterThanOrEqual(2)
+    }, { timeout: 16_000 })
+    expect(screen.getByLabelText('状态筛选')).toHaveValue('')
+    expect(screen.getByText('种子 job-1')).toBeInTheDocument()
+    expect(screen.getByText('种子 job-2')).toBeInTheDocument()
+  }, 36_000)
 
   it('opens downloader detail from real snapshot and traffic APIs', async () => {
     server.use(
