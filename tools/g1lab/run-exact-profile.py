@@ -207,7 +207,17 @@ def main():
             print('Running isolated probe: ' + mode, flush=True)
             env = dict(probe_env, VERTEX_PRO_G1_FAULT_MODE=mode, VERTEX_PRO_FIXTURE_DIR='/tmp/fixtures')
             keys = ['VERTEX_PRO_QUI_URL', 'VERTEX_PRO_QUI_PROXY_KEY', 'VERTEX_PRO_G1_ISOLATED_LAB', 'VERTEX_PRO_G1_FAULT_MODE', 'VERTEX_PRO_FIXTURE_DIR']
-            result = json.loads(dc('run', '--rm', '--no-deps', *[part for key in keys for part in ('-e', key)], 'harness', env=env))
+            completed = subprocess.run(['docker', 'compose', '-f', str(compose_file), 'run', '--rm', '--no-deps', *[part for key in keys for part in ('-e', key)], 'harness'], cwd=ROOT, env=env, text=True, capture_output=True, timeout=600)
+            safe_stdout, safe_stderr = completed.stdout, completed.stderr
+            for credential in (proxy_key, password, qb_password):
+                safe_stdout = safe_stdout.replace(credential, '[REDACTED]')
+                safe_stderr = safe_stderr.replace(credential, '[REDACTED]')
+            result = json.loads(safe_stdout)
+            if completed.returncode:
+                write_json(output / ('failed-' + mode + '.json'), result)
+                print('Probe failure ' + mode + ': ' + json.dumps(result), file=sys.stderr)
+                print(safe_stderr[-2000:], file=sys.stderr)
+                raise RuntimeError('Isolated probe failed: ' + mode)
             require(proxy_key not in json.dumps(result), 'Probe output contains a lab credential')
             validate_probe(result, mode)
             return result
