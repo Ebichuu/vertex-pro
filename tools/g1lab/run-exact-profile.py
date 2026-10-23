@@ -32,10 +32,11 @@ def require(condition, message):
 
 def command(*args, env=None):
     result = subprocess.run(args, cwd=ROOT, env=env, text=True, capture_output=True, timeout=600)
-    if result.returncode and args[0] == 'docker' and args[1] in ('build', 'pull'):
+    compose_lifecycle = args[:2] == ('docker', 'compose') and len(args) > 4 and args[4] in ('up', 'down', 'ps', 'port')
+    if result.returncode and args[0] == 'docker' and (args[1] in ('build', 'pull') or compose_lifecycle):
         print(result.stderr[-6000:], file=sys.stderr)
     # Never dump subprocess logs: qB startup logs and proxy errors can contain credentials.
-    operation = ' '.join(args[:2]) if args[0] == 'docker' else args[0]
+    operation = ('docker compose ' + args[4]) if compose_lifecycle else (' '.join(args[:2]) if args[0] == 'docker' else args[0])
     require(result.returncode == 0, f'{operation} operation failed (exit {result.returncode})')
     return result.stdout.strip()
 
