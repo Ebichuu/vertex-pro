@@ -2,7 +2,9 @@ package httpapi
 
 import (
 	"net/http"
+	"net/http/cookiejar"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -124,7 +126,7 @@ func TestCSRFDoubleSubmitRequiredOnUnsafeMethods(t *testing.T) {
 
 func TestSessionCookieAttributesAreHardened(t *testing.T) {
 	cookies := NewSessionCookies("session-token", "csrf-token", 3600)
-	if len(cookies) != 2 {
+	if len(cookies) != 3 {
 		t.Fatalf("cookie count = %d", len(cookies))
 	}
 	session := cookies[0]
@@ -144,6 +146,81 @@ func TestSessionCookieAttributesAreHardened(t *testing.T) {
 	serialized := session.String()
 	if !strings.Contains(serialized, "HttpOnly") || !strings.Contains(serialized, "Secure") || !strings.Contains(serialized, "SameSite=Strict") {
 		t.Fatalf("serialized cookie = %s", serialized)
+	}
+}
+
+func TestSessionCookiesAvailableToSPAAndAPI(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		legacy bool
+	}{
+		{name: "new session"},
+		{name: "legacy cookie migration", legacy: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			jar, err := cookiejar.New(nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			loginURL, _ := url.Parse("https://vertex.local/api/v1/auth/login")
+			pageURL, _ := url.Parse("https://vertex.local/settings")
+			apiURL, _ := url.Parse("https://vertex.local/api/v1/settings")
+			if test.legacy {
+				jar.SetCookies(loginURL, []*http.Cookie{{Name: CSRFCookieName, Value: "old-csrf", Path: "/api/v1", Secure: true}})
+			}
+			response := httptest.NewRecorder()
+			for _, cookie := range NewSessionCookies("new-session", "new-csrf", 3600) {
+				http.SetCookie(response, cookie)
+			}
+			jar.SetCookies(loginURL, response.Result().Cookies())
+			pageCookies := jar.Cookies(pageURL)
+			if len(pageCookies) != 1 || pageCookies[0].Name != CSRFCookieName || pageCookies[0].Value != "new-csrf" {
+				t.Fatalf("SPA cannot read the new CSRF token: %+v", pageCookies)
+			}
+			request := httptest.NewRequest(http.MethodPut, apiURL.String(), nil)
+			for _, cookie := range jar.Cookies(apiURL) {
+				request.AddCookie(cookie)
+			}
+			request.Header.Set(CSRFHeaderName, pageCookies[0].Value)
+			session, err := request.Cookie(SessionCookieName)
+			if err != nil || session.Value != "new-session" {
+				t.Fatalf("API session cookie = %v, %v", session, err)
+			}
+			if len(request.Cookies()) != 2 || !verifyCSRF(request) {
+				t.Fatalf("SPA token does not authorize API request: %s", request.Header.Get("Cookie"))
+			}
+			request.Header.Set(CSRFHeaderName, "old-csrf")
+			if verifyCSRF(request) {
+				t.Fatal("old CSRF token still authorizes API requests")
+			}
+			httpURL, _ := url.Parse("http://vertex.local/api/v1/settings")
+			if cookies := jar.Cookies(httpURL); len(cookies) != 0 {
+				t.Fatalf("secure cookies sent over HTTP: %+v", cookies)
+			}
+		})
+	}
+}
+
+func TestClearSessionCookiesRemovesCurrentAndLegacyPaths(t *testing.T) {
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	logoutURL, _ := url.Parse("https://vertex.local/api/v1/auth/logout")
+	jar.SetCookies(logoutURL, NewSessionCookies("session", "csrf", 3600))
+	jar.SetCookies(logoutURL, []*http.Cookie{{Name: CSRFCookieName, Value: "legacy", Path: "/api/v1", Secure: true}})
+	response := httptest.NewRecorder()
+	for _, cookie := range ClearSessionCookies() {
+		http.SetCookie(response, cookie)
+	}
+	jar.SetCookies(logoutURL, response.Result().Cookies())
+	for _, path := range []string{"/settings", "/api/v1/settings"} {
+		t.Run(path, func(t *testing.T) {
+			target, _ := url.Parse("https://vertex.local" + path)
+			if cookies := jar.Cookies(target); len(cookies) != 0 {
+				t.Fatalf("cookies survived logout: %+v", cookies)
+			}
+		})
 	}
 }
 

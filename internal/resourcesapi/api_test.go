@@ -17,7 +17,9 @@ import (
 	"github.com/vertex-pro/vertex-pro/internal/realtimecards"
 	"github.com/vertex-pro/vertex-pro/internal/rsspreview"
 	"github.com/vertex-pro/vertex-pro/internal/rssservice"
+	"github.com/vertex-pro/vertex-pro/internal/snapshot"
 	"github.com/vertex-pro/vertex-pro/internal/sseserver"
+	"github.com/vertex-pro/vertex-pro/internal/syncmerge"
 )
 
 func TestRouterRequiresSession(t *testing.T) {
@@ -85,17 +87,30 @@ func TestAcknowledgeUnknownWiresManualClosure(t *testing.T) {
 	seedResourceFixture(t, database)
 	auth := newAuth(t, database)
 	session := login(t, auth)
-	router := Router(Deps{Database: database, Auth: auth, Web: &httpapi.WebProtection{AllowedHosts: []string{"vertex.local"}}, Now: func() time.Time { return time.Date(2026, 8, 29, 8, 0, 0, 0, time.UTC) }})
+	root := t.TempDir()
+	store, err := snapshot.New(database, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.Save(context.Background(), "qb-1", 5, 3, syncmerge.Snapshot{RID: 1, Torrents: map[string]syncmerge.Torrent{"identity-1": {ID: "identity-1", Fields: map[string]any{}}}}, true); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 8, 29, 8, 0, 0, 0, time.UTC)
+	if _, err := database.Exec(`UPDATE sync_instance_state SET updated_at=? WHERE instance_id='qb-1'`, now.Format(time.RFC3339Nano)); err != nil {
+		t.Fatal(err)
+	}
+	router := Router(Deps{Database: database, Auth: auth, SnapshotRoot: root, Web: &httpapi.WebProtection{AllowedHosts: []string{"vertex.local"}}, Now: func() time.Time { return now }})
 	body := `{"action":"CONFIRM_EFFECT","command_id":"cmd-1","binding_id":"binding-1","evidence":{"sync_generation":5,"snapshot_revision":2,"snapshot_digest":"after","identity_present":true,"qb_torrent_id":"torrent-9"}}`
 	response := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/jobs/job-1/acknowledge-unknown", stringReader(body))
 	request.Host = "vertex.local"
 	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Idempotency-Key", "confirm-effect-key")
 	request.AddCookie(&http.Cookie{Name: httpapi.SessionCookieName, Value: session})
 	request.AddCookie(&http.Cookie{Name: httpapi.CSRFCookieName, Value: "csrf-1"})
 	request.Header.Set(httpapi.CSRFHeaderName, "csrf-1")
 	router.ServeHTTP(response, request)
-	if response.Code != http.StatusOK {
+	if response.Code != http.StatusAccepted {
 		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 	}
 	var jobState string

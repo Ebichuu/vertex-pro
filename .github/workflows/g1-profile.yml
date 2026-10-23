@@ -1,0 +1,49 @@
+name: vertex-pro-g1-profile
+
+on:
+  push:
+    branches:
+      - codex/live-e2e-20261023
+  workflow_dispatch:
+    inputs:
+      qb_binary_url:
+        description: Exact qB 5.0.4 static binary HTTPS URL (SHA-256 is pinned in the runner)
+        type: string
+        required: true
+      qui_image:
+        description: Production qui image reference pinned by sha256 digest
+        type: string
+        required: true
+      qb_build_fingerprint:
+        description: Real qbprofile.Probe QBBuildFingerprint from the target production build
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.6'
+      - name: Verify exact QB_504 combination in an isolated lab
+        env:
+          GOTOOLCHAIN: local
+          VERTEX_G1_QB_BINARY_URL: ${{ inputs.qb_binary_url || 'https://github.com/Ebichuu/vertex-pro/releases/download/g1-fixture-qb504-20261023/qbittorrent-nox' }}
+          VERTEX_G1_QUI_IMAGE: ${{ inputs.qui_image || 'ghcr.io/ebichuu/qui@sha256:a7d345cf1f4c29388fd0f0d1133a23c4fe267ad7f48a546b02fd6d4735d1d162' }}
+          VERTEX_G1_QB_BUILD_FINGERPRINT: ${{ inputs.qb_build_fingerprint || 'sha256:d0e77c32b79ce9e4f4fcd7e3233bff8f36265277ca75a62bf4a07e532dc5d149' }}
+          VERTEX_G1_OUTPUT: ${{ runner.temp }}/g1-evidence
+        run: python3 tools/g1lab/run-exact-profile.py
+      - name: Archive redacted evidence and campaign database
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: g1-qb504-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/g1-evidence
+          if-no-files-found: error
+          retention-days: 30

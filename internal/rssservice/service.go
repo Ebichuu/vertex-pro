@@ -120,7 +120,7 @@ func (service Service) CreateFeed(ctx context.Context, input CreateFeedInput) (F
 	if err := validateName(input.Name, "feed name"); err != nil {
 		return Feed{}, err
 	}
-	feedURL, err := validateURL(input.FeedURL, "feed URL")
+	feedURL, err := validateFeedURL(input.FeedURL)
 	if err != nil {
 		return Feed{}, err
 	}
@@ -186,7 +186,7 @@ func (service Service) UpdateFeed(ctx context.Context, input UpdateFeedInput) (F
 		changed = true
 	}
 	if input.FeedURL != nil {
-		feedURL, err := validateURL(*input.FeedURL, "feed URL")
+		feedURL, err := validateFeedURL(*input.FeedURL)
 		if err != nil {
 			return Feed{}, err
 		}
@@ -272,6 +272,19 @@ func validateURL(value, label string) (string, error) {
 	parsed, err := url.Parse(strings.TrimSpace(value))
 	if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
 		return "", fmt.Errorf("invalid %s", label)
+	}
+	return parsed.String(), nil
+}
+
+// Authenticated RSS subscriptions commonly put their passkey and filters in
+// the query. Keep those opaque; base site URLs retain their stricter policy.
+func validateFeedURL(value string) (string, error) {
+	parsed, err := url.Parse(strings.TrimSpace(value))
+	if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.User != nil || parsed.Fragment != "" {
+		return "", errors.New("invalid feed URL")
+	}
+	if _, err := url.ParseQuery(parsed.RawQuery); err != nil {
+		return "", errors.New("invalid feed URL")
 	}
 	return parsed.String(), nil
 }

@@ -42,6 +42,11 @@ type Report struct {
 // database probes run read-only, and the digest is computed over the
 // canonical JSON of the report without the digest field.
 func Build(version string, build buildidentity.Identity, config map[string]any, database *sql.DB, now time.Time) (Report, error) {
+	return BuildContext(context.Background(), version, build, config, database, now)
+}
+
+// BuildContext allows HTTP callers to bound the read-only database probes.
+func BuildContext(ctx context.Context, version string, build buildidentity.Identity, config map[string]any, database *sql.DB, now time.Time) (Report, error) {
 	redactedConfig := make(map[string]any, len(config))
 	for key, value := range config {
 		if observability.SensitiveKey(key) {
@@ -59,12 +64,12 @@ func Build(version string, build buildidentity.Identity, config map[string]any, 
 	databaseCheck := Check{Name: "database"}
 	if database == nil {
 		databaseCheck.Detail = "not configured"
-	} else if err := database.PingContext(context.Background()); err != nil {
+	} else if err := database.PingContext(ctx); err != nil {
 		databaseCheck.Detail = observability.RedactString(err.Error())
 	} else {
 		databaseCheck.OK = true
 		databaseCheck.Detail = "ping ok"
-		if err := db.CheckStartupConsistency(context.Background(), database); err != nil {
+		if err := db.CheckStartupConsistency(ctx, database); err != nil {
 			databaseCheck.OK = false
 			databaseCheck.Detail = observability.RedactString(err.Error())
 		}

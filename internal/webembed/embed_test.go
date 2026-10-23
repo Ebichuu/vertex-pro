@@ -29,3 +29,20 @@ func TestHandlerRejectsPathTraversal(t *testing.T) {
 		}
 	}
 }
+
+func TestHandlerServesClientRoutesOnRefresh(t *testing.T) {
+	for _, path := range []string{"/settings", "/aggregation", "/rules/new", "/history/job-1", "/downloaders/qb-1"} {
+		response := httptest.NewRecorder()
+		Handler().ServeHTTP(response, httptest.NewRequest(http.MethodGet, path, nil))
+		if response.Code != 200 || !strings.Contains(response.Body.String(), `id="root"`) {
+			t.Fatalf("%s: %d %s", path, response.Code, response.Body.String())
+		}
+	}
+	for _, path := range []string{"/api/v1/missing", "/assets/missing.js"} {
+		response := httptest.NewRecorder()
+		Handler().ServeHTTP(response, httptest.NewRequest(http.MethodGet, path, nil))
+		if response.Code != 404 {
+			t.Fatalf("%s: %d", path, response.Code)
+		}
+	}
+}

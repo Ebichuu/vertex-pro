@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -37,6 +36,7 @@ import (
 	"github.com/vertex-pro/vertex-pro/internal/ruleservice"
 	"github.com/vertex-pro/vertex-pro/internal/schedulercycle"
 	"github.com/vertex-pro/vertex-pro/internal/secrets"
+	"github.com/vertex-pro/vertex-pro/internal/settings"
 	"github.com/vertex-pro/vertex-pro/internal/snapshot"
 	"github.com/vertex-pro/vertex-pro/internal/sseserver"
 	"github.com/vertex-pro/vertex-pro/internal/startuprecover"
@@ -49,6 +49,7 @@ import (
 // Startup recovery is always run before HTTP traffic is exposed. External
 // mutation workers remain opt-in and are not started by this constructor.
 type Config struct {
+	Version                      string
 	Database                     db.Config
 	Hosts                        []string
 	Origins                      []string
@@ -56,6 +57,7 @@ type Config struct {
 	RecoveryConfirmationWindow   time.Duration
 	RecoveryReconciliationWindow time.Duration
 	Qui                          *QuiConfig
+	QuiInstances                 []QuiConfig
 	Scheduler                    *SchedulerConfig
 	DispatchStage                *DispatchStageConfig
 	Retention                    *RetentionConfig
@@ -114,6 +116,8 @@ type QuiConfig struct {
 
 // Runtime owns resources initialized during service startup.
 type Runtime struct {
+	Settings         settings.Settings
+	rssFetcher       rssfetch.Fetcher
 	Database         *sql.DB
 	Auth             *adminauth.Service
 	Handler          http.Handler
@@ -123,6 +127,12 @@ type Runtime struct {
 	Recovery         startuprecover.Result
 	hub              *sseserver.Hub
 	watcher          *syncwatcher.Watcher
+	controlClient    *control.Client
+	realtime         *realtimecards.Registry
+	instanceID       string
+	syncMu           sync.Mutex
+	schedulerMu      sync.Mutex
+	now              func() time.Time
 	confirmations    *confirmcoordinator.Coordinator
 	scheduler        *schedulercycle.Cycle
 	dispatchStage    *dispatchstage.Stage
@@ -133,6 +143,9 @@ type Runtime struct {
 	// 因为保留清理不依赖 qui 集成是否启用。
 	retentionCancel context.CancelFunc
 	workers         sync.WaitGroup
+	children        []*Runtime
+	proxyClient     *proxy.Client
+	startWorkers    func()
 }
 
 // New opens and validates the database before exposing HTTP traffic. A fresh
@@ -171,6 +184,27 @@ func New(ctx context.Context, config Config) (*Runtime, error) {
 	if now == nil {
 		now = time.Now
 	}
+	settingsService, err := settings.New(database, now)
+	if err != nil {
+		return nil, err
+	}
+	activeSettings, err := settingsService.Load(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("load runtime settings: %w", err)
+	}
+	if config.Scheduler != nil {
+		schedulerConfig := *config.Scheduler
+		if schedulerConfig.PollInterval <= 0 {
+			schedulerConfig.PollInterval = time.Duration(activeSettings.RSSPollIntervalMinutes) * time.Minute
+		}
+		config.Scheduler = &schedulerConfig
+	}
+	if config.Retention != nil {
+		retentionConfig := *config.Retention
+		retentionConfig.Policy.StatsRawRetention = time.Duration(activeSettings.StatsRawRetentionDays) * 24 * time.Hour
+		retentionConfig.Policy.StatsHourly = time.Duration(activeSettings.StatsHourlyRetentionDays) * 24 * time.Hour
+		config.Retention = &retentionConfig
+	}
 	confirmationWindow := config.RecoveryConfirmationWindow
 	if confirmationWindow <= 0 {
 		confirmationWindow = 10 * time.Minute
@@ -199,6 +233,11 @@ func New(ctx context.Context, config Config) (*Runtime, error) {
 		return nil, err
 	}
 	feedFetcher = feedFetcher.WithBoundary(boundary)
+	limits, err := rssfetch.NewLimits(activeSettings.RateLimitPerMinute, activeSettings.MaxConcurrentRSSFetches)
+	if err != nil {
+		return nil, err
+	}
+	feedFetcher = feedFetcher.WithLimits(limits)
 
 	rule, err := ruleservice.New(database, ruleservice.ClockFunc(now))
 	if err != nil {
@@ -210,6 +249,19 @@ func New(ctx context.Context, config Config) (*Runtime, error) {
 	events := &sseserver.Server{Database: database, Hub: hub}
 	web := &httpapi.WebProtection{AllowedHosts: config.Hosts, AllowedOrigins: config.Origins}
 	api := resourcesapi.Router(resourcesapi.Deps{
+		Settings:       settingsService,
+		ActiveSettings: activeSettings.Values,
+		SessionTTL:     time.Duration(activeSettings.SessionTTLHours) * time.Hour,
+		Version:        config.Version,
+		SnapshotRoot: func() string {
+			if config.Qui != nil {
+				return config.Qui.SnapshotRoot
+			}
+			if len(config.QuiInstances) > 0 {
+				return config.QuiInstances[0].SnapshotRoot
+			}
+			return ""
+		}(),
 		Database: database,
 		Auth:     auth,
 		Web:      web,
@@ -234,16 +286,57 @@ func New(ctx context.Context, config Config) (*Runtime, error) {
 	if config.Retention != nil {
 		snapshotRoot = config.Retention.SnapshotRoot
 	}
-	runtime := &Runtime{Database: database, Auth: auth, Handler: mux, Metrics: metrics.New(), Recovery: recovery, hub: hub, snapshotRoot: snapshotRoot, hardenedOutbound: config.HardenedOutbound}
+	runtime := &Runtime{Database: database, Auth: auth, Handler: mux, Metrics: metrics.New(), Recovery: recovery, hub: hub, snapshotRoot: snapshotRoot, hardenedOutbound: config.HardenedOutbound, Settings: activeSettings, rssFetcher: feedFetcher}
+	runtime.realtime, runtime.now = realtime, now
+	initialized := false
+	defer func() {
+		if !initialized {
+			runtime.stopWorkers()
+		}
+	}()
+	quiConfigs := append([]QuiConfig{}, config.QuiInstances...)
 	if config.Qui != nil {
-		if err := runtime.startQui(ctx, *config.Qui, config.Scheduler, config.Qui.DispatchStage, now); err != nil {
+		quiConfigs = append([]QuiConfig{*config.Qui}, quiConfigs...)
+	}
+	seenInstances := map[string]bool{}
+	for index, quiConfig := range quiConfigs {
+		if seenInstances[quiConfig.InstanceID] {
+			return nil, fmt.Errorf("duplicate qui instance %s", quiConfig.InstanceID)
+		}
+		seenInstances[quiConfig.InstanceID] = true
+		worker := runtime
+		if index > 0 {
+			worker = &Runtime{Database: database, Metrics: runtime.Metrics, hub: hub, realtime: realtime, now: now, Settings: activeSettings, rssFetcher: feedFetcher, hardenedOutbound: config.HardenedOutbound}
+			runtime.children = append(runtime.children, worker)
+		}
+		stageConfig := quiConfig.DispatchStage
+		if index == 0 && stageConfig == nil {
+			stageConfig = config.DispatchStage
+		}
+		if err := worker.startQui(ctx, quiConfig, stageConfig, now); err != nil {
 			return nil, err
+		}
+	}
+	if config.Scheduler != nil && config.Scheduler.Enabled {
+		if err := runtime.startScheduler(config.Scheduler); err != nil {
+			return nil, err
+		}
+	}
+	// No external mutation worker starts until every configured instance and
+	// the scheduler have initialized successfully.
+	if runtime.startWorkers != nil {
+		runtime.startWorkers()
+	}
+	for _, child := range runtime.children {
+		if child.startWorkers != nil {
+			child.startWorkers()
 		}
 	}
 	if config.Retention != nil {
 		runtime.startRetention(config.Retention, now)
 	}
 	closeDatabase = false
+	initialized = true
 	return runtime, nil
 }
 
@@ -310,6 +403,14 @@ func (runtime *Runtime) Close() error {
 	if runtime == nil || runtime.Database == nil {
 		return nil
 	}
+	runtime.stopWorkers()
+	return runtime.Database.Close()
+}
+
+func (runtime *Runtime) stopWorkers() {
+	for _, child := range runtime.children {
+		child.stopWorkers()
+	}
 	if runtime.cancel != nil {
 		runtime.cancel()
 	}
@@ -320,7 +421,6 @@ func (runtime *Runtime) Close() error {
 	if runtime.watcher != nil {
 		runtime.watcher.Close()
 	}
-	return runtime.Database.Close()
 }
 
 // Ready performs the checks that must remain true while the service accepts traffic.
@@ -342,7 +442,10 @@ func (runtime *Runtime) SubscriberCount() int {
 	return runtime.hub.SubscriberCount()
 }
 
-func (runtime *Runtime) startQui(ctx context.Context, config QuiConfig, schedulerConfig *SchedulerConfig, dispatchStageConfig *DispatchStageConfig, now func() time.Time) error {
+func (runtime *Runtime) startQui(ctx context.Context, config QuiConfig, dispatchStageConfig *DispatchStageConfig, now func() time.Time) error {
+	if dispatchStageConfig != nil && dispatchStageConfig.Enabled && dispatchStageConfig.Storage.InstanceID != config.InstanceID {
+		return errors.New("dispatch storage instance does not match the configured qui instance")
+	}
 	if strings.TrimSpace(config.InstanceID) == "" {
 		return errors.New("qui instance ID is required")
 	}
@@ -356,10 +459,13 @@ func (runtime *Runtime) startQui(ctx context.Context, config QuiConfig, schedule
 	if err != nil {
 		return err
 	}
+	runtime.controlClient, runtime.instanceID = controlClient, config.InstanceID
 	proxyClient, err := proxy.New(ctx, proxy.Config{BaseURL: config.BaseURL, ProxyKey: config.ProxyKey, Store: config.Store, HTTPClient: config.HTTPClient})
 	if err != nil {
 		return err
 	}
+	runtime.proxyClient = proxyClient
+	runtime.snapshotRoot = config.SnapshotRoot
 	instances, err := controlClient.Instances(ctx)
 	if err != nil {
 		return fmt.Errorf("list qui instances: %w", err)
@@ -411,7 +517,7 @@ func (runtime *Runtime) startQui(ctx context.Context, config QuiConfig, schedule
 		}
 		runtime.Dispatch = dispatch
 		if dispatchStageConfig != nil && dispatchStageConfig.Enabled {
-			stage, err := newDispatchStage(runtime.Database, dispatchStageConfig, proxyClient, profile, now, runtime.hardenedOutbound)
+			stage, err := newDispatchStage(runtime.Database, dispatchStageConfig, proxyClient, profile, now, runtime.hardenedOutbound, runtime.collectDispatchEvidence)
 			if err != nil {
 				return fmt.Errorf("initialize dispatch stage: %w", err)
 			}
@@ -439,7 +545,8 @@ func (runtime *Runtime) startQui(ctx context.Context, config QuiConfig, schedule
 	if err != nil {
 		return err
 	}
-	if _, err := watcher.RunOnce(ctx); err != nil {
+	initialEvent, err := watcher.RunOnce(ctx)
+	if err != nil {
 		return fmt.Errorf("initialize qui sync: %w", err)
 	}
 	if err := updateSyncState(ctx, runtime.Database, config.InstanceID, "READY", now()); err != nil {
@@ -452,8 +559,22 @@ func (runtime *Runtime) startQui(ctx context.Context, config QuiConfig, schedule
 	runtime.confirmations = confirmations
 	runtime.Profile = &profile
 	runtime.watcher = watcher
+	if err := runtime.RefreshMonitoring(ctx, now(), &initialEvent.Snapshot); err != nil {
+		return fmt.Errorf("initialize instance monitoring: %w", err)
+	}
+	runtime.startWorkers = func() { runtime.startQuiWorkers(config, dispatchStageConfig, now) }
+	return nil
+}
+
+func (runtime *Runtime) startQuiWorkers(config QuiConfig, dispatchStageConfig *DispatchStageConfig, now func() time.Time) {
 	workerContext, cancel := context.WithCancel(context.Background())
-	runtime.cancel = cancel
+	previousCancel := runtime.cancel
+	runtime.cancel = func() {
+		cancel()
+		if previousCancel != nil {
+			previousCancel()
+		}
+	}
 	if runtime.dispatchStage != nil {
 		stageInterval := 30 * time.Second
 		if dispatchStageConfig.Interval > 0 {
@@ -483,31 +604,6 @@ func (runtime *Runtime) startQui(ctx context.Context, config QuiConfig, schedule
 			}
 		}()
 	}
-	if schedulerConfig != nil && schedulerConfig.Enabled {
-		scheduler, err := newSchedulerCycle(runtime.Database, schedulerConfig, config.InstanceID, runtime.hardenedOutbound)
-		if err != nil {
-			return fmt.Errorf("initialize scheduler: %w", err)
-		}
-		runtime.scheduler = scheduler
-		pollInterval := schedulerConfig.PollInterval
-		if pollInterval <= 0 {
-			pollInterval = 5 * time.Minute
-		}
-		runtime.workers.Add(1)
-		go func() {
-			defer runtime.workers.Done()
-			ticker := time.NewTicker(pollInterval)
-			defer ticker.Stop()
-			for {
-				select {
-				case <-workerContext.Done():
-					return
-				case <-ticker.C:
-					_ = runtime.RunSchedulerCycle(workerContext)
-				}
-			}
-		}()
-	}
 	interval := config.SyncInterval
 	if interval <= 0 {
 		interval = 10 * time.Second
@@ -526,13 +622,14 @@ func (runtime *Runtime) startQui(ctx context.Context, config QuiConfig, schedule
 			}
 		}
 	}()
-	return nil
 }
 
 // RunSchedulerCycle polls every enabled feed once: fetch, dedupe, download,
 // identify, and match. Job creation is the end of the cycle; dispatching is
 // owned by the dispatch runtime and never happens here.
 func (runtime *Runtime) RunSchedulerCycle(ctx context.Context) error {
+	runtime.schedulerMu.Lock()
+	defer runtime.schedulerMu.Unlock()
 	if runtime.scheduler == nil {
 		return fmt.Errorf("scheduler is not enabled")
 	}
@@ -543,6 +640,9 @@ func (runtime *Runtime) RunSchedulerCycle(ctx context.Context) error {
 	var firstErr error
 	for _, feed := range feeds {
 		result, err := runtime.scheduler.Run(ctx, feed)
+		if saveErr := runtime.recordFeedPoll(ctx, feed, result, err); saveErr != nil {
+			return saveErr
+		}
 		if err != nil {
 			runtime.Metrics.Inc("vertex_rss_feeds_total", map[string]string{"result": "error"})
 			if firstErr == nil {
@@ -568,7 +668,7 @@ func (runtime *Runtime) RunSchedulerCycle(ctx context.Context) error {
 }
 
 func (runtime *Runtime) databaseEnabledFeeds(ctx context.Context) ([]schedulercycle.FeedRef, error) {
-	rows, err := runtime.Database.QueryContext(ctx, `SELECT site_id, feed_id, feed_url FROM feeds WHERE enabled = 1`)
+	rows, err := runtime.Database.QueryContext(ctx, `SELECT f.site_id, f.feed_id, f.feed_url,COALESCE(f.etag,''),COALESCE(f.last_modified,''),COALESCE(r.initialized,0),COALESCE(r.last_polled_at,''),f.poll_minutes FROM feeds f JOIN sites s ON s.site_id=f.site_id LEFT JOIN feed_runtime_state r ON r.feed_id=f.feed_id WHERE f.enabled = 1 AND s.enabled = 1`)
 	if err != nil {
 		return nil, fmt.Errorf("list enabled feeds: %w", err)
 	}
@@ -576,15 +676,31 @@ func (runtime *Runtime) databaseEnabledFeeds(ctx context.Context) ([]schedulercy
 	feeds := make([]schedulercycle.FeedRef, 0, 8)
 	for rows.Next() {
 		var feed schedulercycle.FeedRef
-		if err := rows.Scan(&feed.SiteID, &feed.FeedID, &feed.URL); err != nil {
+		var initialized bool
+		var lastPolled string
+		var interval int
+		if err := rows.Scan(&feed.SiteID, &feed.FeedID, &feed.URL, &feed.ETag, &feed.LastModified, &initialized, &lastPolled, &interval); err != nil {
 			return nil, err
+		}
+		if lastPolled != "" {
+			at, err := time.Parse(time.RFC3339Nano, lastPolled)
+			if err != nil {
+				return nil, fmt.Errorf("invalid feed polling timestamp: %w", err)
+			}
+			if runtime.now().Sub(at) < time.Duration(interval)*time.Minute {
+				continue
+			}
+		}
+		feed.BaselineOnly = !initialized
+		if !initialized {
+			feed.ETag, feed.LastModified = "", ""
 		}
 		feeds = append(feeds, feed)
 	}
 	return feeds, rows.Err()
 }
 
-func newDispatchStage(database *sql.DB, config *DispatchStageConfig, proxyClient *proxy.Client, profile qbprofile.Profile, now func() time.Time, hardened bool) (*dispatchstage.Stage, error) {
+func newDispatchStage(database *sql.DB, config *DispatchStageConfig, proxyClient *proxy.Client, profile qbprofile.Profile, now func() time.Time, hardened bool, collect func(context.Context) (dispatchstage.Evidence, func(), error)) (*dispatchstage.Stage, error) {
 	downloader, err := torrentdownload.New(torrentdownload.Config{AllowedHosts: config.AllowedArtifactHosts, RejectPrivateIPs: hardened})
 	if err != nil {
 		return nil, err
@@ -595,16 +711,12 @@ func newDispatchStage(database *sql.DB, config *DispatchStageConfig, proxyClient
 		Profile:    profile,
 		Sender:     proxyClient,
 		Now:        now,
+		Collect:    collect,
 	})
 }
 
-func newSchedulerCycle(database *sql.DB, config *SchedulerConfig, instanceID string, hardened bool) (*schedulercycle.Cycle, error) {
-	fetcher, err := rssfetch.New(nil, 1<<20)
-	if err != nil {
-		return nil, err
-	}
-	fetcher = fetcher.WithBoundary(rssfetch.Boundary{RejectPrivateIPs: hardened})
-	downloader, err := torrentdownload.New(torrentdownload.Config{AllowedHosts: config.AllowedArtifactHosts})
+func newSchedulerCycle(database *sql.DB, config *SchedulerConfig, instanceID string, fetcher rssfetch.Fetcher, hardened bool) (*schedulercycle.Cycle, error) {
+	downloader, err := torrentdownload.New(torrentdownload.Config{AllowedHosts: config.AllowedArtifactHosts, RejectPrivateIPs: hardened})
 	if err != nil {
 		return nil, err
 	}
@@ -641,29 +753,7 @@ func newSchedulerCycle(database *sql.DB, config *SchedulerConfig, instanceID str
 // definition carries its own action set.
 func defaultMatchFactory(instanceID string) matchpipeline.MatchFactory {
 	return func(rule ruleservice.Rule) (ruleaggregate.Match, error) {
-		definition := struct {
-			ActionSetJSON string `json:"action_set_json"`
-		}{}
-		if err := json.Unmarshal(rule.Definition, &definition); err != nil {
-			return ruleaggregate.Match{}, fmt.Errorf("decode rule %s definition: %w", rule.ID, err)
-		}
-		if definition.ActionSetJSON == "" {
-			return ruleaggregate.Match{TargetMode: "FIXED_INSTANCE", TargetInstanceID: instanceID, ParticipationWindow: time.Hour}, nil
-		}
-		actions := struct {
-			TargetMode       string `json:"target_mode"`
-			TargetInstanceID string `json:"target_instance_id"`
-			Window           int    `json:"participation_window_minutes"`
-		}{}
-		if err := json.Unmarshal([]byte(definition.ActionSetJSON), &actions); err != nil {
-			return ruleaggregate.Match{}, fmt.Errorf("decode rule %s action set: %w", rule.ID, err)
-		}
-		window := time.Hour
-		if actions.Window > 0 {
-			window = time.Duration(actions.Window) * time.Minute
-		}
-		match := ruleaggregate.Match{TargetMode: actions.TargetMode, TargetInstanceID: actions.TargetInstanceID, ParticipationWindow: window}
-		return match, nil
+		return ruleservice.MatchFor(rule, instanceID)
 	}
 }
 
@@ -671,8 +761,10 @@ func defaultMatchFactory(instanceID string) matchpipeline.MatchFactory {
 // confirmation coordinator over the resulting snapshot, and refresh the
 // instance state. Exposed for tests and diagnostic tooling.
 func (runtime *Runtime) TickSync(ctx context.Context) error {
-	runtime.tickSync(ctx, tickSyncNow(time.Now()))
-	return nil
+	if runtime.watcher == nil {
+		return errors.New("qui sync is not enabled")
+	}
+	return runtime.tickSync(ctx, runtime.now)
 }
 
 // tickSyncNow adapts an absolute time into the now-func shape.
@@ -680,16 +772,23 @@ func tickSyncNow(at time.Time) func() time.Time {
 	return func() time.Time { return at }
 }
 
-func (runtime *Runtime) tickSync(ctx context.Context, now func() time.Time) {
+func (runtime *Runtime) tickSync(ctx context.Context, now func() time.Time) error {
+	runtime.syncMu.Lock()
+	defer runtime.syncMu.Unlock()
+	return runtime.tickSyncLocked(ctx, now)
+}
+
+// tickSyncLocked requires syncMu, shared with the pre-Add critical section.
+func (runtime *Runtime) tickSyncLocked(ctx context.Context, now func() time.Time) error {
 	state := "READY"
 	event, err := runtime.watcher.RunOnce(ctx)
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
-			return
+			return err
 		}
 		runtime.Metrics.Inc("vertex_sync_ticks_total", map[string]string{"result": "stale"})
-		_ = updateSyncState(ctx, runtime.Database, event.InstanceID, "STALE", now())
-		return
+		_ = updateSyncState(ctx, runtime.Database, runtime.instanceID, "STALE", now())
+		return err
 	}
 	// The confirmation coordinator only touches chains created by the
 	// dispatcher; a failed cycle is retried on the next tick because every
@@ -709,6 +808,10 @@ func (runtime *Runtime) tickSync(ctx context.Context, now func() time.Time) {
 		runtime.Metrics.Inc("vertex_sync_ticks_total", map[string]string{"result": "ok"})
 	}
 	_ = updateSyncState(ctx, runtime.Database, event.InstanceID, state, now())
+	if err := runtime.RefreshMonitoring(ctx, now(), &event.Snapshot); err != nil {
+		return err
+	}
+	return confirmErr
 }
 
 func updateSyncState(ctx context.Context, database *sql.DB, instanceID, state string, updatedAt time.Time) error {

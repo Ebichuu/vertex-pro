@@ -74,6 +74,24 @@ type TransferInfo struct {
 	Uploaded      int64 `json:"up_info_data"`
 }
 
+// Missing counters are unknown, not a valid zero-rate sample.
+func (info *TransferInfo) UnmarshalJSON(data []byte) error {
+	var fields struct {
+		DownloadSpeed *int64 `json:"dl_info_speed"`
+		UploadSpeed   *int64 `json:"up_info_speed"`
+		Downloaded    *int64 `json:"dl_info_data"`
+		Uploaded      *int64 `json:"up_info_data"`
+	}
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return err
+	}
+	if fields.DownloadSpeed == nil || fields.UploadSpeed == nil || fields.Downloaded == nil || fields.Uploaded == nil {
+		return errors.New("qui transfer-info is missing counters")
+	}
+	*info = TransferInfo{DownloadSpeed: *fields.DownloadSpeed, UploadSpeed: *fields.UploadSpeed, Downloaded: *fields.Downloaded, Uploaded: *fields.Uploaded}
+	return nil
+}
+
 type HTTPError struct {
 	StatusCode int
 	Status     string

@@ -1,8 +1,10 @@
 import { http, HttpResponse } from 'msw'
+import { settingsHandlers } from './settings'
 import { apiErrorFixture, authStatusFixture, dashboardFixture, instancesFixture, rulesFixture, sitesFixture, staleDashboardFixture } from './fixtures'
 
 
 export const handlers = [
+  ...settingsHandlers(),
   http.get('/api/v1/auth/status', () => HttpResponse.json(authStatusFixture)),
   http.get('/api/v1/dashboard', ({ request }) => {
     const scenario = new URL(request.url).searchParams.get('scenario')

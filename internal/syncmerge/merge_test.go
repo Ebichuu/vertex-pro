@@ -2,6 +2,27 @@ package syncmerge
 
 import "testing"
 
+func TestMergePreservesAndReplacesServerCapacityFacts(t *testing.T) {
+	full, err := Merge(Snapshot{}, Delta{RID: 1, FullUpdate: true, Torrents: map[string]map[string]any{}, ServerState: map[string]any{"free_space_on_disk": 100, "connection_status": "connected"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	delta, err := Merge(full.Snapshot, Delta{RID: 2, ServerState: map[string]any{"free_space_on_disk": 50}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if delta.Snapshot.ServerState["free_space_on_disk"] != 50 || delta.Snapshot.ServerState["connection_status"] != "connected" || full.Snapshot.ServerState["free_space_on_disk"] != 100 {
+		t.Fatal("incremental server state did not preserve immutable snapshots")
+	}
+	replaced, err := Merge(delta.Snapshot, Delta{RID: 3, FullUpdate: true, Torrents: map[string]map[string]any{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if replaced.Snapshot.ServerState["free_space_on_disk"] != nil {
+		t.Fatal("full snapshot inherited old capacity")
+	}
+}
+
 func TestMergeBuildsBaselineAndInheritsIncrementalFields(t *testing.T) {
 	baseline, err := Merge(Snapshot{}, Delta{RID: 0, FullUpdate: true, Torrents: map[string]map[string]any{"hash-1": {"name": "one", "amount_left": 100, "state": "downloading"}}})
 	if err != nil {

@@ -10,7 +10,7 @@ G1 已完成三 Profile（qB 4.3.8、5.0.4、5.2.2）的固定 qui 真实链路�
 
 RSS→规则→Placement→Reservation→Dispatch→FirstConfirm/对账的生产调度链已接通，但 qB 写操作仍遵循 `VERTEX_PRO_ENABLE_DISPATCH` 显式开启、Profile 验证通过才允许的 fail-closed 规则。当前主分支还不能声称 `FROZEN-V1`；G2、C1、A24 和 RC 冻结流程仍未完成。
 
-镜像只通过 GitHub Actions 构建和发布。
+镜像只通过 GitHub Actions 构建和发布。推送 `v*` tag 会触发 `.github/workflows/image.yml`，发布 GHCR 镜像及 provenance/SBOM；Pull Request 只做构建验证。不要在本地或其他 CI 中构建发布镜像。
 
 产品边界、状态机和安全不变量以 `docs/产品方案设计/VERTEX_PRO_COMPLETE_REDESIGN_V1_RC8_FINAL.md` 为准；施工顺序以 `docs/实施流程/VERTEX_PRO_V1_CODE_IMPLEMENTATION_PLAYBOOK.md` 为准；具体进度以 `docs/实施流程/IMPLEMENTATION_STATUS_V1.md` 为准。
 

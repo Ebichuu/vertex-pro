@@ -21,6 +21,11 @@
     { "name": "events" }
   ],
   "paths": {
+    "/settings": {
+      "get": { "tags": ["settings"], "operationId": "getSettings", "security": [{ "SessionCookie": [] }], "responses": { "200": { "description": "Saved settings and the active startup snapshot. Changes require a service restart.", "headers": { "ETag": { "schema": { "type": "string" } } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SettingsResponse" } } } }, "401": { "$ref": "#/components/responses/ErrorResponse" }, "default": { "$ref": "#/components/responses/ErrorResponse" } } },
+      "put": { "tags": ["settings"], "operationId": "updateSettings", "security": [{ "SessionCookie": [] }], "parameters": [{ "$ref": "#/components/parameters/IfMatch" }, { "name": "X-CSRF-Token", "in": "header", "required": true, "schema": { "type": "string", "minLength": 1 } }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SettingsValues" } } } }, "responses": { "200": { "description": "Settings saved atomically; active runtime settings change on restart.", "headers": { "ETag": { "schema": { "type": "string" } } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SettingsResponse" } } } }, "400": { "$ref": "#/components/responses/ErrorResponse" }, "401": { "$ref": "#/components/responses/ErrorResponse" }, "403": { "$ref": "#/components/responses/ErrorResponse" }, "409": { "$ref": "#/components/responses/ErrorResponse" }, "422": { "$ref": "#/components/responses/ErrorResponse" }, "default": { "$ref": "#/components/responses/ErrorResponse" } } }
+    },
+    "/settings/diagnostics": { "get": { "tags": ["settings"], "operationId": "getSettingsDiagnostics", "security": [{ "SessionCookie": [] }], "responses": { "200": { "description": "Redacted server-generated JSON diagnostics; no resource URLs or credentials.", "headers": { "Content-Disposition": { "schema": { "type": "string" } } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DiagnosticReport" } } } }, "401": { "$ref": "#/components/responses/ErrorResponse" }, "default": { "$ref": "#/components/responses/ErrorResponse" } } } },
     "/auth/status": { "get": { "tags": ["auth"], "operationId": "getAuthStatus", "responses": { "200": { "$ref": "#/components/responses/JsonObject" }, "default": { "$ref": "#/components/responses/ErrorResponse" } } } },
     "/auth/initialize": { "post": { "tags": ["auth"], "operationId": "initializeAuth", "requestBody": { "$ref": "#/components/requestBodies/JsonObject" }, "responses": { "200": { "$ref": "#/components/responses/JsonObject" }, "400": { "$ref": "#/components/responses/ErrorResponse" }, "409": { "$ref": "#/components/responses/ErrorResponse" }, "422": { "$ref": "#/components/responses/ErrorResponse" }, "default": { "$ref": "#/components/responses/ErrorResponse" } } } },
     "/auth/login": { "post": { "tags": ["auth"], "operationId": "loginAuth", "requestBody": { "$ref": "#/components/requestBodies/JsonObject" }, "responses": { "200": { "$ref": "#/components/responses/JsonObject" }, "400": { "$ref": "#/components/responses/ErrorResponse" }, "409": { "$ref": "#/components/responses/ErrorResponse" }, "429": { "$ref": "#/components/responses/ErrorResponse" }, "default": { "$ref": "#/components/responses/ErrorResponse" } } } },
@@ -64,6 +69,7 @@
     "/events/stream": { "get": { "tags": ["events"], "operationId": "streamEvents", "parameters": [{ "$ref": "#/components/parameters/LastEventId" }], "responses": { "200": { "description": "Server-sent event stream.", "content": { "text/event-stream": { "schema": { "type": "string" } } } }, "409": { "$ref": "#/components/responses/ErrorResponse" }, "default": { "$ref": "#/components/responses/ErrorResponse" } } } }
   },
   "components": {
+    "securitySchemes": { "SessionCookie": { "type": "apiKey", "in": "cookie", "name": "vertex_session" } },
     "parameters": {
       "ResourceId": { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "minLength": 1 } },
       "CommandId": { "name": "command_id", "in": "path", "required": true, "schema": { "type": "string", "minLength": 1 } },
@@ -94,6 +100,22 @@
       "ErrorResponse": { "description": "Stable error envelope.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } } }
     },
     "schemas": {
+      "SettingsValues": {
+        "x-typescript": true, "type": "object", "additionalProperties": false,
+        "required": ["timezone", "rss_poll_interval_minutes", "rate_limit_per_minute", "max_concurrent_rss_fetches", "session_ttl_hours", "stats_raw_retention_days", "stats_hourly_retention_days"],
+        "properties": {
+          "timezone": { "type": "string", "minLength": 1, "maxLength": 100, "description": "IANA display timezone. UTC storage and statistics buckets are unchanged." },
+          "rss_poll_interval_minutes": { "type": "integer", "minimum": 1, "maximum": 1440 },
+          "rate_limit_per_minute": { "type": "integer", "minimum": 1, "maximum": 600, "description": "Paced RSS requests per target hostname, shared by polling, previews and redirects." },
+          "max_concurrent_rss_fetches": { "type": "integer", "minimum": 1, "maximum": 32 },
+          "session_ttl_hours": { "type": "integer", "minimum": 1, "maximum": 720, "description": "Used for new logins after restart; existing sessions keep their expiry." },
+          "stats_raw_retention_days": { "type": "integer", "minimum": 1, "maximum": 3650 },
+          "stats_hourly_retention_days": { "type": "integer", "minimum": 1, "maximum": 3650, "description": "Must be at least stats_raw_retention_days." }
+        }
+      },
+      "SettingsSecurity": { "x-typescript": true, "type": "object", "additionalProperties": false, "required": ["csrf_protection", "secure_cookies", "diagnostics_redacted"], "properties": { "csrf_protection": { "type": "boolean" }, "secure_cookies": { "type": "boolean" }, "diagnostics_redacted": { "type": "boolean" } } },
+      "SettingsResponse": { "x-typescript": true, "type": "object", "additionalProperties": false, "required": ["values", "active", "revision", "updated_at", "restart_required", "security"], "properties": { "values": { "$ref": "#/components/schemas/SettingsValues" }, "active": { "$ref": "#/components/schemas/SettingsValues" }, "revision": { "type": "integer", "minimum": 1 }, "updated_at": { "type": "string", "format": "date-time" }, "restart_required": { "type": "boolean" }, "security": { "$ref": "#/components/schemas/SettingsSecurity" } } },
+      "DiagnosticReport": { "x-typescript": true, "type": "object", "additionalProperties": false, "required": ["generated_at", "version", "build", "config", "checks", "digest"], "properties": { "generated_at": { "type": "string", "format": "date-time" }, "version": { "type": "string" }, "build": { "type": "object", "additionalProperties": true }, "config": { "type": "object", "additionalProperties": true }, "checks": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["name", "ok"], "properties": { "name": { "type": "string" }, "ok": { "type": "boolean" }, "detail": { "type": "string" } } } }, "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" } } },
       "JsonObject": { "type": "object", "additionalProperties": true },
       "CreateFeedRequest": { "type": "object", "required": ["id", "site_id", "name", "feed_url"], "properties": { "id": { "type": "string", "minLength": 1, "maxLength": 128 }, "site_id": { "type": "string", "minLength": 1, "maxLength": 128 }, "name": { "type": "string", "minLength": 1, "maxLength": 200 }, "feed_url": { "type": "string", "format": "uri" }, "enabled": { "type": "boolean", "default": true }, "poll_minutes": { "type": "integer", "minimum": 1, "maximum": 1440, "default": 15 } }, "additionalProperties": false },
       "UpdateFeedRequest": { "type": "object", "minProperties": 1, "properties": { "name": { "type": "string", "minLength": 1, "maxLength": 200 }, "feed_url": { "type": "string", "format": "uri" }, "enabled": { "type": "boolean" }, "poll_minutes": { "type": "integer", "minimum": 1, "maximum": 1440 } }, "additionalProperties": false },

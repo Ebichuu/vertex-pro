@@ -3,14 +3,14 @@ import type { HistoryEntry } from './history'
 export interface HistoryRuleMatch {
   id: string
   name: string
-  priority: number
+  priority?: number
   winner: boolean
 }
 
 export interface HistoryFinalDecision {
   downloader: string
   category: string
-  tags: ReadonlyArray<string>
+  tags?: ReadonlyArray<string>
   savePath: string
 }
 
@@ -47,12 +47,13 @@ export interface HistoryDetail {
   site: string
   downloader: string
   userStatus: Pick<HistoryEntry, 'user_status' | 'user_status_label'>
-  discoveredAt: string
+  discoveredAt?: string
   addedAt?: string
   confirmedAt?: string
   finishedAt?: string
   failureReason?: string
   rules: ReadonlyArray<HistoryRuleMatch>
+  rulesKnown?: boolean
   winnerReason: string
   finalDecision: HistoryFinalDecision
   transfer: HistoryTransferSnapshot
@@ -190,7 +191,7 @@ export function sortHistoryTimeline(timeline: ReadonlyArray<HistoryTimelineItem>
 }
 
 export function formatHistoryBytes(bytes?: number): string {
-  if (bytes === undefined) {
+  if (bytes === undefined || !Number.isFinite(bytes) || bytes < 0) {
     return '暂无数据'
   }
   const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB']
@@ -203,7 +204,7 @@ export function formatHistoryBytes(bytes?: number): string {
   return `${value.toFixed(unitIndex === 0 ? 0 : 2)} ${units[unitIndex]}`
 }
 
-export function formatHistoryTime(value?: string): string {
+export function formatHistoryTime(value?: string, timezone = 'UTC'): string {
   if (!value) {
     return '暂无数据'
   }
@@ -215,6 +216,6 @@ export function formatHistoryTime(value?: string): string {
     dateStyle: 'medium',
     timeStyle: 'medium',
     hour12: false,
-    timeZone: 'Asia/Shanghai',
+    timeZone: timezone,
   }).format(date)
 }

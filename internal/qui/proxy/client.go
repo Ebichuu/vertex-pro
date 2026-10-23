@@ -135,15 +135,16 @@ func (client *Client) Fetch(ctx context.Context, rid uint64) (syncmerge.Delta, e
 		return syncmerge.Delta{}, fmt.Errorf("marshal qB sync response: %w", err)
 	}
 	var delta struct {
-		RID        uint64                    `json:"rid"`
-		FullUpdate bool                      `json:"full_update"`
-		Torrents   map[string]map[string]any `json:"torrents"`
-		Removed    []string                  `json:"torrents_removed"`
+		RID         uint64                    `json:"rid"`
+		FullUpdate  bool                      `json:"full_update"`
+		Torrents    map[string]map[string]any `json:"torrents"`
+		Removed     []string                  `json:"torrents_removed"`
+		ServerState map[string]any            `json:"server_state"`
 	}
 	if err := json.Unmarshal(payload, &delta); err != nil {
 		return syncmerge.Delta{}, fmt.Errorf("decode qB sync response: %w", err)
 	}
-	return syncmerge.Delta{RID: delta.RID, FullUpdate: delta.FullUpdate, Torrents: delta.Torrents, Removed: delta.Removed}, nil
+	return syncmerge.Delta{RID: delta.RID, FullUpdate: delta.FullUpdate, Torrents: delta.Torrents, Removed: delta.Removed, ServerState: delta.ServerState}, nil
 }
 
 func (client *Client) Trackers(ctx context.Context, torrentHash string) ([]map[string]any, error) {
@@ -192,7 +193,7 @@ func (client *Client) Send(ctx context.Context, input *http.Request) (qbresponse
 	outgoing.Header.Set("Accept", "application/json, text/plain")
 	response, err := client.httpClient.Do(outgoing)
 	if err != nil {
-		return qbresponse.RawResponse{}, fmt.Errorf("qB proxy Add request: %w", err)
+		return qbresponse.RawResponse{}, &transportError{cause: err}
 	}
 	defer response.Body.Close()
 	body, err := io.ReadAll(io.LimitReader(response.Body, maxAddResponseBytes+1))
@@ -236,7 +237,7 @@ func (client *Client) getJSON(ctx context.Context, endpoint string, target any) 
 	request.Header.Set("Accept", "application/json")
 	response, err := client.httpClient.Do(request)
 	if err != nil {
-		return fmt.Errorf("qB proxy request: %w", err)
+		return &transportError{cause: err}
 	}
 	defer response.Body.Close()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
@@ -268,6 +269,13 @@ func (client *Client) getJSON(ctx context.Context, endpoint string, target any) 
 	}
 	return nil
 }
+
+// net/http includes the request URL in transport errors. Proxy credentials
+// live in the path and must never reach logs or callers through Error().
+type transportError struct{ cause error }
+
+func (err *transportError) Error() string { return "qB proxy transport failed" }
+func (err *transportError) Unwrap() error { return err.cause }
 
 func allowedEndpoint(endpoint string) bool {
 	switch strings.SplitN(endpoint, "?", 2)[0] {

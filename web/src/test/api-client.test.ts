@@ -11,6 +11,13 @@ function stubClient(status: number, body: unknown): { client: ApiClient; calls: 
 }
 
 describe("generated api client", () => {
+  it("binds browser fetch to the global object", async () => {
+    const client = new ApiClient('http://vertex.local', async function (this: unknown) {
+      expect(this).toBe(globalThis);
+      return new Response('{}', { status: 200 });
+    } as typeof fetch);
+    await client.getAuthStatus();
+  });
   it("listSites 调用合同路径且不手写字符串", async () => {
     const { client, calls } = stubClient(200, { items: [] });
     const result = await client.listSites();

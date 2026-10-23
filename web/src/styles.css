@@ -209,6 +209,45 @@ body { margin: 0; background: var(--surface); color: var(--text); font-family: "
 @media (max-width: 680px) { .downloader-detail-heading, .downloader-detail-section-heading { display: block; } .downloader-detail-status { justify-content: flex-start; padding-top: 8px; } .downloader-metric-grid, .downloader-capacity-grid, .downloader-period-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } .downloader-period-tabs { margin-top: 8px; } .downloader-capacity-bar { align-items: flex-start; flex-direction: column; } }
 @media (max-width: 480px) { .downloader-metric-grid, .downloader-capacity-grid, .downloader-period-summary { grid-template-columns: 1fr; } .downloader-detail-section, .downloader-quality { padding: 15px; } .downloader-chart { grid-template-columns: repeat(12, 30px); } }
 
+/* UI-11 Settings：按策略分组的可替换设置表单与脱敏诊断下载。 */
+.settings-page { display: grid; gap: 22px; min-width: 0; }
+.settings-heading { align-items: flex-start; display: flex; gap: 20px; justify-content: space-between; }
+.settings-heading h1 { margin-bottom: 10px; }
+.settings-layout { align-items: start; display: grid; gap: 20px; grid-template-columns: minmax(0, 1.35fr) minmax(260px, .65fr); }
+.settings-form, .settings-diagnostics { display: grid; gap: 18px; min-width: 0; }
+.settings-form fieldset { border: 0; border-top: 1px solid var(--border); margin: 0; min-width: 0; padding: 18px 0 0; }
+.settings-form fieldset:first-of-type { border-top: 0; padding-top: 0; }
+.settings-form fieldset:disabled { opacity: .72; }
+.settings-section-title { color: var(--text); font-size: 15px; font-weight: 700; margin-bottom: 14px; padding: 0; }
+.settings-form-grid { display: grid; gap: 14px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.settings-field { color: var(--text); display: grid; font-size: 13px; gap: 6px; min-width: 0; }
+.settings-field > label { font-weight: 600; }
+.settings-field input { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; color: var(--text); min-height: 36px; padding: 7px 9px; width: 100%; }
+.settings-field input:focus { border-color: var(--accent); outline: 2px solid color-mix(in srgb, var(--accent) 24%, transparent); outline-offset: 1px; }
+.settings-field small, .settings-security-note, .settings-diagnostics-note { color: var(--muted); font-size: 12px; line-height: 1.45; }
+.settings-field .field-error { display: block; }
+.settings-grid-error { grid-column: 1 / -1; }
+.settings-security-status { align-content: start; border: 1px solid var(--border); border-radius: 7px; display: grid; gap: 0; min-width: 0; }
+.settings-security-status div { align-items: center; border-bottom: 1px solid var(--border); display: grid; gap: 8px; grid-template-columns: minmax(0, 1fr) auto; padding: 9px 10px; }
+.settings-security-status div:last-child { border-bottom: 0; }
+.settings-security-status span, .settings-security-status small { color: var(--muted); }
+.settings-security-status strong { color: var(--ok); font-size: 13px; }
+.settings-security-status small { grid-column: 1 / -1; }
+.settings-security-note { margin: 12px 0 0; }
+.settings-actions { align-items: center; border-top: 1px solid var(--border); display: flex; flex-wrap: wrap; gap: 12px; padding-top: 18px; }
+.settings-notice { background: #ecfdf3; border: 1px solid #86efac; border-radius: 7px; color: #166534; margin: 0; padding: 10px 12px; }
+.settings-permission { background: #fff7ed; border: 1px solid #fdba74; border-radius: 7px; color: #9a3412; margin: 0; padding: 10px 12px; }
+.settings-diagnostics { align-content: start; position: sticky; top: 20px; }
+.settings-diagnostics h2 { margin: 0; }
+.settings-diagnostics > p:not(.eyebrow) { line-height: 1.6; margin: 0; }
+.settings-diagnostics .ghost-button { justify-self: start; }
+.settings-apply-note { background: var(--panel); border-left: 3px solid var(--accent); color: var(--muted); font-size: 13px; line-height: 1.65; margin: 0; padding: 8px 12px; }
+.settings-active-summary { border-top: 1px solid var(--border); display: grid; font-size: 13px; gap: 8px 12px; grid-template-columns: minmax(0, 1fr) auto; margin: 0; padding-top: 16px; }
+.settings-active-summary dt { color: var(--muted); }
+.settings-active-summary dd { margin: 0; overflow-wrap: anywhere; }
+@media (max-width: 820px) { .settings-layout { grid-template-columns: 1fr; } .settings-diagnostics { position: static; } }
+@media (max-width: 560px) { .settings-heading { display: block; } .settings-heading .page-badge { display: inline-flex; margin-top: 8px; } .settings-form-grid { grid-template-columns: 1fr; } .settings-form, .settings-diagnostics { padding: 15px; } }
+
 /* UI-10 Exceptions */
 .exceptions-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
 .exception-item { border-left: 4px solid var(--warn); }

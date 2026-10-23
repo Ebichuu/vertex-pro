@@ -27,7 +27,7 @@ func TestAssembleIsDeterministicAndComplete(t *testing.T) {
 	if document.Schema != sbomSchema {
 		t.Fatalf("schema=%s", document.Schema)
 	}
-	if document.Artifact.GoVersion != "go1.26.3" || document.Artifact.MainModule != "github.com/vertex-pro/vertex-pro/cmd/vertex-pro" {
+	if document.Artifact.GoVersion != "go1.26.6" || document.Artifact.MainModule != "github.com/vertex-pro/vertex-pro/cmd/vertex-pro" {
 		t.Fatalf("artifact=%+v", document.Artifact)
 	}
 	if document.BaseImage != "gcr.io/distroless/static-debian12:nonroot" {
@@ -113,7 +113,7 @@ func TestReadsRealTestBinaryBuildInfo(t *testing.T) {
 
 func fakeBuildInfo() *debug.BuildInfo {
 	return &buildinfo.BuildInfo{
-		GoVersion: "go1.26.3",
+		GoVersion: "go1.26.6",
 		Main:      debug.Module{Path: "github.com/vertex-pro/vertex-pro/cmd/vertex-pro"},
 		Deps: []*debug.Module{
 			{Path: "modernc.org/sqlite", Version: "v1.34.4"},

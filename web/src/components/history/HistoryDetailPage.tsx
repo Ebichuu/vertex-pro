@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
 import {
   formatHistoryBytes,
-  formatHistoryTime,
+  formatHistoryTime as formatTimeInZone,
   sortHistoryTimeline,
   type HistoryDetail,
   type HistoryDetailLoader,
 } from '../../features/history/history-detail'
 import { statusTone } from '../../features/history/history'
+import { useDisplayTimezone } from '../../features/settings/timezone'
 
 type HistoryDetailPageProps = {
   jobId: string
@@ -26,6 +27,8 @@ const timelineToneLabel: Record<HistoryDetail['timeline'][number]['tone'], strin
 }
 
 export function HistoryDetailPage({ jobId, loadDetail, onBack }: HistoryDetailPageProps) {
+  const timezone = useDisplayTimezone()
+  const formatHistoryTime = (value?: string) => formatTimeInZone(value, timezone)
   const [attempt, setAttempt] = useState(0)
   const [state, setState] = useState<LoadState>({ status: 'loading' })
 
@@ -84,7 +87,7 @@ export function HistoryDetailPage({ jobId, loadDetail, onBack }: HistoryDetailPa
         </div>
         <div className="history-detail-heading-status">
           <span className={`status-chip tone-${statusTone(detail.userStatus.user_status)}`}>{detail.userStatus.user_status_label}</span>
-          <span className="page-badge">LOCAL ONLY</span>
+          <button type="button" className="ghost-button" onClick={() => setAttempt((value) => value + 1)}>刷新记录</button>
         </div>
       </div>
 
@@ -139,7 +142,7 @@ export function HistoryDetailPage({ jobId, loadDetail, onBack }: HistoryDetailPa
               <p className="eyebrow">RULE RESULT</p>
               <h2 id="history-rules-title">规则与最终结果</h2>
             </div>
-            <span>{detail.rules.length} 条规则命中</span>
+            <span>{detail.rulesKnown === false ? '命中信息暂无数据' : `${detail.rules.length} 条规则命中`}</span>
           </div>
           <div className="history-rule-layout">
             <div>
@@ -147,11 +150,12 @@ export function HistoryDetailPage({ jobId, loadDetail, onBack }: HistoryDetailPa
               <ul className="history-rule-matches">
                 {detail.rules.map((rule) => (
                   <li key={rule.id} className={rule.winner ? 'is-winner' : undefined}>
-                    <span><strong>{rule.name}</strong><small>优先级 {rule.priority}</small></span>
+                    <span><strong>{rule.name}</strong><small>优先级 {rule.priority ?? '暂无数据'}</small></span>
                     {rule.winner && <span className="winner-badge">胜出</span>}
                   </li>
                 ))}
               </ul>
+              {detail.rules.length === 0 && <p className="muted">{detail.rulesKnown === false ? '暂无规则命中信息' : '没有记录命中规则'}</p>}
               <p className="history-winner-reason">{winner ? `${winner.name}：${detail.winnerReason}` : detail.winnerReason}</p>
             </div>
             <dl className="history-final-decision">
@@ -159,7 +163,7 @@ export function HistoryDetailPage({ jobId, loadDetail, onBack }: HistoryDetailPa
               <SummaryItem label="分类" value={detail.finalDecision.category} />
               <div>
                 <dt>标签</dt>
-                <dd>{detail.finalDecision.tags.map((tag) => <span key={tag} className="tag-chip">{tag}</span>)}</dd>
+                <dd>{detail.finalDecision.tags?.length ? detail.finalDecision.tags.map((tag) => <span key={tag} className="tag-chip">{tag}</span>) : detail.finalDecision.tags ? '无标签' : '暂无数据'}</dd>
               </div>
               <SummaryItem label="保存路径" value={detail.finalDecision.savePath} />
             </dl>
@@ -197,6 +201,7 @@ export function HistoryDetailPage({ jobId, loadDetail, onBack }: HistoryDetailPa
               </li>
             ))}
           </ol>
+          {timeline.length === 0 && <p className="muted">暂无时间线记录</p>}
         </section>
       </div>
 
@@ -208,6 +213,7 @@ export function HistoryDetailPage({ jobId, loadDetail, onBack }: HistoryDetailPa
             <div key={item.label}><dt>{item.label}</dt><dd><code>{item.value}</code></dd></div>
           ))}
         </dl>
+        {detail.diagnostics.length === 0 && <p className="muted">暂无诊断记录</p>}
       </details>
     </article>
   )

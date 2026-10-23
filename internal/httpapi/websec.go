@@ -117,7 +117,7 @@ func applySecurityHeaders(response http.ResponseWriter) {
 }
 
 // NewSessionCookies 为已认证会话签发 cookie 对：HttpOnly 会话令牌与
-// 前端可读的 CSRF 令牌。两者均 Secure/SameSite=Strict 且绑定 /api/v1 路径。
+// 前端可读的 CSRF 令牌。CSRF 使用根路径以供 SPA 读取，会话限定 API 路径。
 func NewSessionCookies(sessionToken, csrfToken string, maxAge int) []*http.Cookie {
 	return []*http.Cookie{
 		{
@@ -132,12 +132,13 @@ func NewSessionCookies(sessionToken, csrfToken string, maxAge int) []*http.Cooki
 		{
 			Name:     CSRFCookieName,
 			Value:    csrfToken,
-			Path:     "/api/v1",
+			Path:     "/",
 			MaxAge:   maxAge,
 			Secure:   true,
 			HttpOnly: false,
 			SameSite: http.SameSiteStrictMode,
 		},
+		{Name: CSRFCookieName, Path: "/api/v1", MaxAge: -1, Secure: true, SameSite: http.SameSiteStrictMode},
 	}
 }
 

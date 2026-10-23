@@ -192,7 +192,7 @@ func (coordinator *Coordinator) sweep(ctx context.Context, event Event, now time
 			}
 		}
 	}
-	provider := eventSnapshotProvider{complete: true, snapshot: unknownreconciler.Snapshot{
+	provider := eventSnapshotProvider{complete: unambiguous, snapshot: unknownreconciler.Snapshot{
 		InstanceID:       event.InstanceID,
 		SyncGeneration:   int64(event.Generation),
 		SnapshotRevision: int64(event.Revision),
@@ -200,7 +200,7 @@ func (coordinator *Coordinator) sweep(ctx context.Context, event Event, now time
 		IdentityPresent:  unambiguous && allPresent,
 		QBTorrentID:      qbTorrentID,
 	}}
-	return unknownreconciler.Sweep(ctx, coordinator.database, provider, unknownreconciler.SweepInput{Now: now.UTC()})
+	return unknownreconciler.Sweep(ctx, coordinator.database, provider, unknownreconciler.SweepInput{Now: now.UTC(), InstanceID: event.InstanceID})
 }
 
 type eventSnapshotProvider struct {
@@ -208,8 +208,8 @@ type eventSnapshotProvider struct {
 	complete bool
 }
 
-func (provider eventSnapshotProvider) FreshestComplete(context.Context, string) (unknownreconciler.Snapshot, bool) {
-	return provider.snapshot, provider.complete
+func (provider eventSnapshotProvider) FreshestComplete(_ context.Context, instanceID string) (unknownreconciler.Snapshot, bool) {
+	return provider.snapshot, provider.complete && provider.snapshot.InstanceID == instanceID
 }
 
 // SnapshotDigest is the canonical digest of a sync snapshot: sha256 over its

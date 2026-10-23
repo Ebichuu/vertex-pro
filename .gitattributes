@@ -1,0 +1,5 @@
+# Contract generation hashes source bytes; keep them identical on Windows and CI.
+contracts/openapi/*.json text eol=lf
+contracts/*.yaml text eol=lf
+internal/generated/*.go text eol=lf
+web/src/generated/*.ts text eol=lf

@@ -18,6 +18,7 @@ import (
 	"github.com/vertex-pro/vertex-pro/internal/reservation"
 	"github.com/vertex-pro/vertex-pro/internal/syncmerge"
 	"github.com/vertex-pro/vertex-pro/internal/syncwaiter"
+	"github.com/vertex-pro/vertex-pro/internal/unknownreconciler"
 )
 
 func coordinatorDatabase(t *testing.T) *sql.DB {
@@ -202,5 +203,60 @@ func TestOnSyncEventReconcilesUnknownChain(t *testing.T) {
 	}
 	if attemptState != "RECONCILED_NO_EFFECT" {
 		t.Fatalf("attemptState=%s", attemptState)
+	}
+}
+
+func TestOnSyncEventReconcilesOnlyItsOwnInstance(t *testing.T) {
+	database := coordinatorDatabase(t)
+	runChainToAwaitingConfirmation(t, database)
+	setChainUnknown(t, database)
+	// This offline instance sorts before the active instance. Its UNKNOWN
+	// chain must not consume evidence belonging to instance-1 or block it.
+	for _, statement := range []string{
+		`INSERT INTO storage_targets(storage_target_id,instance_id,path,storage_verification_state,created_at,updated_at) VALUES('target-0','instance-0','/other','VERIFIED','2026-09-03T10:00:00Z','2026-09-03T10:00:00Z')`,
+		`INSERT INTO sync_instance_state(instance_id,sync_state,sync_generation,rid,snapshot_revision,snapshot_digest,updated_at) VALUES('instance-0','OFFLINE',1,0,1,'baseline','2026-09-03T10:00:00Z')`,
+		`INSERT INTO sync_snapshots(instance_id,sync_generation,snapshot_revision,rid,snapshot_digest,snapshot_path,is_complete,created_at) VALUES('instance-0',1,1,0,'baseline','/other/baseline.json',1,'2026-09-03T10:00:00Z')`,
+		`INSERT INTO race_jobs(job_id,source_id,identity_key,job_state,rule_state,torrent_state,placement_state,participation_deadline,observation_deadline,created_at,updated_at) VALUES('job-0','source-0','identity-0','READY','MATCHED','READY','PREPARED','2026-09-03T11:00:00Z','2026-09-03T11:00:00Z','2026-09-03T10:00:00Z','2026-09-03T10:00:00Z')`,
+		`INSERT INTO placement_attempts(attempt_id,job_id,identity_key,attempt_no,instance_id,storage_target_id,attempt_state,dispatch_state,side_effect_fact,allocation_epoch,reserved_bytes,started_at) VALUES('attempt-0','job-0','identity-0',1,'instance-0','target-0','UNKNOWN','STARTED','POSSIBLE_EFFECT',1,100,'2026-09-03T10:00:00Z')`,
+		`INSERT INTO capacity_reservations(reservation_id,attempt_id,storage_target_id,reserved_bytes,allocation_epoch,reservation_state) VALUES('reservation-0','attempt-0','target-0',100,1,'ACTIVE')`,
+		`INSERT INTO submit_intents(submit_intent_id,attempt_id,instance_id,identity_key,request_fingerprint,target_fingerprint,dispatch_state,pre_add_sync_generation,pre_add_snapshot_revision,pre_add_snapshot_digest,pre_add_identity_fact,created_at,dispatch_started_at) VALUES('intent-0','attempt-0','instance-0','identity-0','req-0','target-0','STARTED',1,1,'baseline','ABSENT','2026-09-03T10:00:00Z','2026-09-03T10:00:00Z')`,
+		`INSERT INTO sync_waiters(waiter_id,attempt_id,instance_id,registered_generation,source_snapshot_revision,identity_key,confirmation_deadline,reconciliation_deadline,waiter_state,created_at) VALUES('waiter-0','attempt-0','instance-0',1,1,'identity-0','2026-09-03T10:02:00Z','2026-09-03T10:05:00Z','ACTIVE','2026-09-03T10:00:00Z')`,
+		`UPDATE race_jobs SET job_state='UNKNOWN',current_attempt_id='attempt-0' WHERE job_id='job-0'`,
+	} {
+		if _, err := database.Exec(statement); err != nil {
+			t.Fatal(err)
+		}
+	}
+	coordinator, err := New(database)
+	if err != nil {
+		t.Fatal(err)
+	}
+	outcomes, err := coordinator.OnSyncEvent(context.Background(), eventWithIdentity(1, 2, false), time.Date(2026, 9, 3, 10, 6, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolved := false
+	for _, outcome := range outcomes {
+		if outcome.AttemptID != "attempt-1" {
+			t.Fatalf("foreign outcome: %+v", outcome)
+		}
+		resolved = resolved || outcome.Action == "RECONCILED_NO_EFFECT"
+	}
+	if !resolved {
+		t.Fatalf("local chain was not reconciled: %+v", outcomes)
+	}
+	var attemptState, reservationState, waiterState string
+	if err := database.QueryRow(`SELECT a.attempt_state,r.reservation_state,w.waiter_state FROM placement_attempts a JOIN capacity_reservations r ON r.attempt_id=a.attempt_id JOIN sync_waiters w ON w.attempt_id=a.attempt_id WHERE a.attempt_id='attempt-0'`).Scan(&attemptState, &reservationState, &waiterState); err != nil {
+		t.Fatal(err)
+	}
+	if attemptState != "UNKNOWN" || reservationState != "ACTIVE" || waiterState != "ACTIVE" {
+		t.Fatalf("foreign chain changed: %s/%s/%s", attemptState, reservationState, waiterState)
+	}
+}
+
+func TestEventSnapshotProviderRejectsOtherInstance(t *testing.T) {
+	provider := eventSnapshotProvider{complete: true, snapshot: unknownreconciler.Snapshot{InstanceID: "instance-1"}}
+	if _, available := provider.FreshestComplete(context.Background(), "instance-2"); available {
+		t.Fatal("foreign instance accepted another instance's evidence")
 	}
 }

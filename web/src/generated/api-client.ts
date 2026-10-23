@@ -39,7 +39,7 @@ export class ApiClient {
   }
 
   private async request<T = JsonObject>(path: string, init: RequestInit, query?: Record<string, string | undefined>): Promise<T> {
-    const response = await this.fetchImpl(this.buildUrl(path, query), init);
+    const response = await this.fetchImpl.call(globalThis, this.buildUrl(path, query), init);
     const text = await response.text();
     const parsed: unknown = text ? JSON.parse(text) : {};
     if (!response.ok) {
@@ -111,6 +111,14 @@ export class ApiClient {
     return this.request<T>(`/api/v1/rules/${encodeURIComponent(id)}`, { method: "GET", headers: opts?.headers, signal: opts?.signal }, opts?.query);
   }
 
+  async getSettings<T = JsonObject>(opts?: RequestOptions): Promise<T> {
+    return this.request<T>(`/api/v1/settings`, { method: "GET", headers: opts?.headers, signal: opts?.signal }, opts?.query);
+  }
+
+  async getSettingsDiagnostics<T = JsonObject>(opts?: RequestOptions): Promise<T> {
+    return this.request<T>(`/api/v1/settings/diagnostics`, { method: "GET", headers: opts?.headers, signal: opts?.signal }, opts?.query);
+  }
+
   async initializeAuth<T = JsonObject>(opts?: RequestOptions): Promise<T> {
     return this.request<T>(`/api/v1/auth/initialize`, { method: "POST", body: JSON.stringify(opts?.body ?? {}), headers: {"Content-Type": "application/json", ...(opts?.headers ?? {})}, signal: opts?.signal }, opts?.query);
   }
@@ -148,7 +156,7 @@ export class ApiClient {
   }
 
   async streamEvents(opts?: RequestOptions): Promise<Response> {
-    return this.fetchImpl(this.buildUrl(`/api/v1/events/stream`, opts?.query), { method: "GET", headers: opts?.headers, signal: opts?.signal });
+    return this.fetchImpl.call(globalThis, this.buildUrl(`/api/v1/events/stream`, opts?.query), { method: "GET", headers: opts?.headers, signal: opts?.signal });
   }
 
   async testFeed<T = JsonObject>(id: string, opts?: RequestOptions): Promise<T> {
@@ -161,6 +169,10 @@ export class ApiClient {
 
   async updateRule<T = JsonObject>(id: string, opts?: RequestOptions): Promise<T> {
     return this.request<T>(`/api/v1/rules/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify(opts?.body ?? {}), headers: {"Content-Type": "application/json", ...(opts?.headers ?? {})}, signal: opts?.signal }, opts?.query);
+  }
+
+  async updateSettings<T = JsonObject>(opts?: RequestOptions): Promise<T> {
+    return this.request<T>(`/api/v1/settings`, { method: "PUT", body: JSON.stringify(opts?.body ?? {}), headers: {"Content-Type": "application/json", ...(opts?.headers ?? {})}, signal: opts?.signal }, opts?.query);
   }
 
 }

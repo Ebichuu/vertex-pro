@@ -1,4 +1,4 @@
-export type DownloaderHealth = 'AVAILABLE' | 'DEGRADED' | 'OFFLINE'
+export type DownloaderHealth = 'AVAILABLE' | 'DEGRADED' | 'OFFLINE' | 'UNKNOWN'
 export type DataFreshness = 'FRESH' | 'STALE' | 'UNKNOWN'
 export type DownloaderPeriodKey = 'day' | 'week' | 'month'
 
@@ -7,6 +7,8 @@ export interface DownloaderPoint {
   timestamp: string
   downloadRate?: number
   uploadRate?: number
+  downloadedBytes?: number
+  uploadedBytes?: number
   missing?: boolean
   counterReset?: boolean
 }
@@ -19,7 +21,9 @@ export interface DownloaderPeriodSummary {
   ratio?: number
   points: ReadonlyArray<DownloaderPoint>
   missingPoints: number
-  counterResets: number
+  counterResets?: number
+  metric?: 'rate' | 'bytes'
+  available?: boolean
 }
 
 export interface DownloaderRealtime {
@@ -56,13 +60,13 @@ export interface DownloaderDetail {
 export type DownloaderDetailLoader = (downloaderId: string) => Promise<DownloaderDetail>
 
 export function formatDownloaderRate(bytesPerSecond?: number): string {
-  if (bytesPerSecond === undefined || bytesPerSecond < 0) return '暂无数据'
+  if (bytesPerSecond === undefined || !Number.isFinite(bytesPerSecond) || bytesPerSecond < 0) return '暂无数据'
   if (bytesPerSecond >= 1024 * 1024) return `${(bytesPerSecond / (1024 * 1024)).toFixed(1)} MiB/s`
   return `${Math.round(bytesPerSecond / 1024)} KiB/s`
 }
 
 export function formatDownloaderBytes(bytes?: number): string {
-  if (bytes === undefined || bytes < 0) return '暂无数据'
+  if (bytes === undefined || !Number.isFinite(bytes) || bytes < 0) return '暂无数据'
   const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB']
   let value = bytes
   let unitIndex = 0
@@ -73,7 +77,7 @@ export function formatDownloaderBytes(bytes?: number): string {
   return `${value.toFixed(unitIndex === 0 ? 0 : 2)} ${units[unitIndex]}`
 }
 
-export function formatDownloaderTime(value?: string): string {
+export function formatDownloaderTime(value?: string, timezone = 'UTC'): string {
   if (!value) return '暂无数据'
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
@@ -81,7 +85,7 @@ export function formatDownloaderTime(value?: string): string {
     dateStyle: 'medium',
     timeStyle: 'short',
     hour12: false,
-    timeZone: 'Asia/Shanghai',
+    timeZone: timezone,
   }).format(date)
 }
 
@@ -90,6 +94,7 @@ export function healthLabel(health: DownloaderHealth): string {
     case 'AVAILABLE': return '在线'
     case 'DEGRADED': return '降级'
     case 'OFFLINE': return '离线'
+    case 'UNKNOWN': return '状态未知'
   }
 }
 

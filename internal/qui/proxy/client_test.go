@@ -15,6 +15,23 @@ import (
 
 type staticStore struct{ value string }
 
+type failingTransport struct{}
+
+func (failingTransport) RoundTrip(*http.Request) (*http.Response, error) {
+	return nil, context.DeadlineExceeded
+}
+
+func TestProxyTransportErrorDoesNotExposeCredential(t *testing.T) {
+	client, err := New(context.Background(), Config{BaseURL: "http://qui.example", ProxyKey: secrets.SecretRef{Provider: "env", Key: "KEY"}, Store: staticStore{value: "private-proxy-value"}, HTTPClient: &http.Client{Transport: failingTransport{}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = client.Version(context.Background())
+	if err == nil || strings.Contains(err.Error(), "private-proxy-value") || !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("error=%v", err)
+	}
+}
+
 func (store staticStore) Resolve(context.Context, secrets.SecretRef) (string, error) {
 	return store.value, nil
 }

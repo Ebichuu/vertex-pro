@@ -119,7 +119,7 @@ func (service Service) List(ctx context.Context, siteID string) ([]Rule, error) 
 	query := `SELECT rule_id,COALESCE(site_id,''),name,enabled,priority,revision,state,definition_json,created_at,updated_at FROM rules`
 	args := []any{}
 	if siteID != "" {
-		query += ` WHERE site_id = ?`
+		query += ` WHERE site_id = ? OR site_id IS NULL`
 		args = append(args, siteID)
 	}
 	query += ` ORDER BY priority DESC, revision DESC, rule_id ASC`

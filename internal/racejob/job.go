@@ -21,6 +21,8 @@ type Input struct {
 	IdentityKey           string
 	ParticipationDeadline time.Time
 	ObservationDeadline   time.Time
+	RuleSnapshot          []byte
+	ContentSize           int64
 }
 
 type Job struct {
@@ -38,6 +40,8 @@ type Job struct {
 	ObservationDeadline   time.Time
 	CreatedAt             time.Time
 	UpdatedAt             time.Time
+	RuleSnapshot          []byte
+	ContentSize           int64
 }
 
 type Result struct {
@@ -98,6 +102,8 @@ func (creator *Creator) Create(ctx context.Context, input Input) (Result, error)
 	}
 	now := creator.clock.Now().UTC()
 	job := Job{ID: deterministicID(input.SourceID), SourceID: input.SourceID, IdentityKey: input.IdentityKey, JobState: "DISCOVERED", RuleState: "PENDING", TorrentState: "PENDING", PlacementState: "PENDING", ObservationState: "NOT_STARTED", ParticipationDeadline: participation, ObservationDeadline: observation, CreatedAt: now, UpdatedAt: now}
+	job.RuleSnapshot = append([]byte(nil), input.RuleSnapshot...)
+	job.ContentSize = input.ContentSize
 	if err := creator.store.Save(ctx, job); err != nil {
 		return Result{}, fmt.Errorf("save race job: %w", err)
 	}

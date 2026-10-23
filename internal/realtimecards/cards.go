@@ -18,6 +18,7 @@ type Card struct {
 	UploadRate       int64
 	DownloadingCount int
 	SeedingCount     int
+	CountsKnown      bool   // true only when counts come from a torrent snapshot
 	Source           string // 统计来源标记（STAT-01：SYNC_SERVER_STATE/TRANSFER_INFO）
 	SampledAt        time.Time
 }

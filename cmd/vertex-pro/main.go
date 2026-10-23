@@ -143,16 +143,44 @@ func runServe(logger *slog.Logger, arguments []string) error {
 	syncInterval := flags.Duration("sync-interval", 10*time.Second, "read-only qui sync interval")
 	profileVerificationBindingPath := flags.String("profile-verification-binding", strings.TrimSpace(os.Getenv("VERTEX_PRO_PROFILE_VERIFICATION_BINDING_FILE")), "path to the exact persisted G1 verification binding JSON")
 	enableDispatch := flags.Bool("enable-dispatch", envBool("VERTEX_PRO_ENABLE_DISPATCH"), "enable qB Add dispatch; fails closed unless the probed Profile is VERIFIED")
+	enableRSS := flags.Bool("enable-rss", envBool("VERTEX_PRO_ENABLE_RSS"), "enable automatic RSS polling; first poll establishes a baseline")
+	artifactHosts := flags.String("artifact-hosts", strings.TrimSpace(os.Getenv("VERTEX_PRO_ARTIFACT_HOSTS")), "comma-separated allowed torrent download hosts")
+	workerInterval := flags.Duration("worker-interval", 10*time.Second, "automatic worker wake interval; feeds retain their own polling cadence")
+	storageConfigPath := flags.String("storage-config", strings.TrimSpace(os.Getenv("VERTEX_PRO_STORAGE_CONFIG_FILE")), "storage target JSON; capacity is always read live")
+	instancesConfigPath := flags.String("instances-config", strings.TrimSpace(os.Getenv("VERTEX_PRO_INSTANCES_CONFIG_FILE")), "multi-instance runtime JSON with secret file references")
 	if err := flags.Parse(arguments); err != nil {
 		return err
 	}
 
 	config := app.Config{
+		Version:          version,
 		Database:         db.Config{Path: *databasePath},
 		Hosts:            splitList(*allowedHosts),
 		Origins:          splitList(*allowedOrigins),
 		Retention:        &app.RetentionConfig{Interval: time.Hour, SnapshotRoot: *snapshotRoot, Policy: retention.DefaultPolicy()},
 		HardenedOutbound: true,
+	}
+	if *workerInterval <= 0 {
+		return errors.New("worker interval must be positive")
+	}
+	if *enableRSS || *enableDispatch {
+		if len(splitList(*artifactHosts)) == 0 {
+			return errors.New("automatic workers require -artifact-hosts")
+		}
+		config.Scheduler = &app.SchedulerConfig{Enabled: true, PollInterval: *workerInterval, AllowedArtifactHosts: splitList(*artifactHosts)}
+	}
+	if strings.TrimSpace(*instancesConfigPath) != "" {
+		if strings.TrimSpace(*quiURL) != "" {
+			return errors.New("use either -instances-config or -qui-url")
+		}
+		instances, err := readRuntimeInstances(*instancesConfigPath, *snapshotRoot, *syncInterval, *workerInterval, *enableDispatch, splitList(*artifactHosts))
+		if err != nil {
+			return err
+		}
+		config.QuiInstances = instances
+	}
+	if *enableDispatch && strings.TrimSpace(*quiURL) == "" && len(config.QuiInstances) == 0 {
+		return errors.New("dispatch requires qui configuration")
 	}
 	if strings.TrimSpace(*quiURL) != "" {
 		build := buildidentity.Current()
@@ -177,6 +205,13 @@ func runServe(logger *slog.Logger, arguments []string) error {
 			VertexCommit:               build.Revision,
 			VertexWorktreeClean:        build.Available && build.Clean,
 			EnableDispatch:             *enableDispatch,
+		}
+		if *enableDispatch {
+			storage, err := readRuntimeStorage(*storageConfigPath, *quiInstanceID)
+			if err != nil {
+				return err
+			}
+			config.Qui.DispatchStage = &app.DispatchStageConfig{Enabled: true, Storage: storage, Interval: *workerInterval, AllowedArtifactHosts: splitList(*artifactHosts)}
 		}
 	}
 	runtime, err := app.New(context.Background(), config)

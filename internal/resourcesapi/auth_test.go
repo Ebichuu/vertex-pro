@@ -54,7 +54,7 @@ func TestAuthLifecycleEndpoints(t *testing.T) {
 		t.Fatalf("login = %d %s", login.Code, login.Body.String())
 	}
 	cookies := login.Result().Cookies()
-	if len(cookies) != 2 || cookies[0].Name != httpapi.SessionCookieName || cookies[1].Name != httpapi.CSRFCookieName {
+	if len(cookies) != 3 || cookies[0].Name != httpapi.SessionCookieName || cookies[1].Name != httpapi.CSRFCookieName {
 		t.Fatalf("login cookies = %#v", cookies)
 	}
 

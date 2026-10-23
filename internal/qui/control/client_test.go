@@ -2,6 +2,7 @@ package control
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +12,15 @@ import (
 
 	"github.com/vertex-pro/vertex-pro/internal/secrets"
 )
+
+func TestTransferInfoRejectsMissingCounters(t *testing.T) {
+	for _, raw := range []string{`null`, `{}`, `{"dl_info_speed":0,"up_info_speed":0,"dl_info_data":0,"up_info_data":null}`} {
+		var value TransferInfo
+		if err := json.Unmarshal([]byte(raw), &value); err == nil {
+			t.Fatalf("accepted incomplete transfer %s", raw)
+		}
+	}
+}
 
 type staticStore struct{ value string }
 

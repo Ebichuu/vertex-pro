@@ -16,18 +16,21 @@ export type RuleActionDraft = {
 
 export type RuleEditorDraft = {
   id: string
+  siteId?: string
   name: string
   enabled: boolean
   priority: number
   revision: number
   conditionTree: VertexConditionTree
   actions: RuleActionDraft
+  extraActions?: Record<string, unknown>
 }
 
 export type RuleEditorErrors = Partial<Record<'name' | 'priority' | 'target' | 'participationWindowMinutes', string>>
 
 export type RuleVersionPayload = {
   rule_id: string
+  site_id?: string
   name: string
   enabled: boolean
   priority: number
@@ -63,6 +66,7 @@ export function validateRuleDraft(draft: RuleEditorDraft): RuleEditorErrors {
 
 export function toRuleVersionPayload(draft: RuleEditorDraft, revision = draft.revision + 1): RuleVersionPayload {
   const actions: RuleActionPayload = {
+    ...draft.extraActions,
     target_mode: draft.actions.targetMode,
     target_instance_id: draft.actions.targetMode === 'FIXED_INSTANCE' ? draft.actions.targetInstanceId : null,
     target_group_id: draft.actions.targetMode === 'INSTANCE_GROUP' ? draft.actions.targetGroupId : null,
@@ -74,6 +78,7 @@ export function toRuleVersionPayload(draft: RuleEditorDraft, revision = draft.re
   }
   return {
     rule_id: draft.id,
+    site_id: draft.siteId,
     name: draft.name.trim(),
     enabled: draft.enabled,
     priority: draft.priority,
@@ -93,11 +98,13 @@ export function fromRuleVersionPayload(payload: RuleVersionPayload): RuleEditorD
   }
   return {
     id: payload.rule_id,
+    siteId: payload.site_id,
     name: payload.name,
     enabled: payload.enabled,
     priority: payload.priority,
     revision: payload.revision,
     conditionTree,
+    extraActions: actions as unknown as Record<string, unknown>,
     actions: {
       targetMode: actions.target_mode,
       targetInstanceId: actions.target_instance_id ?? '',

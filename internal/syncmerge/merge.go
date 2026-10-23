@@ -16,15 +16,17 @@ type Torrent struct {
 }
 
 type Snapshot struct {
-	RID      uint64
-	Torrents map[string]Torrent
+	RID         uint64
+	Torrents    map[string]Torrent
+	ServerState map[string]any `json:",omitempty"`
 }
 
 type Delta struct {
-	RID        uint64
-	FullUpdate bool
-	Torrents   map[string]map[string]any
-	Removed    []string
+	RID         uint64
+	FullUpdate  bool
+	Torrents    map[string]map[string]any
+	Removed     []string
+	ServerState map[string]any
 }
 
 type MergeResult struct {
@@ -36,7 +38,7 @@ type MergeResult struct {
 
 func Merge(previous Snapshot, delta Delta) (MergeResult, error) {
 	if delta.RID == 0 || delta.FullUpdate {
-		next := Snapshot{RID: delta.RID, Torrents: map[string]Torrent{}}
+		next := Snapshot{RID: delta.RID, Torrents: map[string]Torrent{}, ServerState: cloneFields(delta.ServerState)}
 		if err := applyTorrents(&next, delta.Torrents, false); err != nil {
 			return MergeResult{}, err
 		}
@@ -52,6 +54,12 @@ func Merge(previous Snapshot, delta Delta) (MergeResult, error) {
 		return MergeResult{Ignored: true, Snapshot: cloneSnapshot(previous)}, nil
 	}
 	next := cloneSnapshot(previous)
+	if next.ServerState == nil {
+		next.ServerState = make(map[string]any)
+	}
+	for key, value := range delta.ServerState {
+		next.ServerState[key] = value
+	}
 	if err := applyTorrents(&next, delta.Torrents, true); err != nil {
 		return MergeResult{}, err
 	}
@@ -125,8 +133,19 @@ func parseInteger(value any) (int64, bool) {
 	}
 }
 
+func cloneFields(source map[string]any) map[string]any {
+	if source == nil {
+		return nil
+	}
+	result := make(map[string]any, len(source))
+	for key, value := range source {
+		result[key] = value
+	}
+	return result
+}
+
 func cloneSnapshot(source Snapshot) Snapshot {
-	clone := Snapshot{RID: source.RID, Torrents: make(map[string]Torrent, len(source.Torrents))}
+	clone := Snapshot{RID: source.RID, Torrents: make(map[string]Torrent, len(source.Torrents)), ServerState: cloneFields(source.ServerState)}
 	for id, torrent := range source.Torrents {
 		fields := make(map[string]any, len(torrent.Fields))
 		for key, value := range torrent.Fields {

@@ -40,6 +40,31 @@ func TestServiceCreatesAndListsSitesAndFeeds(t *testing.T) {
 		t.Fatalf("feeds=%+v err=%v", feeds, err)
 	}
 }
+
+func TestFeedQueryCredentialsSurviveCreateAndUpdate(t *testing.T) {
+	database := openDatabase(t)
+	defer database.Close()
+	service, _ := New(database)
+	ctx := context.Background()
+	if _, err := service.CreateSite(ctx, CreateSiteInput{ID: "site-query", Name: "Site", BaseURL: "https://site.example", Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	url := "https://site.example/torrentrss.php?passkey=test-only&rows=10&paid=0&linktype=dl"
+	feed, err := service.CreateFeed(ctx, CreateFeedInput{ID: "feed-query", SiteID: "site-query", Name: "RSS", FeedURL: url, Enabled: true})
+	if err != nil || feed.FeedURL != url {
+		t.Fatalf("query URL was not preserved: %v", err)
+	}
+	updatedURL := url + "&category=2"
+	updated, err := service.UpdateFeed(ctx, UpdateFeedInput{ID: feed.ID, ExpectedUpdatedAt: feed.UpdatedAt, FeedURL: &updatedURL})
+	if err != nil || updated.FeedURL != updatedURL {
+		t.Fatalf("updated query URL was not preserved: %v", err)
+	}
+	for _, invalid := range []string{"https://user:secret@site.example/rss?passkey=x", "file:///rss?key=x", "https://site.example/rss#fragment", "https://site.example/rss?passkey=%zz"} {
+		if _, err := validateFeedURL(invalid); err == nil {
+			t.Fatal("invalid feed URL accepted")
+		}
+	}
+}
 func TestServiceRejectsInvalidInputAndCrossSiteDuplicates(t *testing.T) {
 	database := openDatabase(t)
 	defer database.Close()

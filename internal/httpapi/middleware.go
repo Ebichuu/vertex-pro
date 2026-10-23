@@ -180,10 +180,22 @@ func (m *Middleware) recoverPanics(next http.Handler) http.Handler {
 
 // DecodeJSON 在 size limit 内解码请求体；body 超限与非法 JSON 映射为合同错误码。
 func DecodeJSON(response http.ResponseWriter, request *http.Request, target any, maxBytes int64) error {
+	return decodeJSON(response, request, target, maxBytes, false)
+}
+
+// DecodeStrictJSON additionally rejects fields absent from a closed request contract.
+func DecodeStrictJSON(response http.ResponseWriter, request *http.Request, target any, maxBytes int64) error {
+	return decodeJSON(response, request, target, maxBytes, true)
+}
+
+func decodeJSON(response http.ResponseWriter, request *http.Request, target any, maxBytes int64, strict bool) error {
 	if maxBytes > 0 {
 		request.Body = http.MaxBytesReader(response, request.Body, maxBytes)
 	}
 	decoder := json.NewDecoder(request.Body)
+	if strict {
+		decoder.DisallowUnknownFields()
+	}
 	if err := decoder.Decode(target); err != nil {
 		if bodyLimitExceeded(err) {
 			return &TypedError{Code: "INVALID_REQUEST", Message: "request body exceeds limit"}

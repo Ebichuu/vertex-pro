@@ -66,7 +66,6 @@ build:
 	pwsh -NoProfile -File tools/dev/build.ps1
 
 image:
-	docker build -f deploy/docker/Dockerfile --build-arg GOPROXY=https://goproxy.cn,direct -t vertex-pro:local .
-
+	@pwsh -NoProfile -Command "Write-Error '镜像只通过 GitHub Actions 构建发布；请推送版本 tag 或运行 image 工作流。'; exit 1"
 
 

@@ -116,7 +116,9 @@ func ReserveAtomic(ctx context.Context, database *sql.DB, request Request) (Resu
 		}
 
 		var inflight int64
-		err = transaction.QueryRowContext(ctx, `SELECT COUNT(*) FROM placement_attempts WHERE instance_id = ? AND attempt_state IN ('RESERVED','ADD_SENT','AWAITING_CONFIRMATION','UNKNOWN','HASH_SEEN','RECONCILED_CONFIRMED')`, request.InstanceID).Scan(&inflight)
+		// Confirmed submissions retain their identity and capacity ownership,
+		// but no longer occupy an in-flight Add slot.
+		err = transaction.QueryRowContext(ctx, `SELECT COUNT(*) FROM placement_attempts WHERE instance_id = ? AND attempt_state IN ('RESERVED','ADD_SENT','AWAITING_CONFIRMATION','UNKNOWN','EXPIRED_UNKNOWN')`, request.InstanceID).Scan(&inflight)
 		if err != nil {
 			return fmt.Errorf("count inflight attempts: %w", err)
 		}

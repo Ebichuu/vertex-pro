@@ -61,15 +61,17 @@ PENDING -> IN_PROGRESS -> IN_REVIEW -> DONE
 | G | Placement 与容量 | `14/14 DONE` | Gate G / G2 基础 | `PASS`（G2 Gate 评审另行进行） |
 | H | Add、确认与恢复 | `14/14 DONE` | Gate H | `PASS` |
 | I | API、认证与 SSE | `12/12 DONE` | Gate I | `PASS` |
-| J | 前端页面 | `10/13 DONE; 3 PENDING` | Gate J | `PENDING` |
+| J | 前端页面 | `10/13 DONE; 1 IN_PROGRESS; 2 PENDING` | Gate J | `PENDING` |
 | K | 历史、统计与观测 | `12/12 DONE` | Gate K | `PASS` |
 | L | 加固与运维 | `10/12 DONE; 1 IN_PROGRESS; 1 PENDING` | Gate L | `PENDING` |
 | M | RC 与冻结 | `0/7 DONE; 7 PENDING` | Gate M / G3 | `PENDING` |
 
-总体状态：`137/149 DONE`；`1 IN_PROGRESS`；`11 PENDING`。
-Gate A–I 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 12/12、E 13/13、F 12/12、G 14/14、H 14/14、I 12/12）；G1 Gate 于 2026-09-06 评审通过。阶段 J 已收口 UI-01..10，阶段 K 已收口 HIS-01..02 与 STAT-01..04。剩余 12 项 = J 的 UI-11/12/13（3，待实现）+ L 的 HARD-02（IN_PROGRESS：工具链已升 1.26.6 并消除全部 9 个标准库发现，确认重扫待非受限环境）、HARD-07（性能基线，需固定压测环境）+ M 的 7 项 RC 冻结。
+总体状态：`137/149 DONE`；`2 IN_PROGRESS`；`10 PENDING`。
+Gate A–I 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 12/12、E 13/13、F 12/12、G 14/14、H 14/14、I 12/12）；G1 Gate 于 2026-09-06 评审通过。阶段 J 已收口 UI-01..10，阶段 K 已收口 HIS-01..02 与 STAT-01..04。剩余 12 项 = J 的 UI-11（实现与自动化检查完成，待浏览器验收）、UI-12/13（待实现）+ L 的 HARD-02（IN_PROGRESS：工具链已升 1.26.6 并消除全部 9 个标准库发现，确认重扫待非受限环境）、HARD-07（性能基线，需固定压测环境）+ M 的 7 项 RC 冻结。
 
 ### 2026-09-06 状态校准
+
+- UI-11 已接通设置持久化、revision 校验、运行配置与服务端诊断；Go 全套、前端 97/97、类型/生产构建、生成链与合同检查 PASS。打开本机页面时自动审批服务返回 404（不支持 codex-auto-review），1440/1024/390 浏览器验收未执行；Git 暂存提权也被同一故障拒绝，尚未创建新提交，保持 IN_PROGRESS。
 
 - G1 Gate 正式评审通过（PASS，见第 4 节 Gate 记录）：对 `docs/evidence/qui-12/verification-campaign/` 执行证据评审——manifest 所列 12 份 artifact 逐文件 SHA-256 核验一致，9 条 profile verification runs（3 Profile × 3 repetition）全部 `VERIFIED` 且 21/21 用例、外部 kill -9 用例通过、0 自动重投，3 份 activation bindings 绑定第三次重复。
 - Profile 激活的构建绑定：runs/bindings 绑定 `63161b1`；`profileverify.Resolve` 在运行时构建身份与绑定不一致时判定 `RUNTIME_BUILD_INVALID` 并保持 `EXPECTED`（fail closed，设计内行为）。生产部署须构建自 `63161b1`，或在更新 commit 上重跑 P0×3 战役生成新绑定后激活。campaign SQLite 数据库保留在仓库外受限存储，仓库内归档的 run JSON 与 bindings 为权威记录。
@@ -311,7 +313,7 @@ Gate A–I 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 1
 | `UI-08` | History Detail | UI-07, HIS-02,03 | DONE | Codex | `f189e71` | `docs/evidence/ui-08/history-detail-check.json` / sha256:2d513318625639ba5e4e6beeda83e0b068d50e58fbc3a77e0fed731b5bd20d5b |
 | `UI-09` | Downloader Detail | UI-02, STAT-01..05 | DONE | Codex | `f189e71` | `docs/evidence/ui-09/downloader-detail-check.json` / sha256:17b09c1ef7e485380f746004cbe18025c77f4e9be029868e7165ea4d07475fa8 |
 | `UI-10` | Exceptions | UI-01, ADD-10,11, API-07 | DONE | Codex | `f189e71` | `docs/evidence/ui-10/exceptions-check.json` / sha256:bde378546aa33f5d0afe5d051589fe88f979e129317867870f1afad126a66da1 |
-| `UI-11` | Settings | UI-01, API-04 | PENDING | — | — | — |
+| `UI-11` | Settings | UI-01, API-04 | IN_PROGRESS | Codex | `f458256`（开始，main） | `docs/evidence/ui-11/settings-check.json` / sha256:170a4ce1e6329585c53de2583b2823a47d0ec1e1051bc5dbe9027aa6a9553550 |
 | `UI-12` | Accessibility/性能 | UI-01..11 | PENDING | — | — | — |
 | `UI-13` | 主流程 E2E | UI-01..12, CTR-08 | PENDING | — | — | — |
 
@@ -367,7 +369,7 @@ Gate A–I 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 1
 
 | Gate | Status | Required evidence | Commit | Reviewer | Notes |
 |---|---|---|---|---|---|
-| Gate A | PASS | 可重建骨架、工具链、许可证、单镜像 | `5ca8c09` | Codex（记录人；仓库所有者复核待 owner 确认） | 2026-09-05 逐项核验：README 引导 `make bootstrap && make preflight && make build` 全链在当前源码 PASS（boot-05/07 证据）；容器 distroless 无 Node 运行时、nonroot、只读根文件系统（boot-08 runtime）；工具链 go1.26.3/node 24.14.0/pnpm 10.33.0 锁定，Dockerfile 固定基础镜像 tag（distroless 建议后续改 digest 引用）；`verify-license`/`verify-qui-lock` PASS；SBOM 由 `make sbom` 确定性生成 |
+| Gate A | PASS | 可重建骨架、工具链、许可证、单镜像 | `5ca8c09` | Codex（记录人；仓库所有者复核待 owner 确认） | 2026-09-05 逐项核验：README 引导 `make bootstrap && make preflight && make build` 全链在当前源码 PASS（boot-05/07 证据）；容器 distroless 无 Node 运行时、nonroot、只读根文件系统（boot-08 runtime）；工具链 go1.26.6/node 24.14.0/pnpm 10.33.0 锁定，Dockerfile 固定基础镜像 digest；`verify-license`/`verify-qui-lock` PASS；SBOM 由 `make sbom` 确定性生成 |
 | Gate B | PASS | 合同源、生成链、C1 不伪 PASS | `2f64190` | Codex（记录人；仓库所有者复核待 owner 确认） | 2026-09-05 逐项核验：无手写重复枚举（C1-STATE-ENUMS PASS，枚举 source-derived）；API 示例过 schema 校验（C1-OPENAPI PASS）；生成后 Git diff 为空（generate-check PASS）；C1 全部 11 项 PASS 且 `eligible_for_g3=false` 不伪 PASS（CTR-07 证据，报告 sha256:253219a4…） |
 | Gate C | PASS | fresh/upgrade schema、触发器和事务负测 | `e239cf9` | Codex（记录人；仓库所有者复核待 owner 确认） | 2026-09-05 逐项核验：C1 六项（SCHEMA-FRESH/UPGRADE、FOREIGN-KEYS、ATTEMPT-IMMUTABLE、SUBMIT-INTENT-ONE-TO-ONE、RESERVATION-OWNER）真实实现全 PASS（报告 run 20260905T130000Z，sha256:36d1ef99…）；internal/db 负测覆盖迁移中途失败回滚、checksum 不符、跨表漂移与不可变更新拒绝、循环外键插入顺序、启动一致性 fail-closed、升级失败保留原库与备份恢复 |
 | Gate D | PASS | 三 Profile fixture 确定性 Sync；未验证 fail closed | `bc177b6` | Codex（记录人；仓库所有者复核待 owner 确认） | 2026-09-05 逐项核验：三 Profile 12 份金色 fixture 已归档且逐文件 SHA-256 校验（qui-12/fixtures），SyncWatcher/syncmerge 对 fixture 确定性重建全 PASS（含 live qB 5.0.4 与三 Profile lab 战役）；业务代码 fail closed——quihealth 判定真值表测试、Profile 非 VERIFIED 时 dispatchorchestrator 拒绝派发（0 网络调用）、生产写操作默认关闭 |
@@ -532,4 +534,6 @@ Gate A–I 已于 2026-09-05 评审通过（阶段 A 9/9、B 8/8、C 11/11、D 1
 | 2026-09-06 | HARD-06 完成：Docker Linux -race 全套 101 包零数据竞争（`495a382`） | Codex |
 | 2026-09-06 | Go 工具链升级 1.26.3 → 1.26.6（消除 govulncheck 记录的全部 9 个标准库发现；preflight/race/Dockerfile 同步更新，race 在新工具链重跑零竞争）（`86c7d74`） | Codex |
 | 2026-09-06 | HARD-02 推进：vite/vitest 升级清零前端 audit，govulncheck 执行发现 9 个标准库发现（修复版本 go1.26.6），工具链升级为唯一剩余整改（IN_PROGRESS） | Codex |
+| 2026-09-06 | 校准发布护栏：GitHub Actions 统一使用 Go 1.26.6；镜像仅由 `.github/workflows/image.yml` 构建发布，Pull Request 只验证、版本 tag 才推送 GHCR；README 同步当前 137/149 进度和 G1/G2/RC 边界 | Codex |
 | 2026-09-06 | 复验 BOOT-01/02：目录、readiness 和已提交工具链版本一致性 PASS，GitHub 账号及仓库所有者在线核验 PASS；`305734a` 提交 CI/preflight 版本修正，同步证据摘要及 README 入口 | Codex |
+| 2026-09-06 | UI-11 Settings 接通 SQLite、版本冲突、认证/CSRF、运行设置和真实诊断；自动化检查 PASS，浏览器验收与本地提交受自动审批服务故障阻塞，状态更新为 IN_PROGRESS | Codex |

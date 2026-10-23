@@ -12,9 +12,14 @@ type ExceptionsListProps = {
 export function ExceptionsList({ items, uncertainInstances, onAction }: ExceptionsListProps) {
   const [pending, setPending] = useState<{ jobID: string; action: string; label: string } | null>(null)
   const [executing, setExecuting] = useState(false)
+  const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
   const confirm = (jobID: string, action: string, label: string) => setPending({ jobID, action, label })
   return (
     <section aria-labelledby="exceptions-list-title">
+      <h2 id="exceptions-list-title">待处理异常</h2>
+      {error && <p role="alert">{error}</p>}
+      {notice && <p role="status">{notice}</p>}
       {uncertainInstances.length > 0 && (
         <div className="panel exceptions-banner" role="alert">
           容量不可信实例：{uncertainInstances.join('、')}——新投递已暂停，等待容量对账。
@@ -22,7 +27,7 @@ export function ExceptionsList({ items, uncertainInstances, onAction }: Exceptio
       )}
       <ul className="exceptions-list" aria-label="异常列表">
         {items.map((item) => {
-          const actions = actionsForJob(item.user_status)
+          const actions = actionsForJob(item.user_status).filter((action) => item.allowed_actions === undefined || item.allowed_actions.includes(action.action))
           return (
             <li key={item.id} className="panel exception-item" aria-label={`异常 ${item.title || item.id}`}>
               <div className="exception-head">
@@ -30,6 +35,7 @@ export function ExceptionsList({ items, uncertainInstances, onAction }: Exceptio
                 <span className="status-chip tone-wait">{item.user_status_label}</span>
               </div>
               <p className="muted">目标下载器：{item.downloader || '—'}</p>
+              {item.action_unavailable_reason && <p className="muted">{item.action_unavailable_reason}</p>}
               <div className="exception-actions" role="group" aria-label={`受控操作 ${item.id}`}>
                 {actions.map((action) => (
                   <button
@@ -58,17 +64,22 @@ export function ExceptionsList({ items, uncertainInstances, onAction }: Exceptio
               即将对 {pending.jobID} 执行「{pending.label}」。该操作会写入审计记录，请确认你已核对最后新鲜快照。
             </p>
             <div className="confirm-actions">
-              <button type="button" className="ghost-button" onClick={() => setPending(null)}>
+              <button type="button" className="ghost-button" disabled={executing} onClick={() => setPending(null)}>
                 取消
               </button>
               <button
                 type="button"
                 className="ghost-button danger"
+                disabled={executing}
                 onClick={async () => {
                   setExecuting(true)
+                  setError(''); setNotice('')
                   try {
                     await onAction(pending.jobID, pending.action, `cmd-${pending.action.toLowerCase()}-${pending.jobID}-${Date.now()}`)
                     setPending(null)
+                    setNotice('服务器已处理操作，列表已刷新。')
+                  } catch {
+                    setError('操作未完成，请检查状态与新鲜快照后重试。')
                   } finally {
                     setExecuting(false)
                   }

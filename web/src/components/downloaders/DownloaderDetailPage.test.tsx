@@ -2,10 +2,30 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DownloaderDetailPage } from './DownloaderDetailPage'
 import { loadLocalDownloaderDetail } from '../../features/downloaders/downloader-detail'
+import { loadDownloaderDetail } from '../../features/downloaders/api'
+import { http, HttpResponse } from 'msw'
+import { server } from '../../mocks/server'
 
 afterEach(cleanup)
 
 describe('UI-09 Downloader Detail', () => {
+  it('真实空快照和全缺失统计保持未知，并说明数据陈旧', async () => {
+    server.use(
+      http.get('/api/v1/dashboard', () => HttpResponse.json({ instances: [{ id: 'real-qb', name: '真实下载器', sync_state: 'READY', freshness: 'FRESH', realtime_freshness: 'NOT_FRESH', download_rate: 0, upload_rate: 0, realtime_source: '', physical_free_bytes: -1, effective_free_bytes: -1 }] })),
+      http.get('/api/v1/stats/downloaders/summary', ({ request }) => HttpResponse.json({
+        instance_id: 'real-qb', range: new URL(request.url).searchParams.get('range'), download_bytes: 0, upload_bytes: 0,
+        series: [{ bucket_start: '2026-10-22T00:00:00Z', download_bytes: 0, upload_bytes: 0, missing: true }], next_cursor: '',
+      })),
+    )
+    render(<DownloaderDetailPage downloaderId="real-qb" loadDetail={loadDownloaderDetail} onBack={vi.fn()} />)
+    expect(await screen.findByRole('heading', { name: '真实下载器' })).toBeInTheDocument()
+    expect(screen.getByRole('note')).toHaveTextContent('以下最近观测值不代表下载器当前状态')
+    expect(screen.getByRole('img', { name: '本日（UTC）下载与上传流量图' })).toBeInTheDocument()
+    expect(screen.queryByText('0 B')).not.toBeInTheDocument()
+    expect(screen.queryByText('0 KiB/s')).not.toBeInTheDocument()
+    expect(screen.queryByText('LOCAL ONLY')).not.toBeInTheDocument()
+    expect(screen.getAllByText('暂无数据').length).toBeGreaterThan(5)
+  })
   it('展示实时状态、容量和日统计图', async () => {
     render(<DownloaderDetailPage downloaderId="qb-a" loadDetail={loadLocalDownloaderDetail} onBack={vi.fn()} />)
     expect(await screen.findByRole('heading', { name: 'qB-A · NVMe' })).toBeInTheDocument()

@@ -166,9 +166,9 @@ func TestCycleMissingTitleDoesNotMatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = cycle.Run(context.Background(), FeedRef{SiteID: "site-1", URL: server.URL + "/feed.xml"})
-	if err == nil {
-		t.Fatal("expected the strict feed parser to reject an entry-less feed")
+	result, err := cycle.Run(context.Background(), FeedRef{SiteID: "site-1", URL: server.URL + "/feed.xml"})
+	if err != nil || result.Entries != 0 || result.Matched != 0 {
+		t.Fatalf("empty valid feed: result=%+v err=%v", result, err)
 	}
 }
 

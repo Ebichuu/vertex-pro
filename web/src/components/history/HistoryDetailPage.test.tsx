@@ -2,10 +2,28 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { HistoryDetailPage } from './HistoryDetailPage'
 import { HIDDEN_HISTORY_TERMS, loadLocalHistoryDetail, sortHistoryTimeline, type HistoryDetail, type HistoryDetailLoader } from '../../features/history/history-detail'
+import { parseHistoryDetail } from '../../features/history/api'
 
 afterEach(cleanup)
 
 describe('UI-08 History Detail', () => {
+  it('真实详情缺失事实时显示未知，添加请求不冒充下载确认', async () => {
+    const detail = parseHistoryDetail({
+      id: 'real-job', title: '真实待确认任务', user_status: 'NEEDS_CONFIRMATION', job_state: 'UNKNOWN',
+      timeline: [{ event_id: 3, stage: '添加', to_state: 'ADD_SENT', occurred_at: '2026-10-22T01:00:00Z' }],
+      last_transfer: { uploaded_bytes: null, downloaded_bytes: -1, ratio: null },
+    }, 'real-job')
+    render(<HistoryDetailPage jobId="real-job" loadDetail={async () => detail} onBack={() => {}} />)
+    const ordinary = await screen.findByTestId('ordinary-history-detail')
+    expect(ordinary).toHaveTextContent('已发起添加请求，等待确认')
+    expect(ordinary).toHaveTextContent('暂无规则命中信息')
+    expect(ordinary).not.toHaveTextContent('0 条规则命中')
+    expect(ordinary).not.toHaveTextContent('下载器已确认种子存在')
+    expect(ordinary).not.toHaveTextContent('0 B')
+    expect(ordinary).not.toHaveTextContent('NaN')
+    expect(ordinary).not.toHaveTextContent('UNKNOWN')
+    expect(screen.queryByText('LOCAL ONLY')).not.toBeInTheDocument()
+  })
   it('展示最后状态、上传分享率、规则聚合和删除确认', async () => {
     render(<HistoryDetailPage jobId="history-job-1" loadDetail={loadLocalHistoryDetail} onBack={() => {}} />)
 

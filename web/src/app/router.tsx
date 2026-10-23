@@ -1,28 +1,26 @@
 import { useState } from 'react'
 import { createRootRoute, createRoute, createRouter, Link, Outlet, useNavigate } from '@tanstack/react-router'
-import type { ReactNode } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { AppShell } from '../components/shell/AppShell'
 import { DashboardCards } from '../components/dashboard/DashboardCards'
 import { HistoryTable } from '../components/history/HistoryTable'
-import { ApiClient, ApiRequestError } from '../generated/api-client'
+import { ApiClient } from '../generated/api-client'
 import type { HistoryPageData } from '../features/history/history'
 import type { DashboardData } from '../features/dashboard/dashboard'
-import { RuleList } from '../components/rules/RuleList'
-import type { RuleSummary } from '../features/rules/rule-list'
 import { SitesRssPage } from '../components/sites/SitesRssPage'
 import type { Feed, FeedPatch, FeedPreview, Site, SiteFormValues } from '../features/sites/sites'
 import { siteIdForName } from '../features/sites/sites'
-import { RuleEditorPage } from '../components/rules/RuleEditorPage'
-import type { RuleEditorDraft } from '../features/rules/rule-editor'
-import type { VertexConditionTree } from '../features/rules/model'
-import { RuleDryRunPage } from '../components/rules/RuleDryRunPage'
-import { recentRssItems, runLocalDryRun } from '../features/rules/dry-run'
+import { RequestState, RulesPage, SavedRuleEditor } from './rules-pages'
+import { LiveDryRunPage } from '../components/rules/LiveDryRunPage'
+import { ExceptionsPage } from '../components/exceptions/ExceptionsPage'
 import { HistoryDetailPage } from '../components/history/HistoryDetailPage'
-import { loadLocalHistoryDetail } from '../features/history/history-detail'
+import { loadHistoryDetail } from '../features/history/api'
 import { DownloaderDetailPage } from '../components/downloaders/DownloaderDetailPage'
-import { loadLocalDownloaderDetail } from '../features/downloaders/downloader-detail'
+import { loadDownloaderDetail } from '../features/downloaders/api'
 import { csrfHeaders } from '../features/auth/auth'
+import { SettingsPage } from '../components/settings/SettingsPage'
+import { downloadDiagnostics, loadSettings, saveSettings } from '../features/settings/settings'
+import { DisplayTimezoneContext } from '../features/settings/timezone'
 
 const apiClient = new ApiClient(window.location.origin)
 
@@ -79,35 +77,6 @@ function parseFeed(value: unknown, fallbackSiteId: string): Feed {
     lastSuccess: null,
     lastError: null,
     discoveredCount: 0,
-  }
-}
-
-type RulesResponse = {
-  items?: unknown
-}
-
-function parseRules(payload: unknown): RuleSummary[] {
-  if (!payload || typeof payload !== 'object' || !Array.isArray((payload as RulesResponse).items)) {
-    throw new Error('规则 API 响应格式无效')
-  }
-  return ((payload as RulesResponse).items as unknown[]).map(parseRule)
-}
-
-function parseRule(value: unknown): RuleSummary {
-  if (!value || typeof value !== 'object') throw new Error('规则数据无效')
-  const raw = value as Record<string, unknown>
-  if (typeof raw.id !== 'string' || typeof raw.name !== 'string' || typeof raw.priority !== 'number' || !Number.isInteger(raw.priority) || typeof raw.enabled !== 'boolean' || typeof raw.revision !== 'number' || !Number.isInteger(raw.revision) || raw.revision < 1 || typeof raw.updated_at !== 'string') {
-    throw new Error('规则数据字段无效')
-  }
-  return {
-    id: raw.id,
-    name: raw.name,
-    priority: raw.priority,
-    enabled: raw.enabled,
-    revision: raw.revision,
-    matchCount: typeof raw.match_count === 'number' ? raw.match_count : 0,
-    target: typeof raw.target === 'string' ? raw.target : '未设置',
-    updatedAt: raw.updated_at,
   }
 }
 
@@ -217,129 +186,19 @@ function Dashboard() {
   )
 }
 
-const AggregationPreviewPage = () => <RuleDryRunPage items={recentRssItems} runDryRun={runLocalDryRun} />
-
-const sampleRules: RuleSummary[] = [
-  { id: 'rule-4k', name: '4K 电影', priority: 100, enabled: true, revision: 3, matchCount: 148, target: 'qB-A · NVMe', updatedAt: '2026-08-25T09:00:00Z' },
-  { id: 'rule-free', name: 'Freeleech', priority: 60, enabled: true, revision: 2, matchCount: 83, target: '高速组', updatedAt: '2026-08-24T12:00:00Z' },
-  { id: 'rule-anime', name: '动画', priority: 40, enabled: false, revision: 1, matchCount: 27, target: 'qB-C · Archive', updatedAt: '2026-08-23T16:00:00Z' },
-]
-
 function Rules() {
   const navigate = useNavigate()
-  const query = useQuery({
-    queryKey: ['rules'],
-    queryFn: () => apiClient.listRules<RulesResponse>(),
-  })
-  if (query.isPending) {
-    return (
-      <section aria-labelledby="rules-title" className="panel">
-        <h1 id="rules-title">规则配置</h1>
-        <p className="muted">正在加载投递规则…</p>
-      </section>
-    )
-  }
-  if (query.isError) {
-    return (
-      <section aria-labelledby="rules-title" className="panel">
-        <h1 id="rules-title">规则配置</h1>
-        <p className="muted">规则加载失败：{String(query.error)}</p>
-      </section>
-    )
-  }
-  const updateRule = async (rule: RuleSummary, expectedRevision: number, patch: Partial<Pick<RuleSummary, 'name' | 'priority' | 'enabled'>>) => {
-    try {
-      const payload = await apiClient.updateRule<unknown>(rule.id, { body: patch, headers: { 'If-Match': `"${expectedRevision}"`, ...csrfHeaders() } })
-      return { ok: true as const, rule: parseRule(payload) }
-    } catch (error) {
-      if (error instanceof ApiRequestError && error.status === 409 && error.body.code === 'REVISION_CONFLICT') {
-        const current = await apiClient.getRule<unknown>(rule.id)
-        return { ok: false as const, status: 409 as const, code: 'REVISION_CONFLICT' as const, current: parseRule(current) }
-      }
-      throw error
-    }
-  }
-  return (
-    <section className="rules-page" aria-labelledby="rules-title">
-      <div className="rules-page-heading">
-        <div>
-          <p className="eyebrow">AUTOMATION RULES</p>
-          <h1 id="rules-title">规则配置</h1>
-          <p className="muted">调整规则优先级和启用状态，再回到聚合预览检查最终决策。</p>
-        </div>
-        <div className="rules-page-actions"><Link to="/aggregation" className="ghost-button">Dry-run 预览</Link><span className="page-badge">LOCAL ONLY</span></div>
-      </div>
-      <RuleList rules={parseRules(query.data)} onUpdateRule={updateRule} onEdit={(rule) => { void navigate({ to: '/rules/$ruleId/edit', params: { ruleId: rule.id } }) }} />
-      <Link to="/" className="text-link">返回总览</Link>
-    </section>
-  )
+  return <RulesPage onEdit={(ruleId) => { void navigate({ to: '/rules/$ruleId/edit', params: { ruleId } }) }} onCreate={() => { void navigate({ to: '/rules/new' }) }} />
 }
-
-const sampleInstances = [
-  { id: 'qb-a', label: 'qB-A · NVMe' },
-  { id: 'qb-b', label: 'qB-B · Bulk' },
-  { id: 'qb-c', label: 'qB-C · Archive' },
-]
-
-const sampleGroups = [
-  { id: 'fast', label: '高速组' },
-  { id: 'archive', label: '归档组' },
-]
-
-function ruleDraft(rule: RuleSummary): RuleEditorDraft {
-  const conditionTree: VertexConditionTree = {
-    version: 1,
-    root: {
-      kind: 'group',
-      operator: 'and',
-      children: [
-        { kind: 'leaf', field: 'site', operator: 'equals', value: { type: 'string', string: 'HDSky' } },
-        { kind: 'leaf', field: 'size', operator: 'greater_or_equal', value: { type: 'number', number: 21_474_836_480 } },
-        { kind: 'leaf', field: 'title', operator: 'contains', value: { type: 'string', string: '2160p' } },
-      ],
-    },
-  }
-  const groupTarget = rule.target === '高速组'
-  return {
-    id: rule.id,
-    name: rule.name,
-    enabled: rule.enabled,
-    priority: rule.priority,
-    revision: rule.revision,
-    conditionTree,
-    actions: {
-      targetMode: groupTarget ? 'INSTANCE_GROUP' : 'FIXED_INSTANCE',
-      targetInstanceId: groupTarget ? '' : rule.id === 'rule-anime' ? 'qb-c' : 'qb-a',
-      targetGroupId: groupTarget ? 'fast' : '',
-      category: rule.id === 'rule-anime' ? 'anime' : 'movie/4k',
-      tags: ['vertex-pro', rule.id === 'rule-free' ? 'freeleech' : '4k'],
-      savePathPolicy: 'CATEGORY_SUBDIRECTORY',
-      sequentialDownload: false,
-      participationWindowMinutes: 20,
-    },
-  }
-}
-
 function RuleEditorRoutePage() {
   const { ruleId } = ruleEditorRoute.useParams()
   const navigate = useNavigate()
-  const rule = sampleRules.find((item) => item.id === ruleId) ?? { ...sampleRules[0], id: ruleId, name: '未命名规则' }
-  return <RuleEditorPage initialDraft={ruleDraft(rule)} instances={sampleInstances} groups={sampleGroups} onCancel={() => { void navigate({ to: '/rules' }) }} />
+  return <SavedRuleEditor ruleId={ruleId} onBack={() => { void navigate({ to: '/rules' }) }} />
 }
-
-type PlaceholderPageProps = { id: string; eyebrow: string; title: string; note: string }
-
-function PlaceholderPage({ id, eyebrow, title, note }: PlaceholderPageProps) {
-  const titleId = `${id}-title`
-  return (
-    <section className="panel" aria-labelledby={titleId}>
-      <p className="eyebrow">{eyebrow}</p>
-      <h1 id={titleId}>{title}</h1>
-      <p className="muted">{note}</p>
-    </section>
-  )
+function NewRuleRoutePage() {
+  const navigate = useNavigate()
+  return <SavedRuleEditor onBack={() => { void navigate({ to: '/rules' }) }} />
 }
-
 function Sites() {
   const query = useQuery({
     queryKey: ['sites'],
@@ -372,10 +231,11 @@ function Sites() {
 function History() {
   const navigate = useNavigate()
   const [statusFilter, setStatusFilter] = useState('')
-  const [pages, setPages] = useState<HistoryPageData[]>([])
-  const query = useQuery({
+  const query = useInfiniteQuery({
     queryKey: ['history', statusFilter],
-    queryFn: () => apiClient.listJobs<HistoryPageData>({ query: { user_status: statusFilter || undefined, limit: '50' } }),
+    initialPageParam: '',
+    queryFn: ({ pageParam }) => apiClient.listJobs<HistoryPageData>({ query: { user_status: statusFilter || undefined, limit: '50', cursor: pageParam || undefined } }),
+    getNextPageParam: (lastPage) => lastPage.next_cursor || undefined,
   })
   if (query.isPending) {
     return (
@@ -385,24 +245,23 @@ function History() {
       </section>
     )
   }
-  const current: HistoryPageData = query.data ?? { items: [], next_cursor: '' }
-  const visible = pages.length === 0 || pages[pages.length - 1].next_cursor !== current.next_cursor ? [...pages, current] : pages
   return (
     <section aria-labelledby="history-title" className="history-page">
       <p className="eyebrow">HISTORY</p>
       <h1 id="history-title">历史</h1>
       <p className="muted">投递历史在种子被删除后仍然保留；状态使用用户语言，删除行带删除时间与证据来源。</p>
       <HistoryTable
-        pages={visible}
+        pages={query.data?.pages ?? []}
         statusFilter={statusFilter}
-        onStatusFilterChange={(next) => { setStatusFilter(next); setPages([]) }}
-        hasMore={Boolean(current.next_cursor)}
+        onStatusFilterChange={setStatusFilter}
+        hasMore={query.hasNextPage}
         loading={query.isFetching}
         onLoadMore={() => {
-          void query.refetch()
+          void query.fetchNextPage()
         }}
         onOpen={(jobId) => { void navigate({ to: '/history/$jobId', params: { jobId } }) }}
       />
+      {query.isError && <RequestState error={query.error} retry={() => { void query.refetch() }} />}
     </section>
   )
 }
@@ -410,38 +269,39 @@ function History() {
 function HistoryDetailRoutePage() {
   const { jobId } = historyDetailRoute.useParams()
   const navigate = useNavigate()
-  return <HistoryDetailPage jobId={jobId} loadDetail={loadLocalHistoryDetail} onBack={() => { void navigate({ to: '/history' }) }} />
+  return <HistoryDetailPage jobId={jobId} loadDetail={loadHistoryDetail} onBack={() => { void navigate({ to: '/history' }) }} />
 }
 function DownloaderDetailRoutePage() {
   const { downloaderId } = downloaderDetailRoute.useParams()
   const navigate = useNavigate()
-  return <DownloaderDetailPage downloaderId={downloaderId} loadDetail={loadLocalDownloaderDetail} onBack={() => { void navigate({ to: '/' }) }} />
+  return <DownloaderDetailPage downloaderId={downloaderId} loadDetail={loadDownloaderDetail} onBack={() => { void navigate({ to: '/' }) }} />
 }
-const Exceptions = () => (
-  <PlaceholderPage id="exceptions" eyebrow="EXCEPTIONS" title="异常" note="UNKNOWN、容量不可信等需人工处理的异常将在命令层接线后开放。" />
-)
 const Settings = () => (
-  <PlaceholderPage id="settings" eyebrow="SYSTEM" title="系统设置" note="时区、保留期、限流与安全设置将在设置 API 接线后开放。" />
+  <SettingsPage loadSettings={loadSettings} saveSettings={saveSettings} downloadDiagnostics={downloadDiagnostics} />
 )
 
-const rootRoute = createRootRoute({
-  component: () => (
+function AppLayout() {
+  const query = useQuery({ queryKey: ['settings', 'active'], queryFn: ({ signal }) => loadSettings(signal), staleTime: 60_000, retry: 1 })
+  return <DisplayTimezoneContext.Provider value={query.data?.active.timezone ?? 'UTC'}>
     <AppShell>
       <Outlet />
     </AppShell>
-  ),
-})
+  </DisplayTimezoneContext.Provider>
+}
+
+const rootRoute = createRootRoute({ component: AppLayout })
 const dashboardRoute = createRoute({ getParentRoute: () => rootRoute, path: '/', component: Dashboard })
-const aggregationRoute = createRoute({ getParentRoute: () => rootRoute, path: '/aggregation', component: AggregationPreviewPage })
+const aggregationRoute = createRoute({ getParentRoute: () => rootRoute, path: '/aggregation', component: LiveDryRunPage })
 const sitesRoute = createRoute({ getParentRoute: () => rootRoute, path: '/sites', component: Sites })
 const rulesRoute = createRoute({ getParentRoute: () => rootRoute, path: '/rules', component: Rules })
 const ruleEditorRoute = createRoute({ getParentRoute: () => rootRoute, path: '/rules/$ruleId/edit', component: RuleEditorRoutePage })
+const newRuleRoute = createRoute({ getParentRoute: () => rootRoute, path: '/rules/new', component: NewRuleRoutePage })
 const historyRoute = createRoute({ getParentRoute: () => rootRoute, path: '/history', component: History })
 const historyDetailRoute = createRoute({ getParentRoute: () => rootRoute, path: '/history/$jobId', component: HistoryDetailRoutePage })
 const downloaderDetailRoute = createRoute({ getParentRoute: () => rootRoute, path: '/downloaders/$downloaderId', component: DownloaderDetailRoutePage })
-const exceptionsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/exceptions', component: Exceptions })
+const exceptionsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/exceptions', component: ExceptionsPage })
 const settingsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/settings', component: Settings })
-const routeTree = rootRoute.addChildren([dashboardRoute, aggregationRoute, sitesRoute, rulesRoute, ruleEditorRoute, historyRoute, historyDetailRoute, downloaderDetailRoute, exceptionsRoute, settingsRoute])
+const routeTree = rootRoute.addChildren([dashboardRoute, aggregationRoute, sitesRoute, rulesRoute, newRuleRoute, ruleEditorRoute, historyRoute, historyDetailRoute, downloaderDetailRoute, exceptionsRoute, settingsRoute])
 
 export const router = createRouter({ routeTree })
 

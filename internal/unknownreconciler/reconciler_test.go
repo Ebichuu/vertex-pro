@@ -256,6 +256,10 @@ func openMigrated(t *testing.T) *sql.DB {
 }
 
 func seedUnknown(t *testing.T, database *sql.DB, suffix string) {
+	seedUnknownForInstance(t, database, suffix, "qb-1")
+}
+
+func seedUnknownForInstance(t *testing.T, database *sql.DB, suffix, instanceID string) {
 	t.Helper()
 	now := time.Date(2026, 8, 29, 0, 0, 0, 0, time.UTC).Format(time.RFC3339)
 	attemptID := "attempt-" + suffix
@@ -278,9 +282,29 @@ func seedUnknown(t *testing.T, database *sql.DB, suffix string) {
 		{"UPDATE race_jobs SET job_state='UNKNOWN', current_attempt_id='" + attemptID + "' WHERE job_id='" + jobID + "'", nil},
 	}
 	for _, statement := range statements {
-		if _, err := database.Exec(statement.query, statement.args...); err != nil {
+		if _, err := database.Exec(strings.ReplaceAll(statement.query, "'qb-1'", "'"+instanceID+"'"), statement.args...); err != nil {
 			t.Fatal(err)
 		}
+	}
+}
+
+func TestSweepInstanceScopeLeavesForeignUnknownUntouched(t *testing.T) {
+	database := openMigrated(t)
+	seedUnknownForInstance(t, database, "1", "qb-offline")
+	seedUnknownForInstance(t, database, "2", "qb-online")
+	provider := &stubProvider{snapshots: map[string]Snapshot{"qb-online": {InstanceID: "qb-online", SyncGeneration: 5, SnapshotRevision: 2, SnapshotDigest: "after", IdentityPresent: false}}}
+	// The foreign attempt sorts first and is past its deadline. An event for
+	// qb-online must neither fail on it nor expire or release its ownership.
+	outcomes, err := Sweep(context.Background(), database, provider, SweepInput{Now: time.Date(2026, 8, 29, 1, 30, 0, 0, time.UTC), InstanceID: "qb-online"})
+	if err != nil || len(outcomes) != 1 || outcomes[0].AttemptID != "attempt-2" || outcomes[0].Outcome != OutcomeNoEffect || provider.calls != 1 {
+		t.Fatalf("outcomes=%+v calls=%d err=%v", outcomes, provider.calls, err)
+	}
+	var attemptState, reservationState, waiterState string
+	if err := database.QueryRow(`SELECT a.attempt_state,r.reservation_state,w.waiter_state FROM placement_attempts a JOIN capacity_reservations r ON r.attempt_id=a.attempt_id JOIN sync_waiters w ON w.attempt_id=a.attempt_id WHERE a.attempt_id='attempt-1'`).Scan(&attemptState, &reservationState, &waiterState); err != nil {
+		t.Fatal(err)
+	}
+	if attemptState != "UNKNOWN" || reservationState != "ACTIVE" || waiterState != "ACTIVE" {
+		t.Fatalf("foreign chain changed: %s/%s/%s", attemptState, reservationState, waiterState)
 	}
 }
 

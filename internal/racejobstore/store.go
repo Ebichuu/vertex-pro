@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/vertex-pro/vertex-pro/internal/db"
 	"github.com/vertex-pro/vertex-pro/internal/racejob"
 )
 
@@ -65,16 +66,23 @@ func (store *Store) LoadBySource(ctx context.Context, sourceID string) (racejob.
 func (store *Store) Save(ctx context.Context, job racejob.Job) error {
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	currentAttempt := nullablePointer(job.CurrentAttemptID)
-	result, err := store.database.ExecContext(ctx, `INSERT INTO race_jobs(job_id, source_id, identity_key, job_state, rule_state, torrent_state, placement_state, observation_state, preparation_revision, current_attempt_id, participation_deadline, observation_deadline, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	return db.RunImmediate(ctx, store.database, func(ctx context.Context, tx *db.ImmediateTx) error {
+		result, err := tx.ExecContext(ctx, `INSERT INTO race_jobs(job_id, source_id, identity_key, job_state, rule_state, torrent_state, placement_state, observation_state, preparation_revision, current_attempt_id, participation_deadline, observation_deadline, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(job_id) DO UPDATE SET job_state=excluded.job_state, rule_state=excluded.rule_state, torrent_state=excluded.torrent_state, placement_state=excluded.placement_state, observation_state=excluded.observation_state, preparation_revision=excluded.preparation_revision, current_attempt_id=excluded.current_attempt_id, updated_at=excluded.updated_at`,
-		job.ID, job.SourceID, job.IdentityKey, job.JobState, job.RuleState, job.TorrentState, job.PlacementState, job.ObservationState, job.PreparationRevision, currentAttempt, formatTime(job.ParticipationDeadline), formatTime(job.ObservationDeadline), now, now)
-	if err != nil {
-		return fmt.Errorf("save race job: %w", err)
-	}
-	if rows, err := result.RowsAffected(); err == nil && rows == 0 {
-		return fmt.Errorf("save race job: no rows affected")
-	}
-	return nil
+			job.ID, job.SourceID, job.IdentityKey, job.JobState, job.RuleState, job.TorrentState, job.PlacementState, job.ObservationState, job.PreparationRevision, currentAttempt, formatTime(job.ParticipationDeadline), formatTime(job.ObservationDeadline), now, now)
+		if err != nil {
+			return fmt.Errorf("save race job: %w", err)
+		}
+		if rows, err := result.RowsAffected(); err == nil && rows == 0 {
+			return fmt.Errorf("save race job: no rows affected")
+		}
+		if len(job.RuleSnapshot) > 0 {
+			if _, err := tx.ExecContext(ctx, `INSERT INTO job_rule_snapshots(job_id, aggregation_json, content_size, created_at) VALUES(?,?,?,?) ON CONFLICT(job_id) DO NOTHING`, job.ID, string(job.RuleSnapshot), job.ContentSize, now); err != nil {
+				return fmt.Errorf("save rule snapshot: %w", err)
+			}
+		}
+		return nil
+	})
 }
 
 func formatTime(value time.Time) string {

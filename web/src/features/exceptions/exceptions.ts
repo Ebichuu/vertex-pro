@@ -7,6 +7,8 @@ export interface ExceptionItem {
   downloader: string
   user_status: string
   user_status_label: string
+  allowed_actions?: string[]
+  action_unavailable_reason?: string
 }
 
 // actionsForJob 按当前状态给出受控操作矩阵（§16.8）：

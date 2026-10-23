@@ -1,0 +1,259 @@
+{
+  "item": "UI-11",
+  "title": "Settings",
+  "status": "IN_PROGRESS",
+  "implementation_status": "AUTOMATED_CHECKS_PASS",
+  "checked_at": "2026-09-06T12:44:57.377Z",
+  "source": {
+    "base_commit": "f4582561392f56cfdf42b5dadb2da9bb211bcb38",
+    "branch": "main",
+    "working_tree_changes": true
+  },
+  "outputs_hash_basis": "UTF-8 text normalized to LF, matching Git text blobs",
+  "implementation": [
+    "管理员认证与 CSRF 保护的设置 GET/PUT，SQLite 单行持久化与原子 revision 防覆盖",
+    "合同生成 TypeScript 类型与 API 客户端，严格输入校验与受控错误提示",
+    "已保存设置与启动时运行值分开显示，重启后应用 RSS、会话、统计保留参数",
+    "RSS 轮询与手动测试共享每主机节流和总并发上限，重定向同样受控，取消不泄漏槽位",
+    "历史与下载器时间格式采用运行设置中的 IANA 时区，UTC 存储与统计分桶保持一致",
+    "服务端诊断报告含真实版本、运行配置、数据库探测和 SHA-256；仅提供非敏感白名单字段",
+    "离线保留草稿、重连检查 revision、冲突后主动载入、加载重试、只读与无回调保护、标签与错误关联"
+  ],
+  "checks": {
+    "go_test": {
+      "command": "go test ./...",
+      "status": "PASS"
+    },
+    "go_vet": {
+      "command": "go vet ./internal/settings ./internal/rssfetch ./internal/resourcesapi ./internal/app ./internal/diagnostics ./internal/httpapi ./tools/codegen",
+      "status": "PASS",
+      "note": "GOCACHE 使用 artifacts/go-cache-ui-11，避开不可写的全局缓存"
+    },
+    "web_test": {
+      "command": "pnpm --dir web test",
+      "status": "PASS",
+      "files": 18,
+      "tests": 97,
+      "settings_tests": 16
+    },
+    "web_build": {
+      "command": "pnpm --dir web build",
+      "status": "PASS",
+      "typecheck": "tsc -b",
+      "note": "主 JS 616.28 kB，gzip 186.84 kB；体积优化留待 UI-12"
+    },
+    "generation": {
+      "command": "go run ./tools/codegen -check",
+      "status": "PASS"
+    },
+    "contracts": {
+      "command": "go run ./tools/contractcheck",
+      "status": "PASS",
+      "checks": 11,
+      "eligible_for_g3": false
+    },
+    "browser": {
+      "status": "BLOCKED",
+      "viewports": [
+        1440,
+        1024,
+        390
+      ],
+      "screenshots": [],
+      "reason": "打开本机测试页面被自动审批拒绝：审批服务 HTTP 404，不支持 codex-auto-review。未完成浏览器交互和视觉验收。"
+    },
+    "race": {
+      "status": "NOT_RUN",
+      "reason": "本机 CGO_ENABLED=0 且没有 gcc；并发行为已由 Go 测试覆盖，本轮不声明 race 检测通过"
+    },
+    "images": {
+      "status": "NOT_RUN",
+      "policy": "镜像只通过 GitHub Actions 构建发布"
+    },
+    "commit": {
+      "status": "BLOCKED",
+      "operation": "git add --pathspec-from-file=artifacts/ui-11/stage-paths.txt",
+      "reason": "默认沙箱拒绝创建 .git/index.lock；按用户已有提交授权请求提权后，自动审批服务 HTTP 404（不支持 codex-auto-review）拒绝执行。",
+      "head": "f4582561392f56cfdf42b5dadb2da9bb211bcb38",
+      "new_commit_created": false
+    },
+    "repository_layout": {
+      "status": "PASS",
+      "required_paths": 52
+    },
+    "implementation_plan": {
+      "status": "PASS",
+      "items": 149
+    }
+  },
+  "outputs": [
+    {
+      "path": ".gitattributes",
+      "sha256": "11f4055a682c0f25dd35eddd0e989df171810a4408914bd28468aa41cb4684b2"
+    },
+    {
+      "path": "cmd/vertex-pro/main.go",
+      "sha256": "0b74c6f4d23b5b631caa3a2cac5ca9a1128281fecd79a1bd079b035341bc4c7f"
+    },
+    {
+      "path": "contracts/openapi/openapi.json",
+      "sha256": "a6bc86dbb478c3a49cacc08ad54bd5d65023cc1151c1151ce7a264941eb3e399"
+    },
+    {
+      "path": "docs/plans/2026-09-06-ui-11-settings.md",
+      "sha256": "ace0f9801cbdde717914b168e3bb80f1d29d8c9662b44617ac196ffbc99b79f4"
+    },
+    {
+      "path": "internal/app/app.go",
+      "sha256": "29242628e280fcf0bac5bfa8d7d40c1d2101f4b3dd1da0cd1683f99e47ed5977"
+    },
+    {
+      "path": "internal/app/settings_test.go",
+      "sha256": "7e23e232e29a91c544c1968c4c1b79d91d62c183b68c3f224a606b6fd65e1784"
+    },
+    {
+      "path": "internal/db/migrations/0013_app_settings.sql",
+      "sha256": "488088a881132a9fb8fee6ee82e7b0283705ef41dfc6712682feeb6c9a9ae257"
+    },
+    {
+      "path": "internal/diagnostics/diagnostics.go",
+      "sha256": "db433d4f55f26c0a4b7e832d7689a6ddf5370a48af1f030f2ebde07184c320f7"
+    },
+    {
+      "path": "internal/generated/contracts.go",
+      "sha256": "c26b0441ed6093a871e40e37f2304ef6192212976832cdfa5ed9dd269526fe5a"
+    },
+    {
+      "path": "internal/httpapi/middleware.go",
+      "sha256": "00a49cb30f48261aaaab9e0589b9d14db9e76472faaea0b46aa48d8ceb09c672"
+    },
+    {
+      "path": "internal/resourcesapi/api.go",
+      "sha256": "a3faaa9ee92671428fa90b8261f05ac5ec411409ce60d46f4680ca6b5056e328"
+    },
+    {
+      "path": "internal/resourcesapi/settings.go",
+      "sha256": "5079f9391c36ef6378f04a147fdcc7977be3403f6901dd2eaf0982dc3ab1d743"
+    },
+    {
+      "path": "internal/resourcesapi/settings_test.go",
+      "sha256": "e0ab6895afd8de5461bdabd869992a33355620d45bce76bc76df684cfb4317c1"
+    },
+    {
+      "path": "internal/rssfetch/limits.go",
+      "sha256": "42edd9b740de31eb8df0c78dcf6ca563b0d87cd9fcb2d3728f75cda28cd1c6d8"
+    },
+    {
+      "path": "internal/rssfetch/limits_test.go",
+      "sha256": "8d108fefb2b2e737822cfa68ed47492aceed5d5f8367d9f4dec17b6272f13bff"
+    },
+    {
+      "path": "internal/settings/settings.go",
+      "sha256": "c00b6f7dc45be2ec797ff2a679d77bedc31efb81a024832ac58e4d27b2acf07b"
+    },
+    {
+      "path": "internal/settings/settings_test.go",
+      "sha256": "6c1ec773ac73c4bb600ad04895c08ed3ed601200dceef28382ca2393c5516abe"
+    },
+    {
+      "path": "internal/settings/diagnostics.go",
+      "sha256": "bab7a035c6852098409ee3ff1f05330a8a03d9c4c232d2e979ce0463b81ef944"
+    },
+    {
+      "path": "tools/codegen/main.go",
+      "sha256": "41cecfcbc560e464fb3f018e099ac26e865f89de17bd87dbece041520809ae96"
+    },
+    {
+      "path": "tools/codegen/models.go",
+      "sha256": "adef8222b1f5e82a8d0a6e922bff29219733a0cb106ffc49f8ecf778aa33dbd1"
+    },
+    {
+      "path": "tools/codegen/models_test.go",
+      "sha256": "e850f966b7c18430e7f60693be859f11eae052976ea2438f626b50c0ae81bf10"
+    },
+    {
+      "path": "web/src/app/router.tsx",
+      "sha256": "f74ab0bdfae835c3a923073f6bc2a198f28362d3663aa4cec90ea0a04173fffc"
+    },
+    {
+      "path": "web/src/components/settings/SettingsPage.tsx",
+      "sha256": "1fd3db8a8aa1d508abfab56a72d7c15ce854244d5a6b718f97bdb99975ee0db4"
+    },
+    {
+      "path": "web/src/components/settings/SettingsPage.test.tsx",
+      "sha256": "f6fd0fc8c0cf924b463cc61110024e1e17e4bd9ec814ec23e7c2d891fa99832a"
+    },
+    {
+      "path": "web/src/components/history/HistoryDetailPage.tsx",
+      "sha256": "396d33ff2e18689026b9c4b50fafbafde714b43f07e798badbbb799d1619f807"
+    },
+    {
+      "path": "web/src/components/downloaders/DownloaderDetailPage.tsx",
+      "sha256": "33d4827572388f77dc956da08092a4793e6ddb7006c5506097dfb11b87c1a9ce"
+    },
+    {
+      "path": "web/src/features/history/history-detail.ts",
+      "sha256": "2aaac2064aebf5bfafefe2448c32be512cfd52ed38b1dee5c3d5fdb06e864db1"
+    },
+    {
+      "path": "web/src/features/downloaders/downloader-detail.ts",
+      "sha256": "f50023613b476eb7330c7eff923a441187433e84c393621b1e2d932e00a7eba5"
+    },
+    {
+      "path": "web/src/features/settings/settings.ts",
+      "sha256": "defe4a9ed2b7e6ec98c4060520c0a0b5de8e75ce59f59cdca66d37a9111a0394"
+    },
+    {
+      "path": "web/src/features/settings/settings.test.ts",
+      "sha256": "f27092421a3133fae645048f95740ccb301f88553498087d8ce7cd9d29676310"
+    },
+    {
+      "path": "web/src/features/settings/validation.ts",
+      "sha256": "77a133c1c6a47c04178aff32134b82d12b15b16bf396c09a809feb4209d52a3c"
+    },
+    {
+      "path": "web/src/features/settings/timezone.ts",
+      "sha256": "f87a880f0837523957e555b8d5f0a8da284cef45f2293137913471e33bd0234b"
+    },
+    {
+      "path": "web/src/generated/api-client.ts",
+      "sha256": "cdc175798d46ab42e7cb1c0ce8d214441391982291db362676861ad8763e1151"
+    },
+    {
+      "path": "web/src/generated/contracts.ts",
+      "sha256": "73f3bc2b425764de6df854fa641eca16a8490f84d84f7cded3246d5989963a66"
+    },
+    {
+      "path": "web/src/generated/models.ts",
+      "sha256": "8488aaa6d6fc0146c470e0726293bcd7c18e1037b8555d6ca934aa7726ce3089"
+    },
+    {
+      "path": "web/src/mocks/handlers.ts",
+      "sha256": "93e112d581731d00618e735a9065fd06b084a364d5b005d6a2542a1a0afea1bb"
+    },
+    {
+      "path": "web/src/mocks/settings.ts",
+      "sha256": "036690b6d57b611e6dd603ef454116eeec8a58a09279c9c4f787a6b489e220cb"
+    },
+    {
+      "path": "web/src/styles.css",
+      "sha256": "dbbf1124fe5dafaccf8d9ba6c73d9392f1e9bc155441720ba8aac21ed2fc8a7f"
+    },
+    {
+      "path": "web/dist/index.html",
+      "sha256": "6b631bbf22ade4eebdc38e523b7f4e997aef3aae0e91d4bba0224107519d5fda"
+    },
+    {
+      "path": "web/dist/assets/index-Cq1zFJOk.js",
+      "sha256": "de808deebfbe21801ff357e3cf1df42e21892b404fd4da7494e583278893f2f5"
+    },
+    {
+      "path": "web/dist/assets/index-DH6A179M.css",
+      "sha256": "83b76653ce0e57e4da59f7744f7e2350358991c4931db40c34f3365c60a45576"
+    }
+  ],
+  "blockers": [
+    "1440/1024/390 浏览器交互与视觉证据未完成，UI-11 保持 IN_PROGRESS；Gate J 保持 PENDING。",
+    "本地提交被自动审批服务故障阻塞；源码、提交清单和部分暂存补丁已准备，未创建新 Git commit。"
+  ]
+}

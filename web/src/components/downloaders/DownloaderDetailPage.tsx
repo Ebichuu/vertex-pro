@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useDisplayTimezone } from '../../features/settings/timezone'
 import {
   formatDownloaderBytes,
   formatDownloaderRate,
-  formatDownloaderTime,
+  formatDownloaderTime as formatTimeInZone,
   freshnessLabel,
   healthLabel,
   healthTone,
@@ -30,6 +31,8 @@ const PERIODS: ReadonlyArray<{ key: DownloaderPeriodKey; label: string }> = [
 ]
 
 export function DownloaderDetailPage({ downloaderId, loadDetail, onBack }: DownloaderDetailPageProps) {
+  const timezone = useDisplayTimezone()
+  const formatDownloaderTime = (value?: string) => formatTimeInZone(value, timezone)
   const [attempt, setAttempt] = useState(0)
   const [periodKey, setPeriodKey] = useState<DownloaderPeriodKey>('day')
   const [state, setState] = useState<LoadState>({ status: 'loading' })
@@ -84,14 +87,16 @@ export function DownloaderDetailPage({ downloaderId, loadDetail, onBack }: Downl
           <button type="button" className="history-back-button" onClick={onBack}>← 返回总览</button>
           <p className="eyebrow">DOWNLOADER DETAIL</p>
           <h1 id="downloader-detail-title">{detail.name}</h1>
-          <p className="muted">实时传输、容量与流量统计来自同一份下载器快照。</p>
+          <p className="muted">查看下载器的最近观测值，以及按 UTC 日、周、月汇总的流量。</p>
         </div>
         <div className="downloader-detail-status">
           <span className={`status-chip tone-${tone}`}>{healthLabel(detail.health)}</span>
           <span className={`status-chip tone-${detail.freshness === 'FRESH' ? 'ok' : 'wait'}`}>{freshnessLabel(detail.freshness)}</span>
-          <span className="page-badge">LOCAL ONLY</span>
+          <button type="button" className="ghost-button" onClick={() => setAttempt((value) => value + 1)}>刷新数据</button>
         </div>
       </div>
+
+      {detail.freshness !== 'FRESH' && <p className="muted" role="note">当前数据不新鲜或缺少观测信息，以下最近观测值不代表下载器当前状态。</p>}
 
       <section className="downloader-detail-section" aria-labelledby="downloader-realtime-title">
         <div className="downloader-detail-section-heading">
@@ -106,13 +111,13 @@ export function DownloaderDetailPage({ downloaderId, loadDetail, onBack }: Downl
           <Metric label="做种中" value={formatCount(detail.realtime.seedingCount)} />
           <Metric label="已暂停" value={formatCount(detail.realtime.pausedCount)} />
         </dl>
-        <p className="downloader-source-note">数据来源：{detail.realtime.source}</p>
+        <p className="downloader-source-note">数据来源：{sourceLabel(detail.realtime.source)}</p>
       </section>
 
       <section className="downloader-detail-section" aria-labelledby="downloader-capacity-title">
         <div className="downloader-detail-section-heading">
           <div><p className="eyebrow">CAPACITY</p><h2 id="downloader-capacity-title">容量</h2></div>
-          <span>容量状态：{detail.capacity.state}</span>
+          <span>容量状态：{capacityLabel(detail.capacity.state)}</span>
         </div>
         <dl className="downloader-capacity-grid">
           <Metric label="总容量" value={formatDownloaderBytes(detail.capacity.totalBytes)} />
@@ -133,7 +138,7 @@ export function DownloaderDetailPage({ downloaderId, loadDetail, onBack }: Downl
           </div>
         </div>
         <PeriodSummary period={period} />
-        <TrafficChart period={period} />
+        {period.available === false ? <p className="muted" role="status">当前周期统计暂时无法读取，请重新加载。</p> : period.points.length === 0 ? <p className="muted">当前周期暂无采样记录。</p> : <TrafficChart period={period} />}
       </section>
 
       <section className="downloader-quality" aria-labelledby="downloader-quality-title">
@@ -141,7 +146,7 @@ export function DownloaderDetailPage({ downloaderId, loadDetail, onBack }: Downl
         <p>{freshnessLabel(detail.freshness)}，最近观测于 {formatDownloaderTime(detail.observedAt)}。</p>
         {detail.reasonCodes.length > 0 && <ul className="reason-list" aria-label="数据质量原因">{detail.reasonCodes.map((reason) => <li key={reason} className="reason-chip">{reason}</li>)}</ul>}
         {period.missingPoints > 0 && <p>当前周期有 {period.missingPoints} 个小时缺失，图表已保留空白，不会插值。</p>}
-        {period.counterResets > 0 && <p>当前周期检测到 {period.counterResets} 次计数器重置，汇总按有效增量计算。</p>}
+        {period.counterResets !== undefined && period.counterResets > 0 && <p>当前周期检测到 {period.counterResets} 次计数器重置，汇总按有效增量计算。</p>}
       </section>
     </article>
   )
@@ -152,7 +157,20 @@ function Metric({ label, value }: { label: string; value: string }) {
 }
 
 function formatCount(value?: number): string {
-  return value === undefined || value < 0 ? '暂无数据' : String(value)
+  return value === undefined || !Number.isFinite(value) || value < 0 ? '暂无数据' : String(value)
+}
+
+function sourceLabel(source: string): string {
+  if (source === 'SYNC_SERVER_STATE') return '下载器同步快照'
+  if (source === 'TRANSFER_INFO_FALLBACK' || source === 'QUI_TRANSFER_INFO' || source === 'TRANSFER_INFO') return '下载器传输信息'
+  return '暂无数据'
+}
+
+function capacityLabel(state: string): string {
+  if (state === 'TRUSTED') return '已核验'
+  if (state === 'RECONCILING') return '核对中'
+  if (state === 'CAPACITY_UNCERTAIN') return '需确认'
+  return '未知'
 }
 
 function CapacityBar({ capacity }: { capacity: DownloaderDetail['capacity'] }) {
@@ -178,24 +196,28 @@ function PeriodSummary({ period }: { period: DownloaderPeriodSummary }) {
 }
 
 function TrafficChart({ period }: { period: DownloaderPeriodSummary }) {
-  const max = useMemo(() => Math.max(1, ...period.points.flatMap((point) => [point.downloadRate ?? 0, point.uploadRate ?? 0])), [period.points])
+  const bytes = period.metric === 'bytes'
+  const max = useMemo(() => Math.max(1, ...period.points.flatMap((point) => bytes ? [point.downloadedBytes ?? 0, point.uploadedBytes ?? 0] : [point.downloadRate ?? 0, point.uploadRate ?? 0])), [bytes, period.points])
   return (
     <div className="downloader-chart-wrap">
       <div className="downloader-chart-legend"><span><i className="legend-swatch download" />下载</span><span><i className="legend-swatch upload" />上传</span><span><i className="legend-swatch missing" />缺失小时</span></div>
-      <div className="downloader-chart" role="img" aria-label={`${period.label}下载与上传速度图`}>
+      <div className="downloader-chart" role="img" aria-label={`${period.label}下载与上传${bytes ? '流量' : '速度'}图`}>
         {period.points.map((point) => {
-          const downloadHeight = point.downloadRate === undefined ? 0 : Math.max(4, point.downloadRate / max * 100)
-          const uploadHeight = point.uploadRate === undefined ? 0 : Math.max(4, point.uploadRate / max * 100)
+          const download = bytes ? point.downloadedBytes : point.downloadRate
+          const upload = bytes ? point.uploadedBytes : point.uploadRate
+          const downloadHeight = download === undefined || download === 0 ? 0 : Math.max(4, download / max * 100)
+          const uploadHeight = upload === undefined || upload === 0 ? 0 : Math.max(4, upload / max * 100)
+          const format = bytes ? formatDownloaderBytes : formatDownloaderRate
           return (
             <div key={point.timestamp} className={`downloader-chart-point${point.missing ? ' is-missing' : ''}`}>
               <div className="downloader-bars" aria-hidden="true"><span className="bar-download" style={{ height: `${downloadHeight}%` }} /><span className="bar-upload" style={{ height: `${uploadHeight}%` }} /></div>
               <span className="downloader-chart-label">{point.label}</span>
-              <span className="visually-hidden">{point.label}：{point.missing ? '数据缺失' : `下载 ${formatDownloaderRate(point.downloadRate)}，上传 ${formatDownloaderRate(point.uploadRate)}`}{point.counterReset ? '，计数器重置' : ''}</span>
+              <span className="visually-hidden">{point.label}：{point.missing ? '数据缺失' : `下载 ${format(download)}，上传 ${format(upload)}`}{point.counterReset ? '，计数器重置' : ''}</span>
             </div>
           )
         })}
       </div>
-      <p className="downloader-chart-note">柱状图展示采样速度；缺失小时保持空白，计数器重置会在数据质量中说明。</p>
+      <p className="downloader-chart-note">柱状图展示{bytes ? '每小时累计流量，按 UTC 划分周期' : '采样速度'}；缺失小时保持空白。</p>
     </div>
   )
 }

@@ -7,6 +7,7 @@ package matchpipeline
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -25,6 +26,7 @@ type Item struct {
 	Category    string
 	Publisher   string
 	PublishedAt time.Time
+	FeedID      string
 }
 
 // MatchFactory converts a matched rule into an aggregate match. Target and
@@ -91,7 +93,7 @@ func Process(ctx context.Context, deps Deps, item Item) (Outcome, error) {
 			outcome.RuleStates = append(outcome.RuleStates, state)
 			continue
 		}
-		tree, err := rules.Parse(rule.Definition)
+		tree, err := ruleservice.ConditionTree(rule.Definition)
 		if err != nil {
 			return Outcome{}, fmt.Errorf("parse rule %s: %w", rule.ID, err)
 		}
@@ -134,11 +136,20 @@ func Process(ctx context.Context, deps Deps, item Item) (Outcome, error) {
 		return outcome, nil
 	}
 	outcome.Matched = true
+	snapshot, err := json.Marshal(aggregated)
+	if err != nil {
+		return Outcome{}, fmt.Errorf("encode rule decision: %w", err)
+	}
+	var contentSize int64
+	if item.Source.SizeBytes != nil {
+		contentSize = *item.Source.SizeBytes
+	}
 	jobResult, err := deps.JobCreator.Create(ctx, racejob.Input{
 		SourceID:              item.Source.SiteID + "/" + item.Source.SourceKey,
 		IdentityKey:           item.IdentityKey,
 		ParticipationDeadline: now().Add(aggregated.ParticipationWindow),
 		ObservationDeadline:   now().Add(aggregated.ParticipationWindow),
+		RuleSnapshot:          snapshot, ContentSize: contentSize,
 	})
 	if err != nil {
 		return Outcome{}, fmt.Errorf("create race job: %w", err)
@@ -160,7 +171,7 @@ func buildFacts(item Item) rules.Facts {
 		}
 	}
 	stringFact("site", item.Source.SiteID)
-	stringFact("rss", item.Source.URL)
+	stringFact("rss", item.FeedID)
 	stringFact("title", item.Source.Title)
 	stringFact("category", item.Category)
 	stringFact("publisher", item.Publisher)

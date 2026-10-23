@@ -5,6 +5,8 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"net/url"
+	"strconv"
 	"strings"
 )
 
@@ -12,10 +14,12 @@ type Fetcher interface {
 	Fetch(context.Context, string) ([]byte, error)
 }
 type Entry struct {
-	ID        string
-	Title     string
-	Link      string
-	Published string
+	ID          string
+	Title       string
+	Link        string
+	Published   string
+	DownloadURL string
+	SizeBytes   *int64
 }
 type Preview struct {
 	FeedURL string
@@ -52,17 +56,18 @@ func Parse(feedURL string, body []byte, limit int) (Preview, error) {
 	if err := xml.Unmarshal(body, &document); err != nil {
 		return Preview{}, fmt.Errorf("parse feed XML: %w", err)
 	}
-	if len(document.Channel.Items) > 0 {
-		return Preview{FeedURL: feedURL, Format: "rss", Entries: rssEntries(document.Channel.Items, limit)}, nil
+	if document.XMLName.Local == "rss" {
+		return Preview{FeedURL: feedURL, Format: "rss", Entries: resolveEntries(feedURL, rssEntries(document.Channel.Items, limit))}, nil
 	}
 	var atom atomFeed
-	if err := xml.Unmarshal(body, &atom); err == nil && len(atom.Entries) > 0 {
-		return Preview{FeedURL: feedURL, Format: "atom", Entries: atomEntries(atom.Entries, limit)}, nil
+	if err := xml.Unmarshal(body, &atom); err == nil && atom.XMLName.Local == "feed" {
+		return Preview{FeedURL: feedURL, Format: "atom", Entries: resolveEntries(feedURL, atomEntries(atom.Entries, limit))}, nil
 	}
 	return Preview{}, errors.New("feed contains no entries")
 }
 
 type xmlDocument struct {
+	XMLName xml.Name
 	Channel rssChannel `xml:"channel"`
 	Feed    atomFeed   `xml:"http://www.w3.org/2005/Atom feed"`
 }
@@ -70,12 +75,19 @@ type rssChannel struct {
 	Items []rssItem `xml:"item"`
 }
 type rssItem struct {
-	GUID      string `xml:"guid"`
-	Title     string `xml:"title"`
-	Link      string `xml:"link"`
-	Published string `xml:"pubDate"`
+	GUID       string      `xml:"guid"`
+	Title      string      `xml:"title"`
+	Link       string      `xml:"link"`
+	Published  string      `xml:"pubDate"`
+	Enclosures []enclosure `xml:"enclosure"`
+}
+type enclosure struct {
+	URL    string `xml:"url,attr"`
+	Type   string `xml:"type,attr"`
+	Length string `xml:"length,attr"`
 }
 type atomFeed struct {
+	XMLName xml.Name
 	Entries []atomEntry `xml:"entry"`
 }
 type atomEntry struct {
@@ -85,14 +97,24 @@ type atomEntry struct {
 	Links   []atomLink `xml:"link"`
 }
 type atomLink struct {
-	Href string `xml:"href,attr"`
-	Rel  string `xml:"rel,attr"`
+	Href   string `xml:"href,attr"`
+	Rel    string `xml:"rel,attr"`
+	Type   string `xml:"type,attr"`
+	Length string `xml:"length,attr"`
 }
 
 func rssEntries(items []rssItem, limit int) []Entry {
 	entries := make([]Entry, 0, min(limit, len(items)))
 	for _, item := range items[:min(limit, len(items))] {
-		entries = append(entries, Entry{ID: strings.TrimSpace(item.GUID), Title: strings.TrimSpace(item.Title), Link: strings.TrimSpace(item.Link), Published: strings.TrimSpace(item.Published)})
+		entry := Entry{ID: strings.TrimSpace(item.GUID), Title: strings.TrimSpace(item.Title), Link: strings.TrimSpace(item.Link), Published: strings.TrimSpace(item.Published)}
+		for _, candidate := range item.Enclosures {
+			if candidate.Type == "application/x-bittorrent" || candidate.Type == "" {
+				entry.DownloadURL = strings.TrimSpace(candidate.URL)
+				entry.SizeBytes = enclosureSize(candidate.Length)
+				break
+			}
+		}
+		entries = append(entries, entry)
 	}
 	return entries
 }
@@ -106,7 +128,39 @@ func atomEntries(items []atomEntry, limit int) []Entry {
 				break
 			}
 		}
-		entries = append(entries, Entry{ID: strings.TrimSpace(item.ID), Title: strings.TrimSpace(item.Title), Link: strings.TrimSpace(link), Published: strings.TrimSpace(item.Updated)})
+		entry := Entry{ID: strings.TrimSpace(item.ID), Title: strings.TrimSpace(item.Title), Link: strings.TrimSpace(link), Published: strings.TrimSpace(item.Updated)}
+		for _, candidate := range item.Links {
+			if candidate.Rel == "enclosure" && (candidate.Type == "application/x-bittorrent" || candidate.Type == "") {
+				entry.DownloadURL = strings.TrimSpace(candidate.Href)
+				entry.SizeBytes = enclosureSize(candidate.Length)
+				break
+			}
+		}
+		entries = append(entries, entry)
+	}
+	return entries
+}
+func enclosureSize(raw string) *int64 {
+	value, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || value < 0 {
+		return nil
+	}
+	return &value
+}
+func resolveEntries(feedURL string, entries []Entry) []Entry {
+	base, err := url.Parse(feedURL)
+	if err != nil {
+		return entries
+	}
+	for index := range entries {
+		for _, field := range []*string{&entries[index].Link, &entries[index].DownloadURL} {
+			if *field == "" {
+				continue
+			}
+			if reference, err := url.Parse(*field); err == nil {
+				*field = base.ResolveReference(reference).String()
+			}
+		}
 	}
 	return entries
 }

@@ -46,6 +46,10 @@ func main() {
 	}
 	goOutput := renderGo(data, digest(sources))
 	tsOutput := renderTypeScript(data, digest(sources))
+	modelsOutput, err := renderModels(data.openAPI)
+	if err != nil {
+		fatal(err)
+	}
 	clientOutput, err := renderClient(data.openAPI)
 	if err != nil {
 		fatal(err)
@@ -53,16 +57,19 @@ func main() {
 	clientPath := filepath.Join(root, "web", "src", "generated", "api-client.ts")
 	goPath := filepath.Join(root, "internal", "generated", "contracts.go")
 	tsPath := filepath.Join(root, "web", "src", "generated", "contracts.ts")
+	modelsPath := filepath.Join(root, "web", "src", "generated", "models.ts")
 	if *check {
 		checkFile(goPath, goOutput)
 		checkFile(tsPath, tsOutput)
 		checkFile(clientPath, clientOutput)
+		checkFile(modelsPath, modelsOutput)
 		return
 	}
 	writeFile(goPath, goOutput)
 	writeFile(tsPath, tsOutput)
 	writeFile(clientPath, clientOutput)
-	fmt.Printf("generated %s\ngenerated %s\ngenerated %s\n", goPath, tsPath, clientPath)
+	writeFile(modelsPath, modelsOutput)
+	fmt.Printf("generated %s\ngenerated %s\ngenerated %s\ngenerated %s\n", goPath, tsPath, clientPath, modelsPath)
 }
 
 func loadSources(root string) (sourceData, []string, error) {
@@ -424,7 +431,7 @@ func renderClient(document map[string]any) (string, error) {
 	builder.WriteString("export type JsonObject = Record<string, unknown>;\n\n")
 	builder.WriteString("export class ApiClient {\n  constructor(private baseUrl: string, private fetchImpl: typeof fetch = fetch) {}\n\n")
 	builder.WriteString("  private buildUrl(path: string, query?: Record<string, string | undefined>): string {\n    const url = new URL(this.baseUrl + path);\n    for (const [key, value] of Object.entries(query ?? {})) {\n      if (value !== undefined) {\n        url.searchParams.set(key, value);\n      }\n    }\n    return url.toString();\n  }\n\n")
-	builder.WriteString("  private async request<T = JsonObject>(path: string, init: RequestInit, query?: Record<string, string | undefined>): Promise<T> {\n    const response = await this.fetchImpl(this.buildUrl(path, query), init);\n    const text = await response.text();\n    const parsed: unknown = text ? JSON.parse(text) : {};\n    if (!response.ok) {\n      throw decodeError(response.status, parsed);\n    }\n    return parsed as T;\n  }\n")
+	builder.WriteString("  private async request<T = JsonObject>(path: string, init: RequestInit, query?: Record<string, string | undefined>): Promise<T> {\n    const response = await this.fetchImpl.call(globalThis, this.buildUrl(path, query), init);\n    const text = await response.text();\n    const parsed: unknown = text ? JSON.parse(text) : {};\n    if (!response.ok) {\n      throw decodeError(response.status, parsed);\n    }\n    return parsed as T;\n  }\n")
 	for _, operation := range operations {
 		params := []string{}
 		for _, param := range operation.PathParams {
@@ -461,7 +468,7 @@ func renderClient(document map[string]any) (string, error) {
 			} else {
 				args = "opts?: RequestOptions"
 			}
-			fmt.Fprintf(&builder, "  async %s(%s): Promise<Response> {\n    return this.fetchImpl(this.buildUrl(%s, opts?.query), %s);\n  }\n\n", operation.OperationID, args, callPath, init)
+			fmt.Fprintf(&builder, "  async %s(%s): Promise<Response> {\n    return this.fetchImpl.call(globalThis, this.buildUrl(%s, opts?.query), %s);\n  }\n\n", operation.OperationID, args, callPath, init)
 		}
 	}
 	builder.WriteString("}\n\n")

@@ -8,6 +8,8 @@ package schedulercycle
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"time"
 
 	"github.com/vertex-pro/vertex-pro/internal/matchpipeline"
 	"github.com/vertex-pro/vertex-pro/internal/rssfetch"
@@ -20,9 +22,12 @@ import (
 
 // FeedRef is one feed to poll.
 type FeedRef struct {
-	SiteID string
-	FeedID string
-	URL    string
+	SiteID       string
+	FeedID       string
+	URL          string
+	BaselineOnly bool
+	ETag         string
+	LastModified string
 }
 
 // Cycle carries the collaborators for repeated poll cycles.
@@ -48,16 +53,19 @@ func New(fetcher rssfetch.Fetcher, downloader *torrentdownload.Downloader, dedup
 
 // Result reports one cycle over one feed.
 type Result struct {
-	FeedURL    string
-	Entries    int
-	New        int
-	Updated    int
-	Duplicates int
-	Matched    int
-	Skipped    int
-	Failed     int
-	Failures   []string
-	Outcomes   []matchpipeline.Outcome
+	FeedURL      string
+	Entries      int
+	New          int
+	Updated      int
+	Duplicates   int
+	Matched      int
+	Skipped      int
+	Failed       int
+	Failures     []string
+	Outcomes     []matchpipeline.Outcome
+	ETag         string
+	LastModified string
+	NotModified  bool
 }
 
 // Run polls one feed end to end. A per-item failure does not abort the cycle;
@@ -66,9 +74,12 @@ func (cycle *Cycle) Run(ctx context.Context, feed FeedRef) (Result, error) {
 	if feed.SiteID == "" || feed.URL == "" {
 		return Result{}, fmt.Errorf("site id and feed url are required")
 	}
-	response, err := cycle.fetcher.Fetch(ctx, rssfetch.Request{URL: feed.URL})
+	response, err := cycle.fetcher.Fetch(ctx, rssfetch.Request{URL: feed.URL, ETag: feed.ETag, LastModified: feed.LastModified})
 	if err != nil {
 		return Result{}, fmt.Errorf("fetch feed: %w", err)
+	}
+	if response.StatusCode == http.StatusNotModified {
+		return Result{NotModified: true, ETag: feed.ETag, LastModified: feed.LastModified}, nil
 	}
 	if int64(len(response.Body)) > cycle.maxFeedSize {
 		return Result{}, fmt.Errorf("feed body exceeds %d bytes", cycle.maxFeedSize)
@@ -79,7 +90,11 @@ func (cycle *Cycle) Run(ctx context.Context, feed FeedRef) (Result, error) {
 	}
 	entries := make([]rsssource.Entry, 0, len(preview.Entries))
 	for _, entry := range preview.Entries {
-		entries = append(entries, rsssource.Entry{GUID: entry.ID, URL: entry.Link, Title: entry.Title})
+		link := entry.DownloadURL
+		if link == "" {
+			link = entry.Link
+		}
+		entries = append(entries, rsssource.Entry{GUID: entry.ID, URL: link, Title: entry.Title, SizeBytes: entry.SizeBytes})
 	}
 	dedupeResult, err := cycle.dedupe.Apply(ctx, feed.SiteID, entries)
 	if err != nil {
@@ -91,6 +106,11 @@ func (cycle *Cycle) Run(ctx context.Context, feed FeedRef) (Result, error) {
 		New:        len(dedupeResult.New),
 		Updated:    len(dedupeResult.Updated),
 		Duplicates: dedupeResult.Duplicates,
+		ETag:       response.ETag, LastModified: response.LastModified,
+	}
+	if feed.BaselineOnly {
+		result.Skipped = len(dedupeResult.New)
+		return result, nil
 	}
 	for _, source := range dedupeResult.New {
 		item, err := cycle.identify(ctx, source)
@@ -98,6 +118,13 @@ func (cycle *Cycle) Run(ctx context.Context, feed FeedRef) (Result, error) {
 			result.Failed++
 			result.Failures = append(result.Failures, fmt.Sprintf("%s: %v", source.SourceKey, err))
 			continue
+		}
+		item.FeedID = feed.FeedID
+		for _, entry := range preview.Entries {
+			if entry.ID == source.GUID {
+				item.PublishedAt = parsePublished(entry.Published)
+				break
+			}
 		}
 		outcome, err := matchpipeline.Process(ctx, cycle.pipeline, item)
 		if err != nil {
@@ -132,5 +159,16 @@ func (cycle *Cycle) identify(ctx context.Context, source rsssource.Source) (matc
 	if identityKey == "" {
 		return matchpipeline.Item{}, fmt.Errorf("artifact lacks v1 identity")
 	}
+	size := parsed.TotalSize
+	source.SizeBytes = &size
 	return matchpipeline.Item{Source: source, IdentityKey: identityKey}, nil
+}
+
+func parsePublished(raw string) time.Time {
+	for _, layout := range []string{time.RFC3339, time.RFC1123Z, time.RFC1123, time.RFC822Z} {
+		if value, err := time.Parse(layout, raw); err == nil {
+			return value
+		}
+	}
+	return time.Time{}
 }

@@ -9,6 +9,7 @@ import {
   type RuleEditorDraft,
   type RuleVersionPayload,
 } from '../../features/rules/rule-editor'
+import { ruleError } from '../../features/rules/api'
 
 type TargetOption = { id: string; label: string }
 
@@ -16,11 +17,12 @@ type RuleEditorPageProps = {
   initialDraft: RuleEditorDraft
   instances: ReadonlyArray<TargetOption>
   groups: ReadonlyArray<TargetOption>
-  onSave?: (payload: RuleVersionPayload) => void | Promise<void>
+  sites?: ReadonlyArray<TargetOption>
+  onSave?: (payload: RuleVersionPayload) => void | RuleEditorDraft | Promise<void | RuleEditorDraft>
   onCancel?: () => void
 }
 
-export function RuleEditorPage({ initialDraft, instances, groups, onSave, onCancel }: RuleEditorPageProps) {
+export function RuleEditorPage({ initialDraft, instances, groups, sites = [], onSave, onCancel }: RuleEditorPageProps) {
   const [draft, setDraft] = useState(initialDraft)
   const [tagsText, setTagsText] = useState(initialDraft.actions.tags.join(', '))
   const [errors, setErrors] = useState<ReturnType<typeof validateRuleDraft>>({})
@@ -37,6 +39,7 @@ export function RuleEditorPage({ initialDraft, instances, groups, onSave, onCanc
 
   const save = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    if (!onSave || saving) return
     const normalized = { ...draft, actions: { ...draft.actions, tags: parseTags(tagsText) } }
     const nextErrors = validateRuleDraft(normalized)
     if (Object.keys(nextErrors).length > 0) {
@@ -48,12 +51,12 @@ export function RuleEditorPage({ initialDraft, instances, groups, onSave, onCanc
     setSaving(true)
     setSaveError(null)
     try {
-      await onSave?.(payload)
-      setDraft(fromRuleVersionPayload(payload))
+      const saved = await onSave(payload)
+      setDraft(saved ?? fromRuleVersionPayload(payload))
       setErrors({})
-      setNotice(`规则草稿已保存为本地 v${payload.revision}。`)
+      setNotice(`规则已保存为 v${saved?.revision ?? payload.revision}。`)
     } catch (error) {
-      setSaveError(`规则保存失败：${String(error)}`)
+      setSaveError(`规则保存失败：${ruleError(error)}`)
     } finally {
       setSaving(false)
     }
@@ -65,20 +68,23 @@ export function RuleEditorPage({ initialDraft, instances, groups, onSave, onCanc
   return <section className="rule-editor-page" aria-labelledby="rule-editor-title">
     <header className="rule-editor-page-heading">
       <div>
-        <p className="eyebrow">RULE EDITOR · LOCAL VERSION</p>
-        <h1 id="rule-editor-title">编辑规则</h1>
+        <p className="eyebrow">RULE EDITOR</p>
+        <h1 id="rule-editor-title">{draft.id ? '编辑规则' : '新建规则'}</h1>
         <p className="muted">条件与动作保存到同一个不可变版本负载。</p>
       </div>
-      <span className="page-badge">v{draft.revision} · LOCAL ONLY</span>
+      <span className="page-badge">{draft.revision ? `v${draft.revision}` : '未保存'}</span>
     </header>
 
     {notice && <p className="sites-rss-notice" role="status">{notice}</p>}
     {saveError && <p className="rule-list-error" role="alert">{saveError}</p>}
+    {!onSave && <p role="status">当前规则仅可查看，保存暂不可用。</p>}
+    {instances.length === 0 && <p role="status">暂无可用下载器。请先完成下载器配置并等待同步，再选择投递目标。</p>}
 
     <form onSubmit={save} className="rule-editor-form" aria-label="规则编辑表单" noValidate>
       <section className="panel rule-editor-basics" aria-labelledby="rule-basics-title">
         <div className="rule-editor-section-heading"><div><p className="eyebrow">IDENTITY</p><h2 id="rule-basics-title">规则设置</h2></div><label className="checkbox-field"><input type="checkbox" checked={draft.enabled} onChange={(event) => setDraft((current) => ({ ...current, enabled: event.target.checked }))} />启用规则</label></div>
         <div className="rule-editor-basics-grid">
+          <label>适用站点<select aria-label="适用站点" disabled={Boolean(draft.id)} value={draft.siteId ?? ''} onChange={(event) => setDraft((current) => ({ ...current, siteId: event.target.value }))}><option value="">所有站点</option>{sites.map((site) => <option key={site.id} value={site.id}>{site.label}</option>)}</select></label>
           <label>规则名称<input value={draft.name} aria-invalid={Boolean(errors.name)} onChange={(event) => { setDraft((current) => ({ ...current, name: event.target.value })); setErrors((current) => ({ ...current, name: undefined })) }} /></label>
           <label>优先级<input type="number" min="0" max="10000" value={draft.priority} aria-invalid={Boolean(errors.priority)} onChange={(event) => { setDraft((current) => ({ ...current, priority: Number(event.target.value) })); setErrors((current) => ({ ...current, priority: undefined })) }} /></label>
         </div>
@@ -96,7 +102,7 @@ export function RuleEditorPage({ initialDraft, instances, groups, onSave, onCanc
           <div className="rule-editor-section-heading"><div><p className="eyebrow">THEN</p><h2 id="rule-actions-title">投递动作</h2></div><span className="muted">受控参数</span></div>
           <div className="rule-target-mode" role="group" aria-label="目标模式">
             <button type="button" aria-pressed={draft.actions.targetMode === 'FIXED_INSTANCE'} onClick={() => updateAction('targetMode', 'FIXED_INSTANCE')}>固定 qB</button>
-            <button type="button" aria-pressed={draft.actions.targetMode === 'INSTANCE_GROUP'} onClick={() => updateAction('targetMode', 'INSTANCE_GROUP')}>qB 组</button>
+            <button type="button" disabled={groups.length === 0} aria-pressed={draft.actions.targetMode === 'INSTANCE_GROUP'} onClick={() => updateAction('targetMode', 'INSTANCE_GROUP')}>qB 组</button>
           </div>
           <div className="rule-editor-action-fields">
             <label>{draft.actions.targetMode === 'FIXED_INSTANCE' ? '目标 qB' : '目标 qB 组'}<select aria-label="投递目标" value={targetValue} aria-invalid={Boolean(errors.target)} onChange={(event) => updateAction(draft.actions.targetMode === 'FIXED_INSTANCE' ? 'targetInstanceId' : 'targetGroupId', event.target.value)}><option value="">请选择</option>{targetOptions.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}</select></label>
@@ -112,8 +118,8 @@ export function RuleEditorPage({ initialDraft, instances, groups, onSave, onCanc
       </div>
 
       <footer className="rule-editor-footer">
-        <p>保存只生成本地规则版本，不下载、不创建 Reservation、不发送 Add。</p>
-        <div>{onCancel && <button type="button" className="ghost-button" onClick={onCancel}>返回规则</button>}<button type="submit" className="primary-button" disabled={saving}>{saving ? '保存中…' : '保存本地版本'}</button></div>
+        <p>保存到服务器。启用后的规则将由 RSS 调度执行；预览请使用 Dry-run。</p>
+        <div>{onCancel && <button type="button" className="ghost-button" onClick={onCancel}>返回规则</button>}<button type="submit" className="primary-button" disabled={saving || !onSave}>{saving ? '保存中…' : '保存规则'}</button></div>
       </footer>
     </form>
   </section>

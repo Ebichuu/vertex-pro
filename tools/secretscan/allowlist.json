@@ -1,1 +1,12 @@
-[]
+[
+  {
+    "path": "tools/secretscan/main_test.go",
+    "match": "0123456789abcdef0123456789abcdef",
+    "note": "Deliberate scanner regression fixture, not a credential"
+  },
+  {
+    "path": "tools/secretscan/main_test.go",
+    "match": "ghp\u005f0123456789abcdefghijklmnopqrstuvwxyz",
+    "note": "Deliberate scanner binary regression fixture, not a credential"
+  }
+]

@@ -1,10 +1,14 @@
 package resourcesapi
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
+	"github.com/vertex-pro/vertex-pro/internal/apiidempotency"
 	"github.com/vertex-pro/vertex-pro/internal/expiredunknown"
 	"github.com/vertex-pro/vertex-pro/internal/firstconfirm"
 	"github.com/vertex-pro/vertex-pro/internal/httpapi"
@@ -33,78 +37,106 @@ func (d Deps) lookupChain(request *http.Request, jobID string) (chainFacts, bool
 func (d Deps) acknowledgeUnknown(response http.ResponseWriter, request *http.Request) {
 	jobID := request.PathValue("id")
 	var payload acknowledgePayload
-	payload.Now = time.Now()
-	if d.Now != nil {
-		payload.Now = d.Now()
-	}
 	if err := httpapi.DecodeJSON(response, request, &payload, 64<<10); err != nil {
+		writeRuleRequestError(response, request, err)
 		return
+	}
+	key := strings.TrimSpace(request.Header.Get("Idempotency-Key"))
+	if key == "" {
+		httpapi.WriteError(response, request, "INVALID_REQUEST", "Idempotency-Key is required")
+		return
+	}
+	now := d.currentTime()
+	fingerprint := apiidempotency.Fingerprint([]byte(jobID + "\x00" + payload.Action))
+	begin, err := apiidempotency.Begin(request.Context(), d.Database, key, "admin", fingerprint, now)
+	if err != nil {
+		if errors.Is(err, apiidempotency.ErrKeyReused) {
+			httpapi.WriteError(response, request, "IDEMPOTENCY_KEY_REUSED", "Idempotency-Key was used with a different action")
+			return
+		}
+		httpapi.WriteError(response, request, "INTERNAL_ERROR", "register exception command failed")
+		return
+	}
+	if begin.Replayed {
+		d.writeAcceptedCommand(response, request, begin.CommandID)
+		return
+	}
+	fail := func(code, message string) {
+		_ = apiidempotency.Complete(request.Context(), d.Database, begin.CommandID, code, "", now)
+		httpapi.WriteError(response, request, httpapi.ErrorCode(code), message)
 	}
 	chain, ok := d.lookupChain(request, jobID)
 	if !ok {
-		httpapi.WriteError(response, request, "NOT_FOUND", "job or delivery chain not found")
+		fail("NOT_FOUND", "job or delivery chain not found")
 		return
 	}
-	evidence := expiredunknown.Evidence{
-		SyncGeneration: payload.Evidence.SyncGeneration, SnapshotRevision: payload.Evidence.SnapshotRevision,
-		SnapshotDigest: payload.Evidence.SnapshotDigest, IdentityPresent: payload.Evidence.IdentityPresent,
-		QBTorrentID: payload.Evidence.QBTorrentID,
+	evidence, evidenceErr := d.serverEvidence(request, chain)
+	allowed := exceptionActions(chain, evidence, evidenceErr == nil, now)
+	valid := false
+	for _, action := range allowed {
+		if action == payload.Action {
+			valid = true
+		}
+	}
+	if !valid {
+		fail("JOB_STATE_CONFLICT", "action requires a compatible job state and fresh server snapshot")
+		return
 	}
 	command := expiredunknown.Request{
-		CommandID: payload.CommandID, JobID: jobID, AttemptID: chain.attemptID,
+		CommandID: begin.CommandID, JobID: jobID, AttemptID: chain.attemptID,
 		SubmitIntentID: chain.intentID, ReservationID: chain.reservationID,
 		StorageTargetID: chain.storageTargetID, InstanceID: chain.instanceID,
-		IdentityKey: chain.identityKey, BindingID: payload.BindingID,
-		Evidence: evidence, Now: d.Now(),
+		IdentityKey: chain.identityKey, BindingID: "binding-" + chain.attemptID,
+		Evidence: evidence, Now: now,
 	}
+	result := map[string]any{"job_id": jobID, "action": payload.Action}
+	var actionErr error
 	switch payload.Action {
 	case "CONFIRM_EFFECT":
 		if chain.attemptState == "UNKNOWN" {
-			result, err := d.confirmUnknownEffect(request, command, chain)
-			if err != nil {
-				httpapi.WriteError(response, request, "JOB_STATE_CONFLICT", err.Error())
-				return
-			}
-			d.writeData(response, request, map[string]any{"command_id": payload.CommandID, "idempotent": result.Idempotent})
-			return
+			_, actionErr = d.confirmUnknownEffect(request, command, chain)
+		} else {
+			_, actionErr = expiredunknown.ConfirmEffect(request.Context(), d.Database, command)
 		}
-		result, err := expiredunknown.ConfirmEffect(request.Context(), d.Database, command)
-		if err != nil {
-			httpapi.WriteError(response, request, "JOB_STATE_CONFLICT", err.Error())
-			return
-		}
-		d.writeData(response, request, map[string]any{"command_id": payload.CommandID, "idempotent": result.Idempotent})
 	case "CONFIRM_NO_EFFECT_AND_EXPIRE":
-		result, err := expiredunknown.ConfirmNoEffectAndExpire(request.Context(), d.Database, command)
-		if err != nil {
-			httpapi.WriteError(response, request, "JOB_STATE_CONFLICT", err.Error())
-			return
-		}
-		d.writeData(response, request, map[string]any{"command_id": payload.CommandID, "idempotent": result.Idempotent})
+		_, actionErr = expiredunknown.ConfirmNoEffectAndExpire(request.Context(), d.Database, command)
 	case "CONFIRM_NO_EFFECT_AND_RETRY":
-		result, err := saferetry.ConfirmNoEffectAndRetry(request.Context(), d.Database, saferetry.Request{
-			CommandID: payload.CommandID, JobID: jobID, AttemptID: chain.attemptID,
+		_, actionErr = saferetry.ConfirmNoEffectAndRetry(request.Context(), d.Database, saferetry.Request{
+			CommandID: begin.CommandID, JobID: jobID, AttemptID: chain.attemptID,
 			SubmitIntentID: chain.intentID, ReservationID: chain.reservationID,
 			StorageTargetID: chain.storageTargetID, InstanceID: chain.instanceID,
-			IdentityKey: chain.identityKey, MaxAttempts: payload.MaxAttempts,
-			ParticipationDeadline: payload.ParticipationDeadline, Evidence: saferetry.Evidence(evidence), Now: d.Now(),
+			IdentityKey: chain.identityKey, MaxAttempts: 3,
+			ParticipationDeadline: chain.participationDeadline, Evidence: saferetry.Evidence(evidence), Now: now,
 		})
-		if err != nil {
-			httpapi.WriteError(response, request, "JOB_STATE_CONFLICT", err.Error())
-			return
-		}
-		d.writeData(response, request, map[string]any{"command_id": payload.CommandID, "idempotent": result.Idempotent, "job_state": result.JobState})
 	case "EXPIRE_UNRESOLVED":
-		d.expireUnresolved(response, request, jobID, chain, payload.CommandID, payload.Now)
-	case "CONTINUE_RECONCILIATION":
-		d.continueReconciliation(response, request, chain, unknownreconciler.Snapshot{
-			InstanceID: chain.instanceID, SyncGeneration: payload.Evidence.SyncGeneration,
-			SnapshotRevision: payload.Evidence.SnapshotRevision, SnapshotDigest: payload.Evidence.SnapshotDigest,
-			IdentityPresent: payload.Evidence.IdentityPresent, QBTorrentID: payload.Evidence.QBTorrentID,
-		}, payload.CommandID, payload.Now)
+		_, actionErr = unknownreconciler.ExpireUnresolved(request.Context(), d.Database, unknownreconciler.ExpireRequest{CommandID: begin.CommandID, JobID: jobID, AttemptID: chain.attemptID, ReservationID: chain.reservationID, WaiterID: chain.waiterID, Now: now})
 	default:
-		httpapi.WriteError(response, request, "VALIDATION_FAILED", "unknown action")
+		fail("VALIDATION_FAILED", "unknown action")
+		return
 	}
+	if actionErr != nil {
+		fail("JOB_STATE_CONFLICT", "exception action could not be applied to the current state")
+		return
+	}
+	var state string
+	_ = d.Database.QueryRowContext(request.Context(), `SELECT job_state FROM race_jobs WHERE job_id=?`, jobID).Scan(&state)
+	result["job_state"] = state
+	raw, _ := json.Marshal(result)
+	if err := apiidempotency.Complete(request.Context(), d.Database, begin.CommandID, "", string(raw), now); err != nil {
+		httpapi.WriteError(response, request, "INTERNAL_ERROR", "complete exception command failed")
+		return
+	}
+	d.writeAcceptedCommand(response, request, begin.CommandID)
+}
+
+func (d Deps) writeAcceptedCommand(response http.ResponseWriter, request *http.Request, id string) {
+	command, err := commandPayload(request.Context(), d.Database, id)
+	if err != nil {
+		httpapi.WriteError(response, request, "INTERNAL_ERROR", "read exception command failed")
+		return
+	}
+	response.Header().Set("Location", "/api/v1/commands/"+id)
+	httpapi.WriteJSON(response, http.StatusAccepted, command)
 }
 
 // acknowledgePayload 是 acknowledge-unknown 的请求体。
@@ -118,10 +150,10 @@ type acknowledgePayload struct {
 		IdentityPresent  bool   `json:"identity_present"`
 		QBTorrentID      string `json:"qb_torrent_id"`
 	} `json:"evidence"`
-	BindingID             string `json:"binding_id"`
-	MaxAttempts           int    `json:"max_attempts"`
-	ParticipationDeadline string `json:"participation_deadline"`
-	Now                   time.Time
+	BindingID             string    `json:"binding_id"`
+	MaxAttempts           int       `json:"max_attempts"`
+	ParticipationDeadline string    `json:"participation_deadline"`
+	Now                   time.Time `json:"-"`
 }
 
 // confirmUnknownEffect 对 UNKNOWN 尝试直接执行 8.7.3 首次确认原子事务。

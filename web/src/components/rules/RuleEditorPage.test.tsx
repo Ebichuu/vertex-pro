@@ -39,11 +39,11 @@ describe('UI-05 Rule Editor', () => {
   })
 
   it('saves an immutable next revision payload and preserves the AST round-trip', async () => {
-    const onSave = vi.fn()
+    const onSave = vi.fn((payload) => ({ ...fromRuleVersionPayload(payload), revision: 4 }))
     render(<RuleEditorPage initialDraft={draft} instances={instances} groups={groups} onSave={onSave} />)
     fireEvent.change(screen.getByLabelText('Tags'), { target: { value: 'vertex-pro, 4k, 4k, free' } })
-    fireEvent.click(screen.getByRole('button', { name: '保存本地版本' }))
-    expect(await screen.findByRole('status')).toHaveTextContent('本地 v4')
+    fireEvent.click(screen.getByRole('button', { name: '保存规则' }))
+    expect(await screen.findByRole('status')).toHaveTextContent('v4')
     const payload = onSave.mock.calls[0][0]
     expect(payload).toMatchObject({ rule_id: 'rule-4k', revision: 4, condition_schema_version: 1, action_schema_version: 1 })
     expect(JSON.parse(payload.action_set_json)).toMatchObject({ target_instance_id: 'qb-a', target_group_id: null, tags: ['vertex-pro', '4k', 'free'] })
@@ -52,9 +52,9 @@ describe('UI-05 Rule Editor', () => {
 
   it('validates the target XOR and participation window before saving', async () => {
     const invalid = { ...draft, actions: { ...draft.actions, targetInstanceId: '', participationWindowMinutes: 0 } }
-    const onSave = vi.fn()
+    const onSave = vi.fn((payload) => ({ ...fromRuleVersionPayload(payload), revision: 4 }))
     render(<RuleEditorPage initialDraft={invalid} instances={instances} groups={groups} onSave={onSave} />)
-    fireEvent.click(screen.getByRole('button', { name: '保存本地版本' }))
+    fireEvent.click(screen.getByRole('button', { name: '保存规则' }))
     expect(await screen.findByText('请选择目标 qB。')).toBeInTheDocument()
     expect(screen.getByText('参与窗口需为 1 到 1440 分钟。')).toBeInTheDocument()
     expect(onSave).not.toHaveBeenCalled()

@@ -46,3 +46,22 @@ func TestTestFailsClosedOnFetcherError(t *testing.T) {
 		t.Fatal("nil fetcher accepted")
 	}
 }
+
+func TestEnclosuresResolveAgainstFeedURL(t *testing.T) {
+	for _, body := range []string{
+		`<rss><channel><item><guid>x</guid><link>/details/1</link><enclosure url="../download/1" type="application/x-bittorrent" length="4096"/></item></channel></rss>`,
+		`<feed xmlns="http://www.w3.org/2005/Atom"><entry><id>x</id><link rel="alternate" href="/details/1"/><link rel="enclosure" href="../download/1" type="application/x-bittorrent" length="4096"/></entry></feed>`,
+	} {
+		p, err := Parse("https://example.test/feeds/main", []byte(body), 10)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(p.Entries) != 1 {
+			t.Fatalf("entries=%+v", p.Entries)
+		}
+		e := p.Entries[0]
+		if e.DownloadURL != "https://example.test/download/1" || e.Link != "https://example.test/details/1" || e.SizeBytes == nil || *e.SizeBytes != 4096 {
+			t.Fatalf("entry=%+v", e)
+		}
+	}
+}
