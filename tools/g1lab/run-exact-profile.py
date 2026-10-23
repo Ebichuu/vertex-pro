@@ -212,6 +212,9 @@ def main():
             for credential in (proxy_key, password, qb_password):
                 safe_stdout = safe_stdout.replace(credential, '[REDACTED]')
                 safe_stderr = safe_stderr.replace(credential, '[REDACTED]')
+            if completed.returncode and not safe_stdout.strip():
+                print(safe_stderr[-3000:], file=sys.stderr)
+                raise RuntimeError('Isolated probe failed before JSON report: ' + mode)
             result = json.loads(safe_stdout)
             if completed.returncode:
                 write_json(output / ('failed-' + mode + '.json'), result)

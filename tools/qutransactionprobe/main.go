@@ -126,7 +126,7 @@ func run(ctx context.Context) error {
 	if faultMode == "" {
 		faultMode = "none"
 	}
-	if faultMode != "none" && faultMode != "response_loss" && faultMode != "timeout" && faultMode != "external_kill" && faultMode != "fixture_capture" && !isSyntheticTransportMode(faultMode) {
+	if faultMode != "none" && faultMode != "response_loss" && faultMode != "timeout" && faultMode != "external_kill" && faultMode != "fixture_capture" && faultMode != "protocol_suite" && !isSyntheticTransportMode(faultMode) {
 		return fmt.Errorf("unsupported VERTEX_PRO_G1_FAULT_MODE %q", faultMode)
 	}
 	baselineDelta, err := client.Fetch(ctx, 0)
@@ -170,6 +170,9 @@ func run(ctx context.Context) error {
 	identityKey := strings.ToLower(identity.V1)
 	if identityKey == "" {
 		return errors.New("transaction fixture lacks v1 identity")
+	}
+	if faultMode == "protocol_suite" {
+		return runProtocolSuite(ctx, client, profile, identity, artifact, name, baseline.Snapshot)
 	}
 
 	tempRoot, err := os.MkdirTemp("", "vertex-pro-g1-transaction-")
