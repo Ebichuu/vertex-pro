@@ -1,3 +1,5 @@
+import { formatRateMBps, formatTerabytes } from '../shared/units'
+
 export type DownloaderHealth = 'AVAILABLE' | 'DEGRADED' | 'OFFLINE' | 'UNKNOWN'
 export type DataFreshness = 'FRESH' | 'STALE' | 'UNKNOWN'
 export type DownloaderPeriodKey = 'day' | 'week' | 'month'
@@ -60,21 +62,11 @@ export interface DownloaderDetail {
 export type DownloaderDetailLoader = (downloaderId: string) => Promise<DownloaderDetail>
 
 export function formatDownloaderRate(bytesPerSecond?: number): string {
-  if (bytesPerSecond === undefined || !Number.isFinite(bytesPerSecond) || bytesPerSecond < 0) return '暂无数据'
-  if (bytesPerSecond >= 1024 * 1024) return `${(bytesPerSecond / (1024 * 1024)).toFixed(1)} MiB/s`
-  return `${Math.round(bytesPerSecond / 1024)} KiB/s`
+  return formatRateMBps(bytesPerSecond, '暂无数据')
 }
 
 export function formatDownloaderBytes(bytes?: number): string {
-  if (bytes === undefined || !Number.isFinite(bytes) || bytes < 0) return '暂无数据'
-  const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB']
-  let value = bytes
-  let unitIndex = 0
-  while (value >= 1024 && unitIndex < units.length - 1) {
-    value /= 1024
-    unitIndex += 1
-  }
-  return `${value.toFixed(unitIndex === 0 ? 0 : 2)} ${units[unitIndex]}`
+  return formatTerabytes(bytes, '暂无数据')
 }
 
 export function formatDownloaderTime(value?: string, timezone = 'UTC'): string {

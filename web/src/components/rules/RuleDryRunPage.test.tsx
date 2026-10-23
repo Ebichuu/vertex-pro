@@ -9,7 +9,7 @@ describe('UI-06 Dry-run and aggregation preview', () => {
   it('shows recent RSS input and waits for an explicit dry-run', () => {
     render(<RuleDryRunPage items={recentRssItems} runDryRun={runLocalDryRun} />)
     expect(screen.getByLabelText('近期 RSS 项')).toHaveValue('rss-dune-4k')
-    expect(screen.getByText('35.8 GiB')).toBeInTheDocument()
+    expect(screen.getByText('38.44 GB')).toBeInTheDocument()
     expect(screen.getByText('等待运行')).toBeInTheDocument()
   })
 

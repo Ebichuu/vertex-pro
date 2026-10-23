@@ -95,7 +95,8 @@ export function RuleEditorPage({ initialDraft, instances, groups, sites = [], on
       <div className="rule-editor-workspace">
         <section className="panel rule-editor-conditions" aria-labelledby="rule-conditions-title">
           <div className="rule-editor-section-heading"><div><p className="eyebrow">WHEN</p><h2 id="rule-conditions-title">匹配条件</h2></div><span className="muted">共享 AST</span></div>
-          <VertexRuleEditor value={draft.conditionTree} onChange={(conditionTree) => { setDraft((current) => ({ ...current, conditionTree })); setNotice(null) }} />
+          <VertexRuleEditor value={draft.conditionTree} onChange={(conditionTree) => { setDraft((current) => ({ ...current, conditionTree })); setErrors((current) => ({ ...current, conditions: undefined })); setNotice(null) }} />
+          {errors.conditions && <p className="field-error" role="alert">{errors.conditions}</p>}
         </section>
 
         <section className="panel rule-editor-actions" aria-labelledby="rule-actions-title">

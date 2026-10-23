@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { csrfHeaders } from '../../features/auth/auth'
 import { items, record, ruleError, rulesClient } from '../../features/rules/api'
 import type { AggregationPreviewData } from '../../features/rules/aggregation-preview'
+import { parseGBInput } from '../../features/rules/size-input'
 import { RuleAggregationPreview } from './RuleAggregationPreview'
 
 type Evaluation = { id: string; name: string; priority: number; revision: number; state: string; reason: string; winner: boolean }
@@ -55,11 +56,12 @@ export function LiveDryRunPage() {
   const run = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (busy) return
-    if (size !== '' && (!Number.isFinite(Number(size)) || Number(size) < 0)) { setError('大小需为非负字节数，留空表示字段缺失。'); return }
+    const parsedSize = size.trim() ? parseGBInput(size) : undefined
+    if (parsedSize?.error !== undefined) { setError(parsedSize.error); setResult(null); return }
     setBusy(true); setError(''); setResult(null)
     const facts: Record<string, unknown> = {}
     for (const [field, value] of Object.entries({ title, site, category })) if (value.trim()) facts[field] = { present: true, value: { type: 'string', string: value.trim() } }
-    if (size !== '') facts.size = { present: true, value: { type: 'number', number: Number(size) } }
+    if (parsedSize) facts.size = { present: true, value: { type: 'number', number: parsedSize.bytes } }
     try { setResult(parseLivePreview(await rulesClient.dryRunRules({ body: { facts, site_id: site || undefined }, headers: csrfHeaders() }))) }
     catch (failure) { setError(`Dry-run 失败：${ruleError(failure)}`) }
     finally { setBusy(false) }
@@ -69,7 +71,7 @@ export function LiveDryRunPage() {
     <div className="dry-run-layout"><form className="panel dry-run-controls" onSubmit={(event) => { void run(event) }}>
       <h2>预览输入</h2>
       <label>标题<input aria-label="预览标题" value={title} onChange={(event) => setTitle(event.target.value)} /></label>
-      <label>大小（字节）<input aria-label="预览大小（字节）" type="number" min="0" value={size} onChange={(event) => setSize(event.target.value)} /></label>
+      <label>大小（GB）<input aria-label="预览大小（GB）" type="text" inputMode="decimal" value={size} onChange={(event) => setSize(event.target.value)} /><span className="field-hint">1 GB = 1,000,000,000 bytes；留空表示字段缺失</span></label>
       <label>站点<select aria-label="预览站点" value={site} onChange={(event) => setSite(event.target.value)}><option value="">未提供（只评估全局规则）</option>{sites.data?.map((row) => <option key={text(row.id)} value={text(row.id)}>{text(row.name) || text(row.id)}</option>)}</select></label>
       {sites.isError && <p role="alert">站点加载失败。<button type="button" onClick={() => { void sites.refetch() }}>重试加载</button></p>}
       <label>分类<input aria-label="预览分类" value={category} onChange={(event) => setCategory(event.target.value)} /></label>

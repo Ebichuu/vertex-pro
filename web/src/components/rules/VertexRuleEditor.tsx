@@ -1,4 +1,5 @@
-﻿import { useState } from 'react'
+﻿import { createContext, useContext, useState } from 'react'
+import { parseSizeValueInput, sizeValueInput } from '../../features/rules/size-input'
 import {
   defaultLeaf,
   defaultTree,
@@ -22,6 +23,28 @@ type LeafCondition = Extract<VertexCondition, { kind: 'leaf' }>
 type LeafProps = { condition: LeafCondition; onChange: (condition: LeafCondition) => void; onRemove: () => void; onCopy: () => void; onMove: (offset: -1 | 1) => void; canMoveUp: boolean; canMoveDown: boolean }
 type GroupProps = { condition: Extract<VertexCondition, { kind: 'group' }>; onChange: (condition: Extract<VertexCondition, { kind: 'group' }>) => void; onRemove?: () => void; onCopy?: () => void; onMove?: (offset: -1 | 1) => void; canMoveUp?: boolean; canMoveDown?: boolean; simple?: boolean }
 
+const SizeInputDrafts = createContext<WeakMap<VertexValue, string>>(new WeakMap())
+
+function copyCondition(condition: VertexCondition, drafts: WeakMap<VertexValue, string>): VertexCondition {
+  if (condition.kind === 'group') return { ...condition, children: condition.children.map((child) => copyCondition(child, drafts)) }
+  const copy = structuredClone(condition)
+  if (condition.value && copy.value && drafts.has(condition.value)) drafts.set(copy.value, drafts.get(condition.value)!)
+  return copy
+}
+
+function SizeValueEditor({ condition, valueType, onChange }: { condition: LeafCondition; valueType: VertexValueType; onChange: (condition: LeafCondition) => void }) {
+  const drafts = useContext(SizeInputDrafts)
+  const input = condition.value && drafts.has(condition.value) ? drafts.get(condition.value)! : sizeValueInput(condition.value)
+  const parsed = parseSizeValueInput(input, valueType)
+  return <input aria-label="值" aria-invalid={Boolean(parsed.error)} type="text" inputMode={valueType === 'number' ? 'decimal' : 'text'} value={input} placeholder={valueType === 'number' ? 'GB' : 'GB，以逗号分隔'} onChange={(event) => {
+    const text = event.target.value
+    // Keep incomplete input outside the AST; an invalid draft has no numeric value to submit.
+    const value = parseSizeValueInput(text, valueType).value ?? { type: valueType }
+    drafts.set(value, text)
+    onChange(setValue(condition, value))
+  }} />
+}
+
 function setValue(condition: LeafCondition, value: VertexValue): LeafCondition {
   return { ...condition, value }
 }
@@ -39,6 +62,7 @@ function updateValue(condition: LeafCondition, valueType: VertexValueType, value
 function ValueEditor({ condition, spec, onChange }: { condition: LeafCondition; spec: VertexFieldSpec; onChange: (condition: LeafCondition) => void }) {
   if (condition.operator === 'exists' || condition.operator === 'not_exists') return null
   const valueType = operatorValueType(spec, condition.operator)
+  if (condition.field === 'size') return <SizeValueEditor condition={condition} valueType={valueType} onChange={onChange} />
   const value = condition.value ?? defaultValue(valueType)
   if (valueType === 'boolean') {
     return <select aria-label="值" value={String(value.boolean ?? false)} onChange={(event) => onChange(updateValue(condition, valueType, event.target.value))}><option value="true">是</option><option value="false">否</option></select>
@@ -71,9 +95,10 @@ function LeafEditor({ condition, onChange, onRemove, onCopy, onMove, canMoveUp, 
 }
 
 function GroupEditor({ condition, onChange, onRemove, onCopy, onMove, canMoveUp = false, canMoveDown = false, simple = false }: GroupProps) {
+  const sizeDrafts = useContext(SizeInputDrafts)
   const updateChild = (index: number, child: VertexCondition) => onChange({ ...condition, children: condition.children.map((item, itemIndex) => itemIndex === index ? child : item) })
   const removeChild = (index: number) => onChange({ ...condition, children: condition.children.filter((_, itemIndex) => itemIndex !== index) })
-  const copyChild = (index: number) => onChange({ ...condition, children: condition.children.flatMap((item, itemIndex) => itemIndex === index ? [item, structuredClone(item)] : [item]) })
+  const copyChild = (index: number) => onChange({ ...condition, children: condition.children.flatMap((item, itemIndex) => itemIndex === index ? [item, copyCondition(item, sizeDrafts)] : [item]) })
   const moveChild = (index: number, offset: -1 | 1) => {
     const target = index + offset
     if (target < 0 || target >= condition.children.length) return
@@ -101,6 +126,7 @@ function GroupEditor({ condition, onChange, onRemove, onCopy, onMove, canMoveUp 
 
 export function VertexRuleEditor({ value = defaultTree(), onChange }: RuleEditorProps) {
   const [tree, setTree] = useState(value)
+  const [sizeDrafts] = useState(() => new WeakMap<VertexValue, string>())
   const [mode, setMode] = useState<'simple' | 'advanced'>(isSimpleConditionTree(value) ? 'simple' : 'advanced')
   const updateTree = (nextTree: VertexConditionTree) => { setTree(nextTree); onChange?.(nextTree) }
   const simpleCompatible = isSimpleConditionTree(tree)
@@ -113,6 +139,7 @@ export function VertexRuleEditor({ value = defaultTree(), onChange }: RuleEditor
       <button type="button" role="tab" aria-selected={mode === 'advanced'} className={mode === 'advanced' ? 'active' : ''} onClick={() => setMode('advanced')}>高级模式</button>
     </div>
     {mode === 'simple' && !simpleCompatible && <div className="rule-mode-warning" role="status">当前条件包含简单模式无法表达的高级语义，已保留原 AST；请切换到高级模式编辑。</div>}
-    <GroupEditor condition={root} simple={simpleView} onChange={(nextRoot) => updateTree({ ...tree, root: nextRoot })} />
+    <p className="field-hint">大小按 GB 输入，1 GB = 1,000,000,000 bytes；区间和集合使用逗号分隔。</p>
+    <SizeInputDrafts.Provider value={sizeDrafts}><GroupEditor condition={root} simple={simpleView} onChange={(nextRoot) => updateTree({ ...tree, root: nextRoot })} /></SizeInputDrafts.Provider>
   </section>
 }

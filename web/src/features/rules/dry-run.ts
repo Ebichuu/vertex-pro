@@ -1,4 +1,5 @@
 import type { AggregationPreviewData } from './aggregation-preview'
+import { formatCapacityGB } from '../shared/units'
 
 export type DryRunEvaluationState = 'TRUE' | 'FALSE' | 'UNKNOWN'
 
@@ -54,7 +55,7 @@ const localResults: Record<string, DryRunPreviewResult> = {
         id: 'rule-4k', name: '4K 电影', priority: 100, revision: 3, state: 'TRUE', reason: '全部条件满足，优先级最高。', winner: true,
         conditions: [
           { id: 'site', label: '站点等于 HDSky', state: 'TRUE', detail: 'RSS 项站点为 HDSky。' },
-          { id: 'size', label: '大小不少于 20 GiB', state: 'TRUE', detail: '当前大小 35.8 GiB。' },
+          { id: 'size', label: '大小不少于 20 GB', state: 'TRUE', detail: `当前大小 ${formatCapacityGB(38_439_342_080)}。` },
           { id: 'title', label: '标题包含 2160p', state: 'TRUE', detail: '标题命中 2160p。' },
         ],
       },
@@ -93,7 +94,7 @@ const localResults: Record<string, DryRunPreviewResult> = {
       {
         id: 'rule-4k', name: '4K 电影', priority: 100, revision: 3, state: 'FALSE', reason: '标题与大小条件未满足。', winner: false,
         conditions: [
-          { id: 'size', label: '大小不少于 20 GiB', state: 'FALSE', detail: '当前大小 7.0 GiB。' },
+          { id: 'size', label: '大小不少于 20 GB', state: 'FALSE', detail: `当前大小 ${formatCapacityGB(7_516_192_768)}。` },
           { id: 'title', label: '标题包含 2160p', state: 'FALSE', detail: '标题只包含 1080p。' },
         ],
       },
@@ -126,7 +127,7 @@ const localResults: Record<string, DryRunPreviewResult> = {
       {
         id: 'rule-4k', name: '4K 电影', priority: 100, revision: 3, state: 'UNKNOWN', reason: '大小字段缺失，无法安全判定。', winner: false,
         conditions: [
-          { id: 'size', label: '大小不少于 20 GiB', state: 'UNKNOWN', detail: 'RSS 项没有提供大小。', missingField: 'size_bytes' },
+          { id: 'size', label: '大小不少于 20 GB', state: 'UNKNOWN', detail: 'RSS 项没有提供大小。', missingField: 'size_bytes' },
           { id: 'title', label: '标题包含 2160p', state: 'FALSE', detail: '标题未命中 2160p。' },
         ],
       },

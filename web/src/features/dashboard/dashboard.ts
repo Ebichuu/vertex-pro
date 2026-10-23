@@ -1,5 +1,6 @@
 // Dashboard 卡片的展示模型与格式化辅助（UI-02）。
 // 卡片字段对应 GET /api/v1/dashboard 的实例汇总投影（§18.2 最低字段）。
+import { formatRateMBps, formatTerabytes } from '../shared/units'
 
 export interface InstanceCard {
   id: string
@@ -25,20 +26,12 @@ export interface DashboardData {
   instances: ReadonlyArray<InstanceCard>
 }
 
-// formatRate 以 KiB/s / MiB/s 呈现速率；0 显示为 0 KiB/s。
 export function formatRate(bytesPerSecond: number): string {
-  if (bytesPerSecond >= 1024 * 1024) {
-    return `${(bytesPerSecond / (1024 * 1024)).toFixed(1)} MiB/s`
-  }
-  return `${Math.round(bytesPerSecond / 1024)} KiB/s`
+  return formatRateMBps(bytesPerSecond)
 }
 
-// formatBytes 以 GiB 呈现容量；-1 表示未知（保持未知，不美化）。
 export function formatBytes(bytes: number): string {
-  if (bytes < 0) {
-    return '未知'
-  }
-  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GiB`
+  return formatTerabytes(bytes)
 }
 
 // freshnessLabel 把后端 freshness/reason 映射为用户可见文案。

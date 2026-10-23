@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { DryRunEvaluationState, DryRunExecutor, DryRunPreviewResult, RecentRssItem } from '../../features/rules/dry-run'
+import { formatCapacityGB } from '../../features/shared/units'
 import { RuleAggregationPreview } from './RuleAggregationPreview'
 
 type RuleDryRunPageProps = {
@@ -10,8 +11,7 @@ type RuleDryRunPageProps = {
 const evaluationLabel: Record<DryRunEvaluationState, string> = { TRUE: '命中', FALSE: '未命中', UNKNOWN: '字段缺失' }
 
 function formatSize(sizeBytes: number | null) {
-  if (sizeBytes === null) return '未提供'
-  return `${(sizeBytes / 1024 ** 3).toFixed(1)} GiB`
+  return formatCapacityGB(sizeBytes, '未提供')
 }
 
 export function RuleDryRunPage({ items, runDryRun }: RuleDryRunPageProps) {

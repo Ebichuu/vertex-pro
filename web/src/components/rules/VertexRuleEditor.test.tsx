@@ -1,6 +1,8 @@
 ﻿import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { VertexRuleEditor } from './VertexRuleEditor'
+import userEvent from '@testing-library/user-event'
+import { validateSizeConditions } from '../../features/rules/size-input'
 import { defaultTree, fromSimpleDraft, isSimpleConditionTree, toSimpleDraft, type VertexConditionTree } from '../../features/rules/model'
 
 afterEach(cleanup)
@@ -11,6 +13,56 @@ function childrenOf(tree: ReturnType<typeof defaultTree>) {
 }
 
 describe('VertexRuleEditor', () => {
+  it('shows existing bytes as precise GB without mutating the original AST', () => {
+    const initial: VertexConditionTree = { version: 1, root: { kind: 'leaf', field: 'size', operator: 'equals', value: { type: 'number', number: 1_073_741_824 } } }
+    let changed = false
+    render(<VertexRuleEditor value={initial} onChange={() => { changed = true }} />)
+    expect(screen.getByLabelText('值')).toHaveValue('1.073741824')
+    fireEvent.click(screen.getByRole('tab', { name: '高级模式' }))
+    expect(changed).toBe(false)
+    expect(initial.root).toMatchObject({ value: { number: 1_073_741_824 } })
+  })
+
+  it('allows typing decimal GB without swallowing the decimal point', async () => {
+    const user = userEvent.setup()
+    let latest = defaultTree()
+    render(<VertexRuleEditor value={latest} onChange={(value) => { latest = value }} />)
+    fireEvent.change(screen.getByLabelText('字段'), { target: { value: 'size' } })
+    await user.clear(screen.getByLabelText('值'))
+    await user.type(screen.getByLabelText('值'), '1.5')
+    expect(screen.getByLabelText('值')).toHaveValue('1.5')
+    expect(childrenOf(latest)[0]).toMatchObject({ value: { number: 1_500_000_000 } })
+  })
+
+  it.each(['between', 'in', 'not_in'])('retains comma drafts while typing %s GB values', async (operator) => {
+    const user = userEvent.setup()
+    let latest = defaultTree()
+    render(<VertexRuleEditor value={latest} onChange={(value) => { latest = value }} />)
+    fireEvent.change(screen.getByLabelText('字段'), { target: { value: 'size' } })
+    fireEvent.change(screen.getByLabelText('运算符'), { target: { value: operator } })
+    await user.clear(screen.getByLabelText('值'))
+    await user.type(screen.getByLabelText('值'), '1,')
+    expect(screen.getByLabelText('值')).toHaveValue('1,')
+    expect(validateSizeConditions(latest.root)).toBeDefined()
+    await user.type(screen.getByLabelText('值'), '10')
+    expect(screen.getByLabelText('值')).toHaveValue('1,10')
+    expect(childrenOf(latest)[0]).toMatchObject({ value: { type: operator === 'between' ? 'number_range' : 'number_set', numbers: [1_000_000_000, 10_000_000_000] } })
+    expect(validateSizeConditions(latest.root)).toBeUndefined()
+  })
+
+  it('preserves an invalid size draft through copying, moving and comparator changes', () => {
+    render(<VertexRuleEditor />)
+    fireEvent.change(screen.getByLabelText('字段'), { target: { value: 'size' } })
+    fireEvent.change(screen.getByLabelText('值'), { target: { value: '1.' } })
+    fireEvent.click(screen.getByRole('button', { name: '复制条件' }))
+    fireEvent.change(screen.getAllByLabelText('值')[0], { target: { value: 'invalid' } })
+    fireEvent.click(screen.getAllByRole('button', { name: '下移条件' })[0])
+    fireEvent.change(screen.getAllByLabelText('运算符')[1], { target: { value: 'greater_than' } })
+    expect(screen.getAllByLabelText('值')[0]).toHaveValue('1.')
+    expect(screen.getAllByLabelText('值')[1]).toHaveValue('invalid')
+    expect(screen.getAllByLabelText('值')[1]).toHaveAttribute('aria-invalid', 'true')
+  })
+
   it('renders Vertex fields and changes the operator/value without changing AST shape', () => {
     let latest = defaultTree()
     render(<VertexRuleEditor value={latest} onChange={(nextValue) => { latest = nextValue }} />)
@@ -20,7 +72,7 @@ describe('VertexRuleEditor', () => {
     expect(childrenOf(latest)[0]).toMatchObject({ kind: 'leaf', field: 'size', operator: 'equals', value: { type: 'number', number: 0 } })
     fireEvent.change(screen.getByLabelText('运算符'), { target: { value: 'greater_than' } })
     fireEvent.change(screen.getByLabelText('值'), { target: { value: '1024' } })
-    expect(childrenOf(latest)[0]).toMatchObject({ field: 'size', operator: 'greater_than', value: { type: 'number', number: 1024 } })
+    expect(childrenOf(latest)[0]).toMatchObject({ field: 'size', operator: 'greater_than', value: { type: 'number', number: 1_024_000_000_000 } })
   })
 
   it('maps set operators to typed set values', () => {

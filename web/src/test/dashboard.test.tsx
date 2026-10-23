@@ -53,12 +53,12 @@ describe('UI-02 Dashboard', () => {
   })
 
   it('速率与容量按口径格式化，未知容量不美化', () => {
-    expect(formatRate(2048)).toBe('2 KiB/s')
-    expect(formatRate(3 * 1024 * 1024)).toBe('3.0 MiB/s')
-    expect(formatBytes(100 * 1024 * 1024 * 1024)).toBe('100.0 GiB')
+    expect(formatRate(2048)).toBe('<0.01 MB/s')
+    expect(formatRate(3 * 1024 * 1024)).toBe('3.15 MB/s')
+    expect(formatBytes(100 * 1024 * 1024 * 1024)).toBe('0.11 TB')
     expect(formatBytes(-1)).toBe('未知')
     const { container } = render(<DashboardCards data={{ jobs_total: 0, user_status_counts: {}, instances: [card()] }} />)
-    expect(container.textContent).toContain('2 KiB/s')
-    expect(container.textContent).toContain('100.0 GiB')
+    expect(container.textContent).toContain('<0.01 MB/s')
+    expect(container.textContent).toContain('0.11 TB')
   })
 })

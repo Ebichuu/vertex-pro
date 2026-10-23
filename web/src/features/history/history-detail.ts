@@ -1,4 +1,5 @@
 import type { HistoryEntry } from './history'
+import { formatTerabytes } from '../shared/units'
 
 export interface HistoryRuleMatch {
   id: string
@@ -117,7 +118,7 @@ const deletedFixture: HistoryDetail = {
     { id: 'event-2', stage: '准备', label: '规则聚合完成', occurredAt: '2026-08-29T07:00:03Z', detail: '命中 2 条规则，由“4K 电影”胜出', tone: 'complete' },
     { id: 'event-3', stage: '添加', label: '已发送到 qB-A · NVMe', occurredAt: '2026-08-29T07:00:08Z', tone: 'complete' },
     { id: 'event-4', stage: '确认', label: '下载器已确认种子存在', occurredAt: '2026-08-29T07:00:12Z', tone: 'complete' },
-    { id: 'event-5', stage: '上传', label: '最后记录上传 120.00 GiB', occurredAt: '2026-08-29T08:59:48Z', tone: 'complete' },
+    { id: 'event-5', stage: '上传', label: `最后记录上传 ${formatTerabytes(128_849_018_880)}`, occurredAt: '2026-08-29T08:59:48Z', tone: 'complete' },
     { id: 'event-6', stage: '删除', label: '删除已确认', occurredAt: '2026-08-29T09:00:00Z', detail: '保留最后上传量与分享率，不会自动重新添加', tone: 'current' },
   ],
   diagnostics: [
@@ -162,7 +163,7 @@ const activeFixture: HistoryDetail = {
     { id: 'active-event-2', stage: '准备', label: '规则聚合完成', occurredAt: '2026-08-29T08:12:03Z', detail: '唯一命中的规则是“Freeleech”', tone: 'complete' },
     { id: 'active-event-3', stage: '添加', label: '已发送到 qB-B · Bulk', occurredAt: '2026-08-29T08:12:08Z', tone: 'complete' },
     { id: 'active-event-4', stage: '确认', label: '下载器已确认种子存在', occurredAt: '2026-08-29T08:12:15Z', tone: 'complete' },
-    { id: 'active-event-5', stage: '上传', label: '最后记录上传 18.25 GiB', occurredAt: '2026-08-29T09:05:00Z', tone: 'current' },
+    { id: 'active-event-5', stage: '上传', label: `最后记录上传 ${formatTerabytes(19_595_657_216)}`, occurredAt: '2026-08-29T09:05:00Z', tone: 'current' },
   ],
 }
 
@@ -191,17 +192,7 @@ export function sortHistoryTimeline(timeline: ReadonlyArray<HistoryTimelineItem>
 }
 
 export function formatHistoryBytes(bytes?: number): string {
-  if (bytes === undefined || !Number.isFinite(bytes) || bytes < 0) {
-    return '暂无数据'
-  }
-  const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB']
-  let value = bytes
-  let unitIndex = 0
-  while (value >= 1024 && unitIndex < units.length - 1) {
-    value /= 1024
-    unitIndex += 1
-  }
-  return `${value.toFixed(unitIndex === 0 ? 0 : 2)} ${units[unitIndex]}`
+  return formatTerabytes(bytes, '暂无数据')
 }
 
 export function formatHistoryTime(value?: string, timezone = 'UTC'): string {

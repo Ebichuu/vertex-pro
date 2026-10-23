@@ -27,7 +27,7 @@ export const VERTEX_FIELDS: VertexFieldSpec[] = [
   { field: 'site', label: '站点', valueType: 'string', operators: ['equals', 'not_equals', 'contains', 'not_contains', 'in', 'not_in', 'exists', 'not_exists'] },
   { field: 'rss', label: 'RSS 源', valueType: 'string', operators: ['equals', 'not_equals', 'contains', 'not_contains', 'in', 'not_in', 'exists', 'not_exists'] },
   { field: 'title', label: '标题', valueType: 'string', operators: ['equals', 'not_equals', 'contains', 'not_contains', 'regex', 'in', 'not_in', 'exists', 'not_exists'] },
-  { field: 'size', label: '大小（字节）', valueType: 'number', operators: ['equals', 'not_equals', 'greater_than', 'greater_or_equal', 'less_than', 'less_or_equal', 'between', 'in', 'not_in', 'exists', 'not_exists'] },
+  { field: 'size', label: '大小（GB）', valueType: 'number', operators: ['equals', 'not_equals', 'greater_than', 'greater_or_equal', 'less_than', 'less_or_equal', 'between', 'in', 'not_in', 'exists', 'not_exists'] },
   { field: 'category', label: '分类', valueType: 'string', operators: ['equals', 'not_equals', 'contains', 'not_contains', 'in', 'not_in', 'exists', 'not_exists'] },
   { field: 'published_at', label: '发布时间', valueType: 'time', operators: ['equals', 'not_equals', 'greater_than', 'greater_or_equal', 'less_than', 'less_or_equal', 'between', 'exists', 'not_exists'] },
   { field: 'discovery_delay', label: '发现延迟（秒）', valueType: 'number', operators: ['equals', 'not_equals', 'greater_than', 'greater_or_equal', 'less_than', 'less_or_equal', 'between', 'in', 'not_in', 'exists', 'not_exists'] },

@@ -1,4 +1,5 @@
 import { VERTEX_RULE_VERSION, type VertexConditionTree } from './model'
+import { validateSizeConditions } from './size-input'
 
 export type RuleTargetMode = 'FIXED_INSTANCE' | 'INSTANCE_GROUP'
 export type SavePathPolicy = 'INSTANCE_DEFAULT' | 'CATEGORY_SUBDIRECTORY'
@@ -34,7 +35,7 @@ export type RuleEditorDraft = {
   extraActions?: Record<string, unknown>
 }
 
-export type RuleEditorErrors = Partial<Record<'name' | 'priority' | 'target' | 'participationWindowMinutes' | 'limits', string>>
+export type RuleEditorErrors = Partial<Record<'name' | 'priority' | 'target' | 'participationWindowMinutes' | 'limits' | 'conditions', string>>
 
 export type RuleVersionPayload = {
   rule_id: string
@@ -70,6 +71,8 @@ type RuleActionPayload = {
 
 export function validateRuleDraft(draft: RuleEditorDraft): RuleEditorErrors {
   const errors: RuleEditorErrors = {}
+  const sizeError = validateSizeConditions(draft.conditionTree.root)
+  if (sizeError) errors.conditions = sizeError
   if (!draft.name.trim()) errors.name = '请输入规则名称。'
   if (!Number.isInteger(draft.priority) || draft.priority < 0 || draft.priority > 10_000) errors.priority = '优先级需为 0 到 10000 的整数。'
   if (draft.actions.targetMode === 'FIXED_INSTANCE' && !draft.actions.targetInstanceId) errors.target = '请选择目标 qB。'
@@ -84,6 +87,8 @@ export function validateRuleDraft(draft: RuleEditorDraft): RuleEditorErrors {
 }
 
 export function toRuleVersionPayload(draft: RuleEditorDraft, revision = draft.revision + 1): RuleVersionPayload {
+  const sizeError = validateSizeConditions(draft.conditionTree.root)
+  if (sizeError) throw new Error(sizeError)
   const actions: RuleActionPayload = {
     ...draft.extraActions,
     start_inactive: draft.actions.startInactive ?? false,

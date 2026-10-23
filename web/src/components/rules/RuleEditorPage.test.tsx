@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RuleEditorPage } from './RuleEditorPage'
 import { defaultTree } from '../../features/rules/model'
-import { fromRuleVersionPayload, toRuleVersionPayload, type RuleEditorDraft } from '../../features/rules/rule-editor'
+import { fromRuleVersionPayload, toRuleVersionPayload, validateRuleDraft, type RuleEditorDraft } from '../../features/rules/rule-editor'
 
 afterEach(cleanup)
 
@@ -29,6 +29,67 @@ const instances = [{ id: 'qb-a', label: 'qB-A · NVMe' }]
 const groups = [{ id: 'fast', label: '高速组' }]
 
 describe('UI-05 Rule Editor', () => {
+  const sizeDraft: RuleEditorDraft = { ...draft, conditionTree: { version: 1, root: { kind: 'leaf', field: 'size', operator: 'equals', value: { type: 'number', number: 1_073_741_824 } } } }
+
+  it('preserves an unedited legacy byte threshold when saving', async () => {
+    const onSave = vi.fn((payload) => fromRuleVersionPayload(payload))
+    render(<RuleEditorPage initialDraft={sizeDraft} instances={instances} groups={groups} onSave={onSave} />)
+    expect(screen.getByLabelText('值')).toHaveValue('1.073741824')
+    fireEvent.click(screen.getByRole('button', { name: '保存规则' }))
+    await screen.findByText('规则已保存为 v4。')
+    expect(JSON.parse(onSave.mock.calls[0][0].condition_tree_json)).toEqual(sizeDraft.conditionTree)
+  })
+
+  it('saves decimal GB as bytes in the immutable payload', async () => {
+    const onSave = vi.fn((payload) => fromRuleVersionPayload(payload))
+    render(<RuleEditorPage initialDraft={sizeDraft} instances={instances} groups={groups} onSave={onSave} />)
+    fireEvent.change(screen.getByLabelText('值'), { target: { value: '1.5' } })
+    fireEvent.click(screen.getByRole('button', { name: '保存规则' }))
+    await screen.findByText('规则已保存为 v4。')
+    expect(JSON.parse(onSave.mock.calls[0][0].condition_tree_json).root.children[0].value).toEqual({ type: 'number', number: 1_500_000_000 })
+    expect(sizeDraft.conditionTree.root).toMatchObject({ value: { number: 1_073_741_824 } })
+  })
+
+  it.each(['', '-1', 'abc', '0.0000000001', '9007199.254740992'])('rejects invalid size %j instead of submitting zero or the old value', async (input) => {
+    const onSave = vi.fn()
+    render(<RuleEditorPage initialDraft={sizeDraft} instances={instances} groups={groups} onSave={onSave} />)
+    fireEvent.change(screen.getByLabelText('值'), { target: { value: input } })
+    fireEvent.click(screen.getByRole('button', { name: '保存规则' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('整数字节')
+    expect(onSave).not.toHaveBeenCalled()
+    expect(screen.getByLabelText('值')).toHaveValue(input)
+  })
+
+  it('rejects incomplete ranges and allows saving after correction', async () => {
+    const onSave = vi.fn((payload) => fromRuleVersionPayload(payload))
+    render(<RuleEditorPage initialDraft={sizeDraft} instances={instances} groups={groups} onSave={onSave} />)
+    fireEvent.change(screen.getByLabelText('运算符'), { target: { value: 'between' } })
+    fireEvent.change(screen.getByLabelText('值'), { target: { value: '1,' } })
+    fireEvent.click(screen.getByRole('button', { name: '保存规则' }))
+    expect(await screen.findByRole('alert')).toBeInTheDocument()
+    expect(onSave).not.toHaveBeenCalled()
+    fireEvent.change(screen.getByLabelText('值'), { target: { value: '1,10' } })
+    fireEvent.click(screen.getByRole('button', { name: '保存规则' }))
+    await screen.findByText('规则已保存为 v4。')
+    expect(JSON.parse(onSave.mock.calls[0][0].condition_tree_json).root.children[0].value).toEqual({ type: 'number_range', numbers: [1_000_000_000, 10_000_000_000] })
+  })
+
+  it('rejects invalid size ASTs at validation and serialization boundaries', () => {
+    const invalid: RuleEditorDraft = { ...draft, conditionTree: { version: 1, root: { kind: 'leaf', field: 'size', operator: 'equals', value: { type: 'number' } } } }
+    expect(validateRuleDraft(invalid).conditions).toContain('整数字节')
+    expect(() => toRuleVersionPayload(invalid)).toThrow('整数字节')
+  })
+
+  it('saves a size set in bytes and excludes UI input drafts from the payload', async () => {
+    const onSave = vi.fn((payload) => fromRuleVersionPayload(payload))
+    render(<RuleEditorPage initialDraft={sizeDraft} instances={instances} groups={groups} onSave={onSave} />)
+    fireEvent.change(screen.getByLabelText('运算符'), { target: { value: 'in' } })
+    fireEvent.change(screen.getByLabelText('值'), { target: { value: '1,1.5,10' } })
+    fireEvent.click(screen.getByRole('button', { name: '保存规则' }))
+    await screen.findByText('规则已保存为 v4。')
+    expect(JSON.parse(onSave.mock.calls[0][0].condition_tree_json).root.children[0]).toEqual({ kind: 'leaf', field: 'size', operator: 'in', value: { type: 'number_set', numbers: [1_000_000_000, 1_500_000_000, 10_000_000_000] } })
+  })
+
   it('renders rule identity, shared condition AST, target and controlled parameters', () => {
     render(<RuleEditorPage initialDraft={draft} instances={instances} groups={groups} />)
     expect(screen.getByRole('heading', { name: '编辑规则' })).toBeInTheDocument()
