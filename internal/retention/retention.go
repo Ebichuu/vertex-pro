@@ -302,6 +302,12 @@ func removeExpiredSnapshots(ctx context.Context, database *sql.DB, root, cutoff 
 				)
 				AND NOT EXISTS (SELECT 1 FROM sync_waiters w WHERE w.instance_id=s.instance_id AND w.registered_generation=s.sync_generation AND w.source_snapshot_revision=s.snapshot_revision)
 				AND NOT EXISTS (
+					SELECT 1 FROM pending_confirmations p JOIN placement_attempts a ON a.attempt_id=p.attempt_id
+					WHERE a.instance_id=s.instance_id
+					AND json_extract(p.evidence_json,'$.SyncGeneration')=s.sync_generation
+					AND json_extract(p.evidence_json,'$.SnapshotRevision')=s.snapshot_revision
+				)
+				AND NOT EXISTS (
 					SELECT 1 FROM submit_intents i JOIN placement_attempts a ON a.attempt_id=i.attempt_id
 					WHERE i.instance_id=s.instance_id AND i.pre_add_sync_generation=s.sync_generation AND i.pre_add_snapshot_revision=s.snapshot_revision
 					AND (a.attempt_state IN ('RESERVED','ADD_SENT','AWAITING_CONFIRMATION','UNKNOWN','EXPIRED_UNKNOWN')

@@ -66,6 +66,7 @@ func New(fetcher rssfetch.Fetcher, downloader *torrentdownload.Downloader, dedup
 
 // Result reports one cycle over one feed.
 type Result struct {
+	PolledAt     time.Time
 	FeedURL      string
 	Entries      int
 	New          int
@@ -90,7 +91,7 @@ func (cycle *Cycle) Run(ctx context.Context, feed FeedRef) (Result, error) {
 	result := Result{}
 	var fetchErr error
 	if !feed.RecoverOnly {
-		result, fetchErr = cycle.discover(ctx, feed)
+		result, fetchErr = cycle.Discover(ctx, feed)
 	}
 	if feed.BaselineOnly {
 		return result, fetchErr
@@ -122,6 +123,7 @@ func (cycle *Cycle) Run(ctx context.Context, feed FeedRef) (Result, error) {
 			}
 			result.Outcomes = append(result.Outcomes, outcome)
 		}
+		work.Matched = outcome.Matched
 		if err := cycle.consumers.Finish(ctx, *work, code, cycle.now()); err != nil {
 			return result, err
 		}
@@ -169,6 +171,37 @@ func (cycle *Cycle) discover(ctx context.Context, feed FeedRef) (Result, error) 
 	}
 	return result, nil
 }
+
+// Discover persists sources only. Preparation runs on independent bounded workers.
+func (cycle *Cycle) Discover(ctx context.Context, feed FeedRef) (Result, error) {
+	at := cycle.now()
+	result, err := cycle.discover(ctx, feed)
+	result.PolledAt = at
+	return result, err
+}
+
+func (cycle *Cycle) ConsumeOne(ctx context.Context, feed FeedRef) (matchpipeline.Outcome, bool, error) {
+	work, err := cycle.consumers.Claim(ctx, feed.SiteID, feed.FeedID, cycle.now())
+	if err != nil || work == nil {
+		return matchpipeline.Outcome{}, false, err
+	}
+	attemptCtx, cancel := context.WithTimeout(ctx, min(45*time.Second, work.Deadline.Sub(cycle.now())))
+	outcome, processErr := cycle.process(attemptCtx, feed, *work)
+	cancel()
+	code := ""
+	if processErr != nil {
+		code = "RSS_ITEM_PROCESSING_FAILED"
+	}
+	work.Matched = outcome.Matched
+	if err := cycle.consumers.Finish(ctx, *work, code, cycle.now()); err != nil {
+		return outcome, true, err
+	}
+	return outcome, true, processErr
+}
+
+// Configure the clock before starting workers; durable claims and the runtime's
+// due-work query must use exactly the same time base.
+func (cycle *Cycle) SetClock(now func() time.Time) { cycle.now = now; cycle.pipeline.Now = now }
 
 func (cycle *Cycle) process(ctx context.Context, feed FeedRef, work rsssource.Consumer) (matchpipeline.Outcome, error) {
 	preview := matchpipeline.Item{Source: work.Source, FeedID: feed.FeedID, PublishedAt: parsePublished(work.Source.PublishedAt)}

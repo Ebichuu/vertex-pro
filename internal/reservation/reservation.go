@@ -45,6 +45,12 @@ type Request struct {
 	MaxInflight                   int64
 	Now                           string
 	Clock                         func() time.Time
+	// Separate pending/unknown budgets from the number of network senders.
+	MaxPending int64
+	MaxUnknown int64
+	// Persist adds local durable handoff records to this same transaction.
+	Persist func(context.Context, *db.ImmediateTx) error
+	Recheck func(context.Context, *db.ImmediateTx) error
 }
 
 type Result struct {
@@ -73,6 +79,11 @@ func ReserveAtomic(ctx context.Context, database *sql.DB, request Request) (Resu
 		expired, err = ExpireParticipationTx(ctx, transaction, request.JobID, now)
 		if err != nil || expired {
 			return err
+		}
+		if request.Recheck != nil {
+			if err := request.Recheck(ctx, transaction); err != nil {
+				return err
+			}
 		}
 		var jobState, ruleState, torrentState, placementState string
 		var currentAttempt sql.NullString
@@ -133,11 +144,24 @@ func ReserveAtomic(ctx context.Context, database *sql.DB, request Request) (Resu
 		var inflight int64
 		// Confirmed submissions retain their identity and capacity ownership,
 		// but no longer occupy an in-flight Add slot.
-		err = transaction.QueryRowContext(ctx, `SELECT COUNT(*) FROM placement_attempts WHERE instance_id = ? AND attempt_state IN ('RESERVED','ADD_SENT','AWAITING_CONFIRMATION','UNKNOWN','EXPIRED_UNKNOWN')`, request.InstanceID).Scan(&inflight)
+		states := "('RESERVED','ADD_SENT','AWAITING_CONFIRMATION','UNKNOWN','EXPIRED_UNKNOWN')"
+		limit := request.MaxInflight
+		if request.MaxPending > 0 {
+			states = "('RESERVED','ADD_SENT','AWAITING_CONFIRMATION')"
+			limit = request.MaxPending
+			var unknown int64
+			if err := transaction.QueryRowContext(ctx, `SELECT count(*) FROM placement_attempts WHERE instance_id=? AND attempt_state IN ('UNKNOWN','EXPIRED_UNKNOWN')`, request.InstanceID).Scan(&unknown); err != nil {
+				return err
+			}
+			if request.MaxUnknown > 0 && unknown >= request.MaxUnknown {
+				return errors.New("UNKNOWN_LIMIT_REACHED")
+			}
+		}
+		err = transaction.QueryRowContext(ctx, `SELECT COUNT(*) FROM placement_attempts WHERE instance_id = ? AND attempt_state IN `+states, request.InstanceID).Scan(&inflight)
 		if err != nil {
 			return fmt.Errorf("count inflight attempts: %w", err)
 		}
-		if inflight >= request.MaxInflight {
+		if inflight >= limit {
 			return errors.New("INFLIGHT_LIMIT_REACHED")
 		}
 
@@ -154,6 +178,15 @@ func ReserveAtomic(ctx context.Context, database *sql.DB, request Request) (Resu
 		if _, err := transaction.ExecContext(ctx, `INSERT INTO capacity_reservations(reservation_id, attempt_id, storage_target_id, reserved_bytes, allocation_epoch, reservation_state) VALUES (?, ?, ?, ?, ?, 'ACTIVE')`, request.ReservationID, request.AttemptID, request.StorageTargetID, request.RequiredBytes, request.AllocationEpoch); err != nil {
 			return fmt.Errorf("insert reservation: %w", err)
 		}
+		// Debit the same projection checked above while holding the writer lock.
+		// Refreshes rebuild it from current reservations in their own transaction.
+		debit, err := transaction.ExecContext(ctx, `UPDATE capacity_epochs SET effective_free_bytes=effective_free_bytes-? WHERE capacity_epoch_id=? AND capacity_state='TRUSTED' AND effective_free_bytes>=?`, request.RequiredBytes, request.CapacityEpochID, request.RequiredBytes)
+		if err != nil {
+			return err
+		}
+		if rows, err := debit.RowsAffected(); err != nil || rows != 1 {
+			return errors.New("CAPACITY_DEBIT_CONFLICT")
+		}
 		resultUpdate, err := transaction.ExecContext(ctx, `UPDATE race_jobs SET current_attempt_id = ?, job_state = 'RESERVED', final_candidate_recheck_revision = ?, final_candidate_recheck_at = ?, updated_at = ? WHERE job_id = ? AND job_state = 'READY' AND current_attempt_id IS NULL`, request.AttemptID, request.FinalCandidateRecheckRevision, request.Now, request.Now, request.JobID)
 		if err != nil {
 			return fmt.Errorf("update race job reservation: %w", err)
@@ -164,6 +197,9 @@ func ReserveAtomic(ctx context.Context, database *sql.DB, request Request) (Resu
 		}
 		if rows != 1 {
 			return errors.New("RACE_JOB_RESERVATION_UPDATE_CONFLICT")
+		}
+		if request.Persist != nil {
+			return request.Persist(ctx, transaction)
 		}
 		return nil
 	})
@@ -183,7 +219,7 @@ func validateRequest(request Request) error {
 			return fmt.Errorf("%s is required", name)
 		}
 	}
-	if request.RequiredBytes < 0 || request.AllocationEpoch < 0 || request.CapacityRevision < 0 || request.SnapshotGeneration < 0 || request.SnapshotRevision < 0 || request.FinalCandidateRecheckRevision < 0 {
+	if request.RequiredBytes < 0 || request.AllocationEpoch < 0 || request.CapacityRevision < 0 || request.SnapshotGeneration < 0 || request.SnapshotRevision < 0 || request.FinalCandidateRecheckRevision < 0 || request.MaxPending < 0 || request.MaxUnknown < 0 {
 		return errors.New("numeric request field is invalid")
 	}
 	if request.MaxInflight <= 0 {

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/vertex-pro/vertex-pro/internal/db"
 	"github.com/vertex-pro/vertex-pro/internal/dispatchcommit"
 	"github.com/vertex-pro/vertex-pro/internal/dispatchworker"
 	"github.com/vertex-pro/vertex-pro/internal/qbresponse"
@@ -26,6 +27,7 @@ type Request struct {
 	WaiterID       string
 	APIVersion     string
 	HTTPRequest    *http.Request
+	Recheck        func(context.Context, *db.ImmediateTx) error
 }
 
 type Result struct {
@@ -88,6 +90,7 @@ func (runner *Runner) Run(ctx context.Context, request Request) (Result, error) 
 		WaiterID:       request.WaiterID,
 		Now:            runner.now().UTC(),
 		Clock:          runner.now,
+		Recheck:        request.Recheck,
 	})
 	if err != nil {
 		return Result{}, err

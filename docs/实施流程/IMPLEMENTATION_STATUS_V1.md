@@ -1,11 +1,13 @@
 # Vertex Pro V1 实施状态表
 
 文档状态：`ACTIVE / AUTHORITATIVE-TRACKER-BY-RC8`  
-最后修订：2026-09-06
+最后修订：2026-10-24
 对应施工手册：`docs/实施流程/VERTEX_PRO_V1_CODE_IMPLEMENTATION_PLAYBOOK.md`  
 对应主规范：`docs/产品方案设计/VERTEX_PRO_COMPLETE_REDESIGN_V1_RC8_FINAL.md`  
 对应产品合同：`docs/产品方案设计/VERTEX_PRO_V1_USER_RULES_CONTRACT.md`  
 仓库目标路径：`docs/实施流程/IMPLEMENTATION_STATUS_V1.md`
+
+当前后续整改：[第三阶段：候选并行准备与多实例独立投递](../implementation/2026-10-24-dispatch-pipeline-phase3.md)已实施并完成本地验证（基线 `1a35a82`）。原子预算、早到 hash 收敛、持久发送队列、8 个准备 worker、每实例 2 个发送 worker 和后台策略预热已接通；全套 106 个 Go 测试包通过。30 条本地故障夹具验证慢任务不阻塞其他实例，四个发送边界的独立进程强制终止恢复通过；p95 ≤100 ms、Linux SIGKILL 与真实机器验收仍待完成，未推送/部署。既有 149 项记录保留原证据，不据此提升旧 Gate 结论。
 
 ---
 

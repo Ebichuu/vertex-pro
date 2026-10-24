@@ -36,7 +36,7 @@ func (s Service) Ensure(ctx context.Context, m ruleaggregate.Match) (string, err
 		return "", fmt.Errorf("invalid qui policy identity or dependencies")
 	}
 	var active int
-	if err := s.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM rules r LEFT JOIN sites site ON site.site_id=r.site_id WHERE r.rule_id=? AND r.enabled=1 AND r.archived=0 AND (site.site_id IS NULL OR (site.enabled=1 AND site.archived=0))`, m.RuleID).Scan(&active); err != nil {
+	if err := s.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM rules r LEFT JOIN sites site ON site.site_id=r.site_id WHERE r.rule_id=? AND r.revision=? AND r.enabled=1 AND r.archived=0 AND (site.site_id IS NULL OR (site.enabled=1 AND site.archived=0))`, m.RuleID, m.RuleRevision).Scan(&active); err != nil {
 		return "", err
 	}
 	if active != 1 {
@@ -74,6 +74,7 @@ func (s Service) Ensure(ctx context.Context, m ruleaggregate.Match) (string, err
 	}
 	count := 0
 	boundFound := false
+	alreadyEnabled := false
 	for _, existing := range list {
 		if boundID > 0 && existing.ID == boundID {
 			boundFound = true
@@ -99,6 +100,7 @@ func (s Service) Ensure(ctx context.Context, m ruleaggregate.Match) (string, err
 			}
 			desired.ID = existing.ID
 			desired.SortOrder = existing.SortOrder
+			alreadyEnabled = existing.Enabled
 		}
 	}
 	if boundID > 0 && !boundFound {
@@ -107,13 +109,15 @@ func (s Service) Ensure(ctx context.Context, m ruleaggregate.Match) (string, err
 	if count > 1 {
 		return "", fmt.Errorf("duplicate managed qui policy")
 	}
-	if _, err := s.Client.SaveAutomation(ctx, s.Instance, desired); err != nil {
-		return "", err
-	}
-	// Read back: a successful response is not proof that the intended rule persisted.
-	list, err = s.Client.Automations(ctx, s.Instance)
-	if err != nil {
-		return "", err
+	if !alreadyEnabled {
+		if _, err := s.Client.SaveAutomation(ctx, s.Instance, desired); err != nil {
+			return "", err
+		}
+		// A mutation response is not proof that the intended rule persisted.
+		list, err = s.Client.Automations(ctx, s.Instance)
+		if err != nil {
+			return "", err
+		}
 	}
 	var saved *control.Automation
 	for i := range list {

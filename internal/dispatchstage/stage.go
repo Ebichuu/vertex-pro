@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/vertex-pro/vertex-pro/internal/db"
 	"github.com/vertex-pro/vertex-pro/internal/dispatchflow"
 	"github.com/vertex-pro/vertex-pro/internal/dispatchorchestrator"
 	"github.com/vertex-pro/vertex-pro/internal/dispatchworker"
@@ -46,20 +47,22 @@ type StorageConfig struct {
 
 // Config configures one dispatch stage.
 type Config struct {
-	Storage         StorageConfig
-	Downloader      *torrentdownload.Downloader
-	Profile         qbprofile.Profile
-	Sender          dispatchworker.Sender
-	Now             func() time.Time
-	ConfirmWindow   time.Duration
-	ReconcileWindow time.Duration
-	// Collect holds the instance sync lock until release, so the reservation
-	// and durable Add marker use the same snapshot as the identity recheck.
+	DurableQueue     bool
+	Storage          StorageConfig
+	Downloader       *torrentdownload.Downloader
+	Profile          qbprofile.Profile
+	Sender           dispatchworker.Sender
+	Now              func() time.Time
+	ConfirmWindow    time.Duration
+	ReconcileWindow  time.Duration
+	ProfileExpiresAt time.Time
+	// Production uses immutable cached evidence. Its revision is revalidated
+	// inside the reservation/Begin transactions; no network lock is needed.
 	Collect func(context.Context) (Evidence, func(), error)
-	// CollectForSelection may reuse fresh observations for ranking only. The
-	// selected target still uses Collect under its lock before any reservation.
+	// CollectForSelection supplies local, fresh observations for ranking.
 	CollectForSelection func(context.Context) (Evidence, func(), error)
 	EnsurePolicy        func(context.Context, ruleaggregate.Match) (string, error)
+	WarmPolicy          func(context.Context, ruleaggregate.Match) (string, error)
 }
 
 type Stage struct {
@@ -67,6 +70,10 @@ type Stage struct {
 	config      Config
 	mu          sync.Mutex
 	coordinator *Coordinator
+	queueMu     sync.Mutex
+	active      map[string]bool
+	slots       chan struct{}
+	wake        chan struct{}
 }
 
 func New(database *sql.DB, config Config) (*Stage, error) {
@@ -88,7 +95,7 @@ func New(database *sql.DB, config Config) (*Stage, error) {
 	if config.Now == nil {
 		config.Now = func() time.Time { return time.Now().UTC() }
 	}
-	return &Stage{database: database, config: config}, nil
+	return &Stage{database: database, config: config, active: map[string]bool{}, slots: make(chan struct{}, senderConcurrency), wake: make(chan struct{}, senderConcurrency)}, nil
 }
 
 type jobRow struct {
@@ -102,10 +109,6 @@ type jobRow struct {
 // ensure reference rows, and dispatch through the orchestrator. Per-job
 // failures are recorded and do not abort the stage.
 func (stage *Stage) Run(ctx context.Context) ([]dispatchorchestrator.Result, []string, error) {
-	if stage.coordinator != nil {
-		stage.coordinator.mu.Lock()
-		defer stage.coordinator.mu.Unlock()
-	}
 	stage.mu.Lock()
 	defer stage.mu.Unlock()
 	jobs, err := stage.listDiscoveredJobs(ctx)
@@ -115,21 +118,7 @@ func (stage *Stage) Run(ctx context.Context) ([]dispatchorchestrator.Result, []s
 	results := make([]dispatchorchestrator.Result, 0, len(jobs))
 	failures := make([]string, 0)
 	for _, job := range jobs {
-		var result *dispatchorchestrator.Result
-		expired, err := reservation.ExpireParticipation(ctx, stage.database, job.jobID, stage.config.Now)
-		if expired && err == nil {
-			continue
-		}
-		if err == nil && job.state == "RESERVED" {
-			// Recover stale, never-sent reservations by expiring them only;
-			// do not create a second send path for a reserved attempt.
-			continue
-		}
-		if err == nil && stage.coordinator != nil {
-			result, err = stage.coordinator.dispatch(ctx, stage, job)
-		} else if err == nil {
-			result, err = stage.dispatchJob(ctx, job)
-		}
+		result, err := stage.advancePreparedJob(ctx, job)
 		if errors.Is(err, reservation.ErrParticipationExpired) {
 			continue
 		}
@@ -145,6 +134,35 @@ func (stage *Stage) Run(ctx context.Context) ([]dispatchorchestrator.Result, []s
 		}
 	}
 	return results, failures, nil
+}
+
+func (stage *Stage) advancePreparedJob(ctx context.Context, job jobRow) (*dispatchorchestrator.Result, error) {
+	if stage.coordinator != nil {
+		stage.coordinator.mu.Lock()
+		defer stage.coordinator.mu.Unlock()
+	}
+	if expired, err := reservation.ExpireParticipation(ctx, stage.database, job.jobID, stage.config.Now); err != nil || expired {
+		return nil, err
+	}
+	// Re-read after obtaining the shared allocator lock. Another instance can
+	// already have reserved a group job from its own earlier enumeration.
+	var current string
+	if err := stage.database.QueryRowContext(ctx, `SELECT job_state FROM race_jobs WHERE job_id=?`, job.jobID).Scan(&current); err != nil {
+		return nil, err
+	}
+	if current == "RESERVED" {
+		if stage.config.DurableQueue {
+			stage.Wake()
+		}
+		return nil, nil
+	}
+	if current != "DISCOVERED" && current != "READY" && current != "WAITING_CAPACITY" {
+		return nil, nil
+	}
+	if stage.coordinator != nil {
+		return stage.coordinator.dispatch(ctx, stage, job)
+	}
+	return stage.dispatchJob(ctx, job)
 }
 
 func (stage *Stage) listDiscoveredJobs(ctx context.Context) ([]jobRow, error) {
@@ -180,6 +198,9 @@ func (stage *Stage) dispatchJob(ctx context.Context, job jobRow) (*dispatchorche
 		return nil, err
 	}
 	if !frozen {
+		if stage.config.DurableQueue {
+			return nil, errors.New("LEGACY_ARTIFACT_PENDING")
+		}
 		source, loadErr := stage.loadSource(ctx, job.sourceID)
 		if loadErr != nil {
 			return nil, loadErr
@@ -290,7 +311,7 @@ func (stage *Stage) dispatchJob(ctx context.Context, job jobRow) (*dispatchorche
 		return nil, err
 	}
 	now := stage.config.Now()
-	result, err := dispatchorchestrator.Run(ctx, stage.database, dispatchorchestrator.Request{
+	request := dispatchorchestrator.Request{
 		Prepare:   stage.prepareJob(job),
 		Placement: stage.placementInput(job.identityKey, parsed.TotalSize, capacity.EffectiveFree),
 		Reservation: reservation.Request{
@@ -299,14 +320,14 @@ func (stage *Stage) dispatchJob(ctx context.Context, job jobRow) (*dispatchorche
 			CapacityEpochID: capacity.ID, AllocationEpoch: capacity.AllocationEpoch, CapacityRevision: int64(evidence.Record.Revision), SnapshotGeneration: int64(evidence.Record.Generation),
 			SnapshotRevision: int64(evidence.Record.Revision), SnapshotDigest: evidence.Record.Digest, RequestFingerprint: "fp-" + job.jobID, TargetFingerprint: "target-" + stage.config.Storage.StorageTargetID,
 			PreAddIdentityFact: reservation.IdentityAbsent, FinalCandidateRecheckRevision: int64(evidence.Record.Revision), MaxInflight: 1,
-			Now: now.Format(time.RFC3339),
+			Now: now.Format(time.RFC3339Nano),
 		},
 		Waiter: syncwaiter.Request{
 			WaiterID: "waiter-attempt-" + job.jobID, InstanceID: stage.config.Storage.InstanceID, RegisteredGeneration: int64(evidence.Record.Generation),
 			SourceSnapshotRevision: int64(evidence.Record.Revision), IdentityKey: job.identityKey,
 			ConfirmationDeadline:   now.Add(stage.config.ConfirmWindow).Format(time.RFC3339),
 			ReconciliationDeadline: now.Add(stage.config.ReconcileWindow).Format(time.RFC3339),
-			CreatedAt:              now.Format(time.RFC3339),
+			CreatedAt:              now.Format(time.RFC3339Nano),
 		},
 		Dispatch: dispatchflow.Request{
 			AttemptID: "attempt-" + job.jobID, SubmitIntentID: "intent-" + job.jobID, WaiterID: "waiter-attempt-" + job.jobID,
@@ -314,23 +335,56 @@ func (stage *Stage) dispatchJob(ctx context.Context, job jobRow) (*dispatchorche
 		},
 		Sender: stage.config.Sender,
 		Now:    stage.config.Now,
-	})
+	}
+	if stage.config.DurableQueue {
+		request.Reservation.Recheck = func(ctx context.Context, tx *db.ImmediateTx) error {
+			if err := stage.sendAdmission(ctx, tx); err != nil {
+				return err
+			}
+			if err := stage.validateSnapshot(ctx, tx, evidence); err != nil {
+				return err
+			}
+			enabled, err := stage.ruleEnabledWith(ctx, tx, job.jobID)
+			if err != nil {
+				return err
+			}
+			if !enabled {
+				return errors.New("RULE_CHANGED_BEFORE_RESERVATION")
+			}
+			return nil
+		}
+		encoded, err := json.Marshal(queuedParams{Params: params, Profile: stage.config.Profile, Storage: stage.config.Storage, Decision: decision})
+		if err != nil {
+			return nil, err
+		}
+		request.QueueParams = string(encoded)
+		request.Reservation.MaxInflight, request.Reservation.MaxPending, request.Reservation.MaxUnknown = pendingLimit, pendingLimit, unknownPauseThreshold
+	}
+	result, err := dispatchorchestrator.Run(ctx, stage.database, request)
 	if err != nil {
 		return nil, err
+	}
+	if stage.config.DurableQueue {
+		stage.Wake()
 	}
 	return &result, nil
 }
 
 func (stage *Stage) ruleEnabled(ctx context.Context, jobID string) (bool, error) {
+	return stage.ruleEnabledWith(ctx, stage.database, jobID)
+}
+
+func (stage *Stage) ruleEnabledWith(ctx context.Context, reader snapshotStateReader, jobID string) (bool, error) {
 	var enabled int
-	err := stage.database.QueryRowContext(ctx, `SELECT COUNT(*) FROM job_rule_snapshots snap
+	err := reader.QueryRowContext(ctx, `SELECT COUNT(*) FROM job_rule_snapshots snap
 		JOIN race_jobs j ON j.job_id=snap.job_id
 		JOIN sites source_site ON source_site.site_id=substr(j.source_id,1,instr(j.source_id,'/')-1)
 		JOIN rules r ON r.rule_id=json_extract(snap.aggregation_json,'$.Winner.RuleID')
 		LEFT JOIN sites rule_site ON rule_site.site_id=r.site_id
 		WHERE snap.job_id=? AND source_site.enabled=1 AND source_site.archived=0
 		AND r.enabled=1 AND r.archived=0
-		AND (r.site_id IS NULL OR (rule_site.enabled=1 AND rule_site.archived=0))`, jobID).Scan(&enabled)
+		AND (?=0 OR r.revision=json_extract(snap.aggregation_json,'$.Winner.RuleRevision'))
+		AND (r.site_id IS NULL OR (rule_site.enabled=1 AND rule_site.archived=0))`, jobID, stage.config.DurableQueue).Scan(&enabled)
 	return enabled > 0, err
 }
 
@@ -348,13 +402,17 @@ func (stage *Stage) placementInput(identityKey string, requiredBytes, effectiveF
 	if profileState == "" {
 		profileState = "EXPECTED"
 	}
+	maxInflight := int64(1)
+	if stage.config.DurableQueue {
+		maxInflight = pendingLimit
+	}
 	return placement.DecisionInput{
 		IdentityKey: identityKey, TargetMode: placement.TargetFixedInstance, TargetInstanceID: storage.InstanceID, RequiredBytes: requiredBytes,
 		Weights: placement.DecisionWeights{InstanceWeight: 1, FreeRatioWeight: 1, InflightPenaltyWeight: 1, CurrentDownloadLoadPenaltyWeight: 1, RecentAddLatencyPenaltyWeight: 1},
 		Candidates: []placement.DecisionCandidate{{
 			InstanceID: storage.InstanceID, StorageTargetID: storage.StorageTargetID, CanPlace: true,
 			HealthState: "AVAILABLE", ProfileState: profileState, StorageState: "VERIFIED", CapacityState: "TRUSTED",
-			InstanceWeight: 1, FreeRatioPPM: 1_000_000, EffectiveFreeBytes: effectiveFree, MaxInflight: 1,
+			InstanceWeight: 1, FreeRatioPPM: 1_000_000, EffectiveFreeBytes: effectiveFree, MaxInflight: maxInflight,
 		}},
 	}
 }

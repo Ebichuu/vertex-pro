@@ -35,6 +35,38 @@ func TestLimitsShareHostsAndCancelQueuedRequests(t *testing.T) {
 	}
 }
 
+func TestArtifactsShareRSSCadenceWithoutTakingRSSSlots(t *testing.T) {
+	limits, _ := NewLimits(1, 1)
+	base := limitTestTransport(func(*http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader("body")), Header: make(http.Header)}, nil
+	})
+	fetcher, _ := New(&http.Client{Transport: base}, 1024)
+	fetcher = fetcher.WithLimits(limits)
+	client := fetcher.ArtifactClient(time.Second)
+	response, err := client.Get("https://site.example/artifact")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if len(limits.slots) != 0 {
+		t.Fatal("torrent occupied an RSS slot")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	if _, err := fetcher.Fetch(ctx, Request{URL: "https://site.example/rss"}); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("RSS bypassed artifact cadence: %v", err)
+	}
+	if _, err := fetcher.Fetch(context.Background(), Request{URL: "https://another.example/rss"}); err != nil {
+		t.Fatal(err)
+	}
+	ctx2, cancel2 := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel2()
+	request, _ := http.NewRequestWithContext(ctx2, http.MethodGet, "https://another.example/artifact", nil)
+	if _, err := client.Do(request); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("artifact bypassed RSS cadence: %v", err)
+	}
+}
+
 type limitTestTransport func(*http.Request) (*http.Response, error)
 
 func (transport limitTestTransport) RoundTrip(request *http.Request) (*http.Response, error) {

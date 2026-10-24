@@ -189,7 +189,7 @@ func TestAutomationWorkersRouteTwoInstancesAndSurviveRestart(t *testing.T) {
 	clock.Add(int64(2 * time.Minute))
 	waitAutomation(t, func() bool {
 		return runtime.Database.QueryRow(`SELECT COUNT(*) FROM race_jobs WHERE job_state='HASH_SEEN'`).Scan(&count) == nil && count == 2
-	})
+	}, runtime.Database)
 	// A confirmed Add must release its dispatch slot without releasing capacity.
 	mu.Lock()
 	entries = append(entries, "target2-second")
@@ -247,7 +247,7 @@ func TestAutomationWorkersRouteTwoInstancesAndSurviveRestart(t *testing.T) {
 	}
 }
 
-func waitAutomation(t *testing.T, ready func() bool) {
+func waitAutomation(t *testing.T, ready func() bool, diagnosticDB ...*sql.DB) {
 	t.Helper()
 	deadline := time.Now().Add(8 * time.Second)
 	for time.Now().Before(deadline) {
@@ -255,6 +255,20 @@ func waitAutomation(t *testing.T, ready func() bool) {
 			return
 		}
 		time.Sleep(10 * time.Millisecond)
+	}
+	for _, database := range diagnosticDB {
+		rows, err := database.Query(`SELECT j.job_id,j.job_state,COALESCE(j.placement_wait_reason,''),COALESCE(a.attempt_state,''),COALESCE(q.next_attempt_at,'') FROM race_jobs j LEFT JOIN placement_attempts a ON a.attempt_id=j.current_attempt_id LEFT JOIN dispatch_queue q ON q.attempt_id=a.attempt_id`)
+		if err != nil {
+			t.Log(err)
+			continue
+		}
+		for rows.Next() {
+			var id, state, reason, attempt, next string
+			if rows.Scan(&id, &state, &reason, &attempt, &next) == nil {
+				t.Log(id, state, reason, attempt, next)
+			}
+		}
+		rows.Close()
 	}
 	t.Fatal("automatic worker did not reach the expected persisted state")
 }

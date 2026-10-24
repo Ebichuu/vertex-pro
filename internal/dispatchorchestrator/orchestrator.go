@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/vertex-pro/vertex-pro/internal/db"
 	"github.com/vertex-pro/vertex-pro/internal/dispatchflow"
 	"github.com/vertex-pro/vertex-pro/internal/dispatchworker"
 	"github.com/vertex-pro/vertex-pro/internal/placement"
@@ -23,6 +24,8 @@ import (
 // Add request from the detected profile and the torrent artifact; the
 // orchestrator never inspects artifact bytes.
 type Request struct {
+	// QueueParams is nonempty only for a durable local handoff, with no send.
+	QueueParams string
 	// Placement is the candidate set for this Add. The orchestrator enforces
 	// the profile/capacity gates by requiring exactly one selected candidate.
 	Placement placement.DecisionInput
@@ -86,9 +89,22 @@ func Run(ctx context.Context, database *sql.DB, request Request) (Result, error)
 	}
 
 	request.Reservation.Clock = now
+	if request.QueueParams != "" {
+		request.Reservation.Persist = func(ctx context.Context, tx *db.ImmediateTx) error {
+			w, r := request.Waiter, request.Reservation
+			if _, err := tx.ExecContext(ctx, `INSERT INTO sync_waiters(waiter_id,attempt_id,instance_id,registered_generation,source_snapshot_revision,identity_key,confirmation_deadline,reconciliation_deadline,waiter_state,created_at) VALUES(?,?,?,?,?,?,?,?,'ACTIVE',?)`, w.WaiterID, r.AttemptID, r.InstanceID, w.RegisteredGeneration, w.SourceSnapshotRevision, r.IdentityKey, w.ConfirmationDeadline, w.ReconciliationDeadline, w.CreatedAt); err != nil {
+				return err
+			}
+			_, err := tx.ExecContext(ctx, `INSERT INTO dispatch_queue(attempt_id,job_id,instance_id,params_json,queued_at) VALUES(?,?,?,?,?)`, r.AttemptID, r.JobID, r.InstanceID, request.QueueParams, now().UTC().Format(time.RFC3339Nano))
+			return err
+		}
+	}
 	reserved, err := reservation.ReserveAtomic(ctx, database, request.Reservation)
 	if err != nil {
 		return Result{}, fmt.Errorf("reserve capacity: %w", err)
+	}
+	if request.QueueParams != "" {
+		return Result{ReservationID: reserved.ReservationID, AttemptID: reserved.AttemptID, SubmitIntentID: reserved.SubmitIntentID, WaiterID: request.Waiter.WaiterID, PlacementSelected: true, ReservationState: "ACTIVE", AttemptAfterReserve: "RESERVED"}, nil
 	}
 	request.Waiter.AttemptID = reserved.AttemptID
 	if _, err := syncwaiter.Register(ctx, database, request.Waiter); err != nil {

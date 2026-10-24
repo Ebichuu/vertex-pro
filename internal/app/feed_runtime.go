@@ -10,6 +10,9 @@ import (
 
 func (runtime *Runtime) recordFeedPoll(ctx context.Context, feed schedulercycle.FeedRef, result schedulercycle.Result, pollErr error) error {
 	now := runtime.now().UTC().Format(time.RFC3339Nano)
+	if !result.PolledAt.IsZero() {
+		now = result.PolledAt.UTC().Format(time.RFC3339Nano)
+	}
 	code := ""
 	if pollErr != nil {
 		code = "RSS_FETCH_OR_PARSE_FAILED"
@@ -21,6 +24,11 @@ func (runtime *Runtime) recordFeedPoll(ctx context.Context, feed schedulercycle.
 			return err
 		}
 		if pollErr == nil {
+			if len(result.Outcomes) == 0 && !result.PolledAt.IsZero() {
+				if _, err := tx.ExecContext(ctx, `UPDATE feed_runtime_state SET last_matched=(SELECT count(*) FROM rss_source_consumers c WHERE c.feed_id=feed_runtime_state.feed_id AND c.matched=1 AND julianday(c.discovered_at)>=julianday(feed_runtime_state.last_polled_at)) WHERE feed_id=?`, feed.FeedID); err != nil {
+					return err
+				}
+			}
 			_, err := tx.ExecContext(ctx, `UPDATE feeds SET etag=?,last_modified=? WHERE feed_id=?`, result.ETag, result.LastModified, feed.FeedID)
 			return err
 		}

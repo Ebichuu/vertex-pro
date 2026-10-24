@@ -134,8 +134,13 @@ func TestPendingConsumerRecoversBeforeDailyFeedPoll(t *testing.T) {
 	if fetches.Load() != 1 || downloads.Load() != 2 {
 		t.Fatalf("recovery requests: RSS=%d artifacts=%d", fetches.Load(), downloads.Load())
 	}
-	if after := readPoll(); after != before {
-		t.Fatalf("recovery changed polling state: before=%+v after=%+v", before, after)
+	after := readPoll()
+	if after.Matched != 1 {
+		t.Fatalf("asynchronous match count=%d", after.Matched)
+	}
+	after.Matched = before.Matched
+	if after != before {
+		t.Fatalf("recovery changed RSS request facts: before=%+v after=%+v", before, after)
 	}
 	var state string
 	var attempts, jobCount int

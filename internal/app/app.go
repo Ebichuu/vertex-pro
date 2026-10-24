@@ -132,8 +132,9 @@ type Runtime struct {
 	realtime      *realtimecards.Registry
 	instanceID    string
 	syncMu        sync.Mutex
-	// Protected by syncMu. Ranking may reuse this observation but never its
-	// capacity projection or the final-send authorization.
+	observationMu sync.RWMutex
+	// Protected by observationMu. Published evidence is immutable; capacity
+	// and final-send authorization are always revalidated in the database.
 	selectionEvidence *dispatchstage.Evidence
 	schedulerMu       sync.Mutex
 	now               func() time.Time
@@ -150,6 +151,13 @@ type Runtime struct {
 	children        []*Runtime
 	proxyClient     *proxy.Client
 	startWorkers    func()
+	allocateWake    chan struct{}
+	prepareWake     chan struct{}
+	onObservation   func()
+	preparationMu   sync.Mutex
+	preparing       map[string]int
+	polling         map[string]bool
+	prepareCursor   int
 }
 
 // New opens and validates the database before exposing HTTP traffic. A fresh
@@ -296,7 +304,7 @@ func New(ctx context.Context, config Config) (*Runtime, error) {
 	if config.Retention != nil {
 		snapshotRoot = config.Retention.SnapshotRoot
 	}
-	runtime = &Runtime{Database: database, Auth: auth, Handler: mux, Metrics: metrics.New(), Recovery: recovery, hub: hub, snapshotRoot: snapshotRoot, hardenedOutbound: config.HardenedOutbound, Settings: activeSettings, rssFetcher: feedFetcher}
+	runtime = &Runtime{Database: database, Auth: auth, Handler: mux, Metrics: metrics.New(), Recovery: recovery, hub: hub, snapshotRoot: snapshotRoot, hardenedOutbound: config.HardenedOutbound, Settings: activeSettings, rssFetcher: feedFetcher, allocateWake: make(chan struct{}, 1), prepareWake: make(chan struct{}, 8), preparing: map[string]int{}, polling: map[string]bool{}}
 	runtime.realtime, runtime.now = realtime, now
 	initialized := false
 	defer func() {
@@ -316,7 +324,7 @@ func New(ctx context.Context, config Config) (*Runtime, error) {
 		seenInstances[quiConfig.InstanceID] = true
 		worker := runtime
 		if index > 0 {
-			worker = &Runtime{Database: database, Metrics: runtime.Metrics, hub: hub, realtime: realtime, now: now, Settings: activeSettings, rssFetcher: feedFetcher, hardenedOutbound: config.HardenedOutbound}
+			worker = &Runtime{Database: database, Metrics: runtime.Metrics, hub: hub, realtime: realtime, now: now, Settings: activeSettings, rssFetcher: feedFetcher, hardenedOutbound: config.HardenedOutbound, allocateWake: make(chan struct{}, 1)}
 			runtime.children = append(runtime.children, worker)
 		}
 		stageConfig := quiConfig.DispatchStage
@@ -335,9 +343,11 @@ func New(ctx context.Context, config Config) (*Runtime, error) {
 	}
 	dispatchstage.Connect(stages...)
 	for _, worker := range append([]*Runtime{runtime}, runtime.children...) {
+		worker.onObservation = runtime.wakeDispatch
 		if worker.dispatchStage != nil {
 			w := worker
-			worker.dispatchStage.SetPolicyProvisioner(quipolicy.Service{DB: database, Client: w.controlClient, Instance: w.instanceID, Now: now}.Ensure)
+			cache := newPolicyCache(quipolicy.Service{DB: database, Client: w.controlClient, Instance: w.instanceID, Now: now})
+			worker.dispatchStage.SetPolicyCache(cache.ready, cache.warm)
 		}
 	}
 
@@ -421,7 +431,7 @@ func (runtime *Runtime) RunRetentionSweep(ctx context.Context, policy retention.
 	return result, nil
 }
 
-// Close stops owned read-only workers before releasing the runtime database.
+// Close stops all owned workers before releasing the runtime database.
 // Hub subscribers are closed by their request contexts.
 func (runtime *Runtime) Close() error {
 	if runtime == nil || runtime.Database == nil {
@@ -541,12 +551,23 @@ func (runtime *Runtime) startQui(ctx context.Context, config QuiConfig, dispatch
 		}
 		runtime.Dispatch = dispatch
 		if dispatchStageConfig != nil && dispatchStageConfig.Enabled {
-			stage, err := newDispatchStage(runtime.Database, dispatchStageConfig, proxyClient, profile, now, runtime.hardenedOutbound, runtime.collectDispatchEvidence)
+			stage, err := newDispatchStage(runtime.Database, dispatchStageConfig, proxyClient, profile, now, runtime.hardenedOutbound, runtime.collectCachedEvidence, runtime.rssFetcher)
 			if err != nil {
 				return fmt.Errorf("initialize dispatch stage: %w", err)
 			}
 			runtime.dispatchStage = stage
-			stage.SetSelectionCollector(runtime.collectSelectionEvidence)
+			stage.SetSelectionCollector(runtime.collectCachedEvidence)
+			if config.ProfileVerificationBinding != nil {
+				var raw string
+				if err := runtime.Database.QueryRowContext(ctx, `SELECT MIN(expires_at) FROM profile_verification_runs WHERE campaign_id=? AND profile_id=? AND verification_state='VERIFIED'`, config.ProfileVerificationBinding.CampaignID, profile.ID).Scan(&raw); err != nil {
+					return fmt.Errorf("load verification expiry: %w", err)
+				}
+				at, err := time.Parse(time.RFC3339Nano, raw)
+				if err != nil {
+					return err
+				}
+				stage.SetProfileExpiry(at)
+			}
 		}
 	}
 	if config.ProfileVerificationBinding != nil {
@@ -587,6 +608,9 @@ func (runtime *Runtime) startQui(ctx context.Context, config QuiConfig, dispatch
 	if err := runtime.RefreshMonitoring(ctx, now(), &initialEvent.Snapshot); err != nil {
 		return fmt.Errorf("initialize instance monitoring: %w", err)
 	}
+	if err := runtime.refreshCapacityAt(ctx, now()); err != nil {
+		runtime.Metrics.Inc("vertex_capacity_refresh_errors_total", map[string]string{"instance": runtime.instanceID})
+	}
 	runtime.startWorkers = func() { runtime.startQuiWorkers(config, dispatchStageConfig, now) }
 	return nil
 }
@@ -605,29 +629,7 @@ func (runtime *Runtime) startQuiWorkers(config QuiConfig, dispatchStageConfig *D
 		if dispatchStageConfig.Interval > 0 {
 			stageInterval = dispatchStageConfig.Interval
 		}
-		runtime.workers.Add(1)
-		go func() {
-			defer runtime.workers.Done()
-			ticker := time.NewTicker(stageInterval)
-			defer ticker.Stop()
-			for {
-				select {
-				case <-workerContext.Done():
-					return
-				case <-ticker.C:
-					results, failures, err := runtime.dispatchStage.Run(workerContext)
-					if err != nil {
-						runtime.Metrics.Inc("vertex_dispatch_jobs_total", map[string]string{"result": "error"})
-						continue
-					}
-					for _, result := range results {
-						runtime.Metrics.Inc("vertex_dispatch_jobs_total", map[string]string{"result": "dispatched"})
-						runtime.Metrics.Inc("vertex_capacity_reservations_total", map[string]string{"state": result.ReservationState})
-					}
-					runtime.Metrics.Add("vertex_dispatch_jobs_total", map[string]string{"result": "failed"}, uint64(len(failures)))
-				}
-			}
-		}()
+		runtime.startPipelineWorkers(workerContext, stageInterval)
 	}
 	interval := config.SyncInterval
 	if interval <= 0 {
@@ -649,9 +651,9 @@ func (runtime *Runtime) startQuiWorkers(config QuiConfig, dispatchStageConfig *D
 	}()
 }
 
-// RunSchedulerCycle polls every enabled feed once: fetch, dedupe, download,
-// identify, and match. Job creation is the end of the cycle; dispatching is
-// owned by the dispatch runtime and never happens here.
+// RunSchedulerCycle runs due, unclaimed feeds through discovery and preparation.
+// Background workers may already own a poll or consumer, so returning does not
+// imply all discovered work has finished. It never sends an Add request.
 func (runtime *Runtime) RunSchedulerCycle(ctx context.Context) error {
 	runtime.schedulerMu.Lock()
 	defer runtime.schedulerMu.Unlock()
@@ -663,6 +665,39 @@ func (runtime *Runtime) RunSchedulerCycle(ctx context.Context) error {
 		return err
 	}
 	return runFeedGroups(ctx, feeds, 4, func(ctx context.Context, feed schedulercycle.FeedRef) error {
+		// Manual cycles share cadence ownership with background discovery.
+		runtime.preparationMu.Lock()
+		fresh, err := runtime.databaseEnabledFeeds(ctx)
+		found := false
+		for _, current := range fresh {
+			if current.FeedID == feed.FeedID {
+				feed = current
+				found = true
+				break
+			}
+		}
+		if err != nil || !found {
+			runtime.preparationMu.Unlock()
+			return err
+		}
+		keys := feedBudgetKeys(feed)
+		for _, key := range keys {
+			if runtime.polling[key] {
+				runtime.preparationMu.Unlock()
+				return nil
+			}
+		}
+		for _, key := range keys {
+			runtime.polling[key] = true
+		}
+		runtime.preparationMu.Unlock()
+		defer func() {
+			runtime.preparationMu.Lock()
+			for _, key := range keys {
+				delete(runtime.polling, key)
+			}
+			runtime.preparationMu.Unlock()
+		}()
 		result, err := runtime.scheduler.Run(ctx, feed)
 		if !feed.RecoverOnly {
 			if saveErr := runtime.recordFeedPoll(ctx, feed, result, err); saveErr != nil {
@@ -736,23 +771,24 @@ func (runtime *Runtime) databaseEnabledFeeds(ctx context.Context) ([]schedulercy
 	return feeds, rows.Err()
 }
 
-func newDispatchStage(database *sql.DB, config *DispatchStageConfig, proxyClient *proxy.Client, profile qbprofile.Profile, now func() time.Time, hardened bool, collect func(context.Context) (dispatchstage.Evidence, func(), error)) (*dispatchstage.Stage, error) {
-	downloader, err := torrentdownload.New(torrentdownload.Config{AllowedHosts: config.AllowedArtifactHosts, RejectPrivateIPs: hardened})
+func newDispatchStage(database *sql.DB, config *DispatchStageConfig, proxyClient *proxy.Client, profile qbprofile.Profile, now func() time.Time, hardened bool, collect func(context.Context) (dispatchstage.Evidence, func(), error), fetcher rssfetch.Fetcher) (*dispatchstage.Stage, error) {
+	downloader, err := torrentdownload.New(torrentdownload.Config{Client: fetcher.ArtifactClient(30 * time.Second), AllowedHosts: config.AllowedArtifactHosts, RejectPrivateIPs: hardened})
 	if err != nil {
 		return nil, err
 	}
 	return dispatchstage.New(database, dispatchstage.Config{
-		Storage:    config.Storage,
-		Downloader: downloader,
-		Profile:    profile,
-		Sender:     proxyClient,
-		Now:        now,
-		Collect:    collect,
+		DurableQueue: true,
+		Storage:      config.Storage,
+		Downloader:   downloader,
+		Profile:      profile,
+		Sender:       proxyClient,
+		Now:          now,
+		Collect:      collect,
 	})
 }
 
 func newSchedulerCycle(database *sql.DB, config *SchedulerConfig, instanceID string, fetcher rssfetch.Fetcher, hardened bool) (*schedulercycle.Cycle, error) {
-	downloader, err := torrentdownload.New(torrentdownload.Config{AllowedHosts: config.AllowedArtifactHosts, RejectPrivateIPs: hardened})
+	downloader, err := torrentdownload.New(torrentdownload.Config{Client: fetcher.ArtifactClient(30 * time.Second), AllowedHosts: config.AllowedArtifactHosts, RejectPrivateIPs: hardened})
 	if err != nil {
 		return nil, err
 	}
@@ -814,7 +850,7 @@ func (runtime *Runtime) tickSync(ctx context.Context, now func() time.Time) erro
 	return runtime.tickSyncLocked(ctx, now)
 }
 
-// tickSyncLocked requires syncMu, shared with the pre-Add critical section.
+// tickSyncLocked requires syncMu; durable senders read published observations.
 func (runtime *Runtime) tickSyncLocked(ctx context.Context, now func() time.Time) error {
 	return runtime.syncEvidenceLocked(ctx, now, true)
 }
@@ -822,8 +858,8 @@ func (runtime *Runtime) tickSyncLocked(ctx context.Context, now func() time.Time
 // The pre-Add path retains fresh snapshots, confirmation and capacity facts,
 // but leaves policy shutdown, history and transfer sampling to regular ticks.
 func (runtime *Runtime) syncEvidenceLocked(ctx context.Context, now func() time.Time, background bool) error {
-	// A failed or replaced observation cannot leave a reusable old cache.
-	runtime.selectionEvidence = nil
+	// Keep a validated observation until replacement or failure. Readers still
+	// verify its TTL and exact persisted revision without waiting on syncMu.
 	observedAt := now().UTC()
 	// Policy shutdown must still run when the downloader's snapshot is offline.
 	if background && runtime.controlClient != nil {
@@ -834,6 +870,7 @@ func (runtime *Runtime) syncEvidenceLocked(ctx context.Context, now func() time.
 	state := "READY"
 	event, err := runtime.watcher.RunOnce(ctx)
 	if err != nil {
+		runtime.storeObservation(nil)
 		if errors.Is(err, context.Canceled) {
 			return err
 		}
@@ -867,17 +904,27 @@ func (runtime *Runtime) syncEvidenceLocked(ctx context.Context, now func() time.
 	_ = updateSyncState(ctx, runtime.Database, event.InstanceID, state, now())
 	if background {
 		if err := runtime.observeJobs(ctx, event, now()); err != nil {
-			return err
+			runtime.Metrics.Inc("vertex_job_observation_errors_total", nil)
 		}
 	}
 	if background {
-		if err := runtime.refreshCapacityAt(ctx, observedAt); err != nil {
+		evidence, err := runtime.readCapacityAt(ctx, observedAt)
+		if err == nil && evidence != nil {
+			err = runtime.dispatchStage.RefreshCapacity(ctx, *evidence)
+		}
+		if err != nil {
 			runtime.Metrics.Add("vertex_capacity_refresh_errors_total", map[string]string{"instance": runtime.instanceID}, 1)
 		}
 		if err := runtime.RefreshMonitoring(ctx, now(), &event.Snapshot); err != nil {
-			runtime.selectionEvidence = nil
+			runtime.storeObservation(nil)
 			return err
 		}
+		// Publish only after the control plane confirms the instance is enabled.
+		// Capacity can remain uncertain while positive identity evidence is useful.
+		runtime.storeObservation(evidence)
+	}
+	if background && runtime.onObservation != nil {
+		runtime.onObservation()
 	}
 	return confirmErr
 }

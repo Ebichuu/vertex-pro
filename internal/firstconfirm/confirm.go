@@ -3,6 +3,7 @@ package firstconfirm
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -36,6 +37,7 @@ type Request struct {
 }
 
 type Result struct {
+	Pending       bool
 	Idempotent    bool
 	AttemptID     string
 	JobID         string
@@ -72,6 +74,8 @@ func Confirm(ctx context.Context, database *sql.DB, request Request) (Result, er
 		confirmTarget := "HASH_SEEN"
 		expectedJobState := "AWAITING_CONFIRMATION"
 		switch attemptState {
+		case "ADD_SENT":
+			expectedJobState = "ADD_SENT"
 		case "UNKNOWN":
 			confirmTarget = "RECONCILED_CONFIRMED"
 			expectedJobState = "UNKNOWN"
@@ -98,6 +102,14 @@ func Confirm(ctx context.Context, database *sql.DB, request Request) (Result, er
 		if intentAttempt != request.AttemptID || intentIdentity != request.IdentityKey || strings.TrimSpace(intentInstance) == "" {
 			return fmt.Errorf("%w: submit intent mismatch", ErrNotConfirmable)
 		}
+		var baselineGeneration, baselineRevision int64
+		var baselineDigest, baselineFact string
+		if err := transaction.QueryRowContext(ctx, `SELECT pre_add_sync_generation,pre_add_snapshot_revision,pre_add_snapshot_digest,pre_add_identity_fact FROM submit_intents WHERE submit_intent_id=?`, request.SubmitIntentID).Scan(&baselineGeneration, &baselineRevision, &baselineDigest, &baselineFact); err != nil {
+			return err
+		}
+		if baselineFact != "ABSENT" || baselineGeneration != request.PreAddSyncGeneration || baselineRevision != request.PreAddSnapshotRevision || baselineDigest != request.PreAddSnapshotDigest {
+			return fmt.Errorf("%w: submit baseline mismatch", ErrNotConfirmable)
+		}
 		var jobState string
 		var currentAttempt sql.NullString
 		if err := transaction.QueryRowContext(ctx, `SELECT job_state, current_attempt_id FROM race_jobs WHERE job_id = ?`, request.JobID).Scan(&jobState, &currentAttempt); err != nil {
@@ -115,10 +127,19 @@ func Confirm(ctx context.Context, database *sql.DB, request Request) (Result, er
 		if request.SyncGeneration < request.PreAddSyncGeneration || (request.SyncGeneration == request.PreAddSyncGeneration && request.SnapshotRevision <= request.PreAddSnapshotRevision) || request.SnapshotDigest == request.PreAddSnapshotDigest {
 			return ErrStaleSnapshot
 		}
+		if attemptState == "ADD_SENT" {
+			encoded, err := json.Marshal(request)
+			if err != nil {
+				return err
+			}
+			_, err = transaction.ExecContext(ctx, `INSERT INTO pending_confirmations(attempt_id,evidence_json) VALUES(?,?) ON CONFLICT(attempt_id) DO NOTHING`, request.AttemptID, string(encoded))
+			result.Pending = true
+			return err
+		}
 		if _, err := transaction.ExecContext(ctx, `INSERT INTO capacity_task_bindings(binding_id, storage_target_id, qb_torrent_id, identity_key, owner_kind, reservation_id, amount_left_state, amount_left_error_code, uncertainty_debit_kind, uncertainty_debit_bytes, snapshot_generation, snapshot_revision, snapshot_digest, updated_at) VALUES (?, ?, ?, ?, 'RESERVATION', ?, 'UNKNOWN', 'MISSING_IN_FULL_SNAPSHOT', 'NONE', 0, ?, ?, ?, ?)`, request.BindingID, request.StorageTargetID, request.QBTorrentID, request.IdentityKey, request.ReservationID, request.SyncGeneration, request.SnapshotRevision, request.SnapshotDigest, request.Now.UTC().Format(time.RFC3339)); err != nil {
 			return fmt.Errorf("insert binding: %w", err)
 		}
-		if _, err := transaction.ExecContext(ctx, `UPDATE placement_attempts SET attempt_state=?, side_effect_fact='OBSERVED_EFFECT', qb_torrent_id=?, confirmation_sync_generation=?, confirmation_snapshot_revision=?, confirmation_evidence_digest=?, confirmed_at=? WHERE attempt_id=? AND attempt_state=?`, confirmTarget, request.QBTorrentID, request.SyncGeneration, request.SnapshotRevision, request.EvidenceDigest, request.Now.UTC().Format(time.RFC3339), request.AttemptID, attemptState); err != nil {
+		if _, err := transaction.ExecContext(ctx, `UPDATE placement_attempts SET attempt_state=?, side_effect_fact='OBSERVED_EFFECT', qb_torrent_id=?, confirmation_sync_generation=?, confirmation_snapshot_revision=?, confirmation_evidence_digest=?, confirmed_at=? WHERE attempt_id=? AND attempt_state=?`, confirmTarget, request.QBTorrentID, request.SyncGeneration, request.SnapshotRevision, request.EvidenceDigest, request.Now.UTC().Format(time.RFC3339Nano), request.AttemptID, attemptState); err != nil {
 			return fmt.Errorf("confirm attempt: %w", err)
 		}
 		if _, err := transaction.ExecContext(ctx, `UPDATE race_jobs SET job_state=?, observation_state='ACTIVE', updated_at=? WHERE job_id=? AND job_state=?`, confirmTarget, request.Now.UTC().Format(time.RFC3339), request.JobID, expectedJobState); err != nil {
@@ -141,11 +162,33 @@ func Confirm(ctx context.Context, database *sql.DB, request Request) (Result, er
 // Confirmation and waiter closure must commit together. In particular, a
 // failed binding/event write must leave the waiter available for replay.
 func closeWaiter(ctx context.Context, transaction *db.ImmediateTx, request Request) error {
+	if _, err := transaction.ExecContext(ctx, `DELETE FROM pending_confirmations WHERE attempt_id=?`, request.AttemptID); err != nil {
+		return err
+	}
 	_, err := transaction.ExecContext(ctx, `UPDATE sync_waiters SET waiter_state='CLOSED', closed_at=? WHERE attempt_id=? AND waiter_state='ACTIVE'`, request.Now.UTC().Format(time.RFC3339Nano), request.AttemptID)
 	if err != nil {
 		return fmt.Errorf("close confirmed waiter: %w", err)
 	}
 	return nil
+}
+
+// Replay joins an early durable observation after the HTTP result is committed.
+// A crash at either side is safe: background synchronization also replays it.
+func Replay(ctx context.Context, database *sql.DB, attemptID string) error {
+	var raw string
+	err := database.QueryRowContext(ctx, `SELECT evidence_json FROM pending_confirmations WHERE attempt_id=?`, attemptID).Scan(&raw)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	var request Request
+	if err := json.Unmarshal([]byte(raw), &request); err != nil {
+		return err
+	}
+	_, err = Confirm(ctx, database, request)
+	return err
 }
 
 func validate(request Request) error {

@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -417,7 +418,8 @@ func TestNewRejectsIncompleteStartupSchema(t *testing.T) {
 }
 
 func TestSchedulerCycleCreatesRaceJobsFromEnabledFeeds(t *testing.T) {
-	feedGUID := "guid-1"
+	var feedGUID atomic.Value
+	feedGUID.Store("guid-1")
 	fixtureTorrent := func(name string) []byte {
 		piece := sha1.Sum([]byte{0})
 		var buffer bytes.Buffer
@@ -449,7 +451,7 @@ func TestSchedulerCycleCreatesRaceJobsFromEnabledFeeds(t *testing.T) {
 		case "/proxy/proxy-key/api/v2/sync/maindata":
 			_, _ = response.Write([]byte(`{"rid":1,"full_update":true,"torrents":{}}`))
 		case "/feed.xml":
-			_, _ = response.Write([]byte(fmt.Sprintf(`<?xml version="1.0"?><rss version="2.0"><channel><title>S</title><item><guid>%s</guid><title>Ubuntu Linux 24.04</title><link>%s/ubuntu.torrent</link></item></channel></rss>`, feedGUID, "http://"+request.Host)))
+			_, _ = response.Write([]byte(fmt.Sprintf(`<?xml version="1.0"?><rss version="2.0"><channel><title>S</title><item><guid>%s</guid><title>Ubuntu Linux 24.04</title><link>%s/ubuntu.torrent</link></item></channel></rss>`, feedGUID.Load(), "http://"+request.Host)))
 		case "/ubuntu.torrent":
 			response.Header().Set("Content-Type", "application/x-bittorrent")
 			_, _ = response.Write(fixtureTorrent("Ubuntu Linux 24.04"))
@@ -530,7 +532,13 @@ func TestSchedulerCycleCreatesRaceJobsFromEnabledFeeds(t *testing.T) {
 	if baselineJobs != 0 {
 		t.Fatalf("baseline created %d jobs", baselineJobs)
 	}
-	feedGUID = "guid-2"
+	waitAutomation(t, func() bool {
+		runtime.preparationMu.Lock()
+		defer runtime.preparationMu.Unlock()
+		var initialized int
+		return len(runtime.polling) == 0 && runtime.Database.QueryRow(`SELECT initialized FROM feed_runtime_state WHERE feed_id='feed-1'`).Scan(&initialized) == nil && initialized == 1
+	})
+	feedGUID.Store("guid-2")
 	if _, err := runtime.Database.Exec(`UPDATE feed_runtime_state SET last_polled_at='2000-01-01T00:00:00Z'`); err != nil {
 		t.Fatal(err)
 	}
@@ -545,6 +553,9 @@ func TestSchedulerCycleCreatesRaceJobsFromEnabledFeeds(t *testing.T) {
 		t.Fatal("cycle stored no rss sources")
 	}
 	var jobState, identityKey string
+	waitAutomation(t, func() bool {
+		return runtime.Database.QueryRow(`SELECT job_state, identity_key FROM race_jobs WHERE source_id='site-1/guid:guid-2'`).Scan(&jobState, &identityKey) == nil
+	}, runtime.Database)
 	if err := runtime.Database.QueryRow(`SELECT job_state, identity_key FROM race_jobs WHERE source_id='site-1/guid:guid-2'`).Scan(&jobState, &identityKey); err != nil {
 		t.Fatal(err)
 	}
@@ -565,7 +576,7 @@ func TestSchedulerCycleCreatesRaceJobsFromEnabledFeeds(t *testing.T) {
 }
 
 func TestDispatchStageSendsAddForPreparedJob(t *testing.T) {
-	addCalls := 0
+	var addCalls atomic.Int64
 	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		switch request.URL.Path {
 		case "/feed.xml":
@@ -583,7 +594,7 @@ func TestDispatchStageSendsAddForPreparedJob(t *testing.T) {
 			response.Header().Set("Content-Type", "application/x-bittorrent")
 			_, _ = response.Write(buffer.Bytes())
 		case "/proxy/proxy-key/api/v2/torrents/add":
-			addCalls++
+			addCalls.Add(1)
 			response.WriteHeader(http.StatusOK)
 			_, _ = response.Write([]byte("Ok."))
 		case "/proxy/proxy-key/api/v2/sync/maindata":
@@ -692,9 +703,6 @@ func TestDispatchStageSendsAddForPreparedJob(t *testing.T) {
 	if err := runtime.RunSchedulerCycle(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if addCalls != 0 {
-		t.Fatalf("add calls=%d before dispatch stage", addCalls)
-	}
 	_, failures, err := runtime.dispatchStage.Run(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -702,9 +710,7 @@ func TestDispatchStageSendsAddForPreparedJob(t *testing.T) {
 	if len(failures) != 0 {
 		t.Fatalf("failures=%+v", failures)
 	}
-	if addCalls != 1 {
-		t.Fatalf("add calls=%d, want exactly one", addCalls)
-	}
+	waitAutomation(t, func() bool { return addCalls.Load() == 1 }, runtime.Database)
 	var reserved int64
 	if err := runtime.Database.QueryRow(`SELECT reserved_bytes FROM capacity_reservations`).Scan(&reserved); err != nil {
 		t.Fatal(err)
@@ -713,6 +719,9 @@ func TestDispatchStageSendsAddForPreparedJob(t *testing.T) {
 		t.Fatalf("reserved=%d, want actual torrent size 4096", reserved)
 	}
 	var attemptState, jobState string
+	waitAutomation(t, func() bool {
+		return runtime.Database.QueryRow(`SELECT a.attempt_state, j.job_state FROM placement_attempts a JOIN race_jobs j ON j.job_id=a.job_id WHERE a.attempt_id LIKE 'attempt-%'`).Scan(&attemptState, &jobState) == nil && attemptState == "AWAITING_CONFIRMATION" && jobState == "AWAITING_CONFIRMATION"
+	}, runtime.Database)
 	if err := runtime.Database.QueryRow(`SELECT a.attempt_state, j.job_state FROM placement_attempts a JOIN race_jobs j ON j.job_id=a.job_id WHERE a.attempt_id LIKE 'attempt-%'`).Scan(&attemptState, &jobState); err != nil {
 		t.Fatal(err)
 	}
@@ -823,6 +832,9 @@ func TestMetricsFamiliesStayBounded(t *testing.T) {
 	if err := runtime.TickSync(context.Background()); err != nil {
 		t.Fatal(err)
 	}
+	waitAutomation(t, func() bool {
+		return strings.Contains(runtime.Metrics.Render(), "vertex_rss_items_total{outcome=\"new\"} 1")
+	})
 	rendered := runtime.Metrics.Render()
 	for _, want := range []string{
 		"vertex_rss_feeds_total{result=\"ok\"} 1",

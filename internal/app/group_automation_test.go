@@ -190,7 +190,7 @@ func TestGroupBatchLifecycleAndQuiPolicy(t *testing.T) {
 	t.Setenv("AUTOMATION_CONTROL", "control-key")
 	for _, id := range []string{"2", "7"} {
 		t.Setenv("AUTOMATION_PROXY_"+id, "key-"+id)
-		cfg.QuiInstances = append(cfg.QuiInstances, QuiConfig{BaseURL: server.URL, InstanceID: id, APIKey: secrets.SecretRef{Provider: "env", Key: "AUTOMATION_CONTROL"}, ProxyKey: secrets.SecretRef{Provider: "env", Key: "AUTOMATION_PROXY_" + id}, Store: secrets.EnvStore{}, SnapshotRoot: filepath.Join(dir, "snapshots"), SyncInterval: 20 * time.Millisecond, ProfileVerificationBinding: &binding, VertexCommit: binding.VertexCommit, VertexWorktreeClean: true, EnableDispatch: true, DispatchStage: &DispatchStageConfig{Enabled: true, Storage: dispatchstage.StorageConfig{InstanceID: id, StorageTargetID: "target-" + id, Path: "/managed"}, Interval: 20 * time.Millisecond, AllowedArtifactHosts: cfg.Scheduler.AllowedArtifactHosts}})
+		cfg.QuiInstances = append(cfg.QuiInstances, QuiConfig{BaseURL: server.URL, InstanceID: id, APIKey: secrets.SecretRef{Provider: "env", Key: "AUTOMATION_CONTROL"}, ProxyKey: secrets.SecretRef{Provider: "env", Key: "AUTOMATION_PROXY_" + id}, Store: secrets.EnvStore{}, SnapshotRoot: filepath.Join(dir, "snapshots"), SyncInterval: 200 * time.Millisecond, ProfileVerificationBinding: &binding, VertexCommit: binding.VertexCommit, VertexWorktreeClean: true, EnableDispatch: true, DispatchStage: &DispatchStageConfig{Enabled: true, Storage: dispatchstage.StorageConfig{InstanceID: id, StorageTargetID: "target-" + id, Path: "/managed"}, Interval: 20 * time.Millisecond, AllowedArtifactHosts: cfg.Scheduler.AllowedArtifactHosts}})
 	}
 	runtime, err := New(ctx, cfg)
 	if err != nil {
@@ -206,15 +206,31 @@ func TestGroupBatchLifecycleAndQuiPolicy(t *testing.T) {
 		t.Fatalf("baseline created jobs: %d, %v", count, err)
 	}
 
+	// Open the feed only once both independently prewarmed policy bindings are
+	// ready. A target still warming is deliberately ineligible for allocation.
+	if _, err := runtime.Database.Exec(`UPDATE feeds SET enabled=0 WHERE feed_id='f'`); err != nil {
+		t.Fatal(err)
+	}
+	clock.Add(int64(2 * time.Minute))
+	for _, worker := range append([]*Runtime{runtime}, runtime.children...) {
+		if err := worker.dispatchStage.Warm(ctx); err != nil {
+			t.Fatal(err)
+		}
+		if err := worker.TickSync(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
 	mu.Lock()
 	for i := 0; i < 12; i++ {
 		entries = append(entries, fmt.Sprintf("group-%02d", i))
 	}
 	mu.Unlock()
-	clock.Add(int64(2 * time.Minute))
+	if _, err := runtime.Database.Exec(`UPDATE feeds SET enabled=1 WHERE feed_id='f'`); err != nil {
+		t.Fatal(err)
+	}
 	waitAutomation(t, func() bool {
 		return runtime.Database.QueryRow(`SELECT COUNT(*) FROM race_jobs WHERE job_state='HASH_SEEN'`).Scan(&count) == nil && count == 10
-	})
+	}, runtime.Database)
 	mu.Lock()
 	if adds["2"] == 0 || adds["7"] == 0 || adds["2"]+adds["7"] != 10 || invalidAdd != 0 || unrelatedCalls != 0 {
 		t.Errorf("distribution %v invalid %d unrelated %d", adds, invalidAdd, unrelatedCalls)

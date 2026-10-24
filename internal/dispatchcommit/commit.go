@@ -11,6 +11,7 @@ import (
 	"github.com/vertex-pro/vertex-pro/internal/addfacts"
 	"github.com/vertex-pro/vertex-pro/internal/db"
 	"github.com/vertex-pro/vertex-pro/internal/dispatchworker"
+	"github.com/vertex-pro/vertex-pro/internal/firstconfirm"
 	"github.com/vertex-pro/vertex-pro/internal/reservation"
 )
 
@@ -29,6 +30,7 @@ type BeginRequest struct {
 	WaiterID       string
 	Now            time.Time
 	Clock          func() time.Time
+	Recheck        func(context.Context, *db.ImmediateTx) error
 }
 
 type BeginResult struct {
@@ -111,6 +113,11 @@ func Begin(ctx context.Context, database *sql.DB, request BeginRequest) (BeginRe
 		if err != nil || expired {
 			return err
 		}
+		if request.Recheck != nil {
+			if err := request.Recheck(ctx, transaction); err != nil {
+				return err
+			}
+		}
 
 		timestamp := request.Now.UTC().Format(time.RFC3339Nano)
 		if changed, err := execOne(ctx, transaction, `UPDATE submit_intents SET dispatch_state='STARTED', dispatch_started_at=? WHERE submit_intent_id=? AND attempt_id=? AND dispatch_state='NOT_STARTED'`, timestamp, request.SubmitIntentID, request.AttemptID); err != nil {
@@ -188,6 +195,15 @@ func Record(ctx context.Context, database *sql.DB, request Request) (Result, err
 			result.Idempotent = true
 			return nil
 		}
+		if (attemptState == "HASH_SEEN" || attemptState == "RECONCILED_CONFIRMED") && jobState == attemptState && currentAttempt.Valid && currentAttempt.String == request.AttemptID && attemptDispatch == addfacts.DispatchStarted && currentSideEffect == "OBSERVED_EFFECT" && intentDispatch == addfacts.DispatchStarted {
+			if !responseFactAt.Valid {
+				if _, err := transaction.ExecContext(ctx, `UPDATE submit_intents SET response_fact_at=? WHERE submit_intent_id=? AND response_fact_at IS NULL`, request.Now.UTC().Format(time.RFC3339Nano), request.SubmitIntentID); err != nil {
+					return err
+				}
+			}
+			result.State, result.Idempotent = attemptState, true
+			return nil
+		}
 		if attemptState != AttemptAddSent || attemptDispatch != addfacts.DispatchStarted || currentSideEffect != addfacts.SideEffectPossible || jobState != AttemptAddSent || !currentAttempt.Valid || currentAttempt.String != request.AttemptID || intentDispatch != addfacts.DispatchStarted {
 			return errors.New("DISPATCH_CHAIN_FACT_MISMATCH")
 		}
@@ -202,6 +218,13 @@ func Record(ctx context.Context, database *sql.DB, request Request) (Result, err
 		}
 		if waiterState != "ACTIVE" {
 			return errors.New("SYNC_WAITER_NOT_ACTIVE")
+		}
+		var observed int
+		if err := transaction.QueryRowContext(ctx, `SELECT count(*) FROM pending_confirmations WHERE attempt_id=?`, request.AttemptID).Scan(&observed); err != nil {
+			return err
+		}
+		if observed > 0 && target == AttemptAddFailed {
+			target, sideEffect, result.State = AttemptAwaitingConfirmation, addfacts.SideEffectPossible, AttemptAwaitingConfirmation
 		}
 
 		timestamp := request.Now.UTC().Format(time.RFC3339Nano)
@@ -241,6 +264,9 @@ func Record(ctx context.Context, database *sql.DB, request Request) (Result, err
 	})
 	if err != nil {
 		return Result{}, err
+	}
+	if err := firstconfirm.Replay(ctx, database, request.AttemptID); err != nil {
+		return result, err
 	}
 	return result, nil
 }

@@ -15,6 +15,7 @@ func (runtime *Runtime) startScheduler(config *SchedulerConfig) error {
 		return fmt.Errorf("initialize RSS scheduler: %w", err)
 	}
 	runtime.scheduler = scheduler
+	scheduler.SetClock(runtime.now)
 	// A scheduler may run without qui, to establish baselines and prepare jobs.
 	ctx, cancel := context.WithCancel(context.Background())
 	previousCancel := runtime.cancel
@@ -28,21 +29,8 @@ func (runtime *Runtime) startScheduler(config *SchedulerConfig) error {
 	if interval <= 0 || interval > time.Minute {
 		interval = time.Minute
 	}
-	runtime.workers.Add(1)
-	go func() {
-		defer runtime.workers.Done()
-		_ = runtime.RunSchedulerCycle(ctx)
-		ticker := time.NewTicker(interval)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				_ = runtime.RunSchedulerCycle(ctx)
-			}
-		}
-	}()
+	runtime.startDiscoveryWorkers(ctx, interval)
+	runtime.startPreparationWorkers(ctx)
 	return nil
 }
 
@@ -53,7 +41,7 @@ func (runtime *Runtime) collectDispatchEvidence(ctx context.Context) (dispatchst
 
 func (runtime *Runtime) collectDispatchEvidenceLocked(ctx context.Context) (dispatchstage.Evidence, func(), error) {
 	release := runtime.syncMu.Unlock
-	runtime.selectionEvidence = nil
+	runtime.storeObservation(nil)
 	collectedAt := runtime.now().UTC()
 	if err := runtime.requireEnabledInstance(ctx); err != nil {
 		return dispatchstage.Evidence{}, release, err
@@ -74,22 +62,22 @@ func (runtime *Runtime) collectDispatchEvidenceLocked(ctx context.Context) (disp
 		return dispatchstage.Evidence{}, release, err
 	}
 	evidence := dispatchstage.Evidence{Snapshot: current, Record: record, Preferences: preferences, CollectedAt: collectedAt}
-	runtime.selectionEvidence = &evidence
+	runtime.storeObservation(&evidence)
 	return evidence, release, nil
 }
 
-// Only ranking may reuse evidence. Keep the instance lock through the caller's
-// local projection, and verify that no newer/stale sync replaced the cache.
+// Legacy synchronous callers retain the instance lock through projection.
+// Production pipeline workers use collectCachedEvidence without this lock.
 func (runtime *Runtime) collectSelectionEvidence(ctx context.Context) (dispatchstage.Evidence, func(), error) {
 	runtime.syncMu.Lock()
-	if e := runtime.selectionEvidence; e != nil {
+	if e := runtime.loadObservation(); e != nil {
 		now := runtime.now().UTC()
 		if !e.CollectedAt.IsZero() && !now.Before(e.CollectedAt) && now.Sub(e.CollectedAt) <= 30*time.Second {
 			var state, digest string
 			var generation, revision uint64
 			err := runtime.Database.QueryRowContext(ctx, `SELECT sync_state,sync_generation,snapshot_revision,snapshot_digest FROM sync_instance_state WHERE instance_id=?`, runtime.instanceID).Scan(&state, &generation, &revision, &digest)
 			if err != nil {
-				runtime.selectionEvidence = nil
+				runtime.storeObservation(nil)
 				return dispatchstage.Evidence{}, runtime.syncMu.Unlock, err
 			}
 			if state == "READY" && e.Record.Complete && e.Record.InstanceID == runtime.instanceID &&

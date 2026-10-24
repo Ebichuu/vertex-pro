@@ -42,6 +42,9 @@ type snapshotStateReader interface {
 func (stage *Stage) validateSnapshot(ctx context.Context, reader snapshotStateReader, evidence Evidence) error {
 	storage := stage.config.Storage
 	now := stage.config.Now().UTC()
+	if !stage.config.ProfileExpiresAt.IsZero() && !now.Before(stage.config.ProfileExpiresAt) {
+		return errors.New("profile verification expired")
+	}
 	if !evidence.Record.Complete || evidence.Record.InstanceID != storage.InstanceID || evidence.Record.Digest == "" || evidence.Record.Revision == 0 || evidence.Record.Generation == 0 || evidence.Snapshot.Torrents == nil {
 		return errors.New("complete instance snapshot required")
 	}
@@ -55,6 +58,13 @@ func (stage *Stage) validateSnapshot(ctx context.Context, reader snapshotStateRe
 	}
 	if state != "READY" || uint64(generation) != evidence.Record.Generation || uint64(revision) != evidence.Record.Revision || digest != evidence.Record.Digest {
 		return errors.New("sync changed before placement")
+	}
+	var disabled int
+	if err := reader.QueryRowContext(ctx, `SELECT count(*) FROM instance_metadata WHERE instance_id=? AND enabled=0`, storage.InstanceID).Scan(&disabled); err != nil {
+		return err
+	}
+	if disabled > 0 {
+		return errors.New("instance disabled before placement")
 	}
 	return nil
 }

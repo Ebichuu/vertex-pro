@@ -2,10 +2,12 @@ package confirmcoordinator
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/vertex-pro/vertex-pro/internal/db"
+	"github.com/vertex-pro/vertex-pro/internal/firstconfirm"
 	"github.com/vertex-pro/vertex-pro/internal/unknownreconciler"
 )
 
@@ -15,6 +17,7 @@ func (coordinator *Coordinator) OnSyncUnavailable(ctx context.Context, instanceI
 	if instanceID == "" || now.IsZero() {
 		return nil, fmt.Errorf("instance id and time are required")
 	}
+	replayErr := coordinator.replayPending(ctx, instanceID)
 	if err := coordinator.advanceConfirmationTimeouts(ctx, instanceID, now); err != nil {
 		return nil, err
 	}
@@ -26,7 +29,35 @@ func (coordinator *Coordinator) OnSyncUnavailable(ctx context.Context, instanceI
 	for _, outcome := range resolved {
 		outcomes = append(outcomes, Outcome{AttemptID: outcome.AttemptID, Action: outcome.Outcome})
 	}
-	return outcomes, nil
+	return outcomes, replayErr
+}
+
+func (coordinator *Coordinator) replayPending(ctx context.Context, instanceID string) error {
+	rows, err := coordinator.database.QueryContext(ctx, `SELECT p.attempt_id FROM pending_confirmations p JOIN placement_attempts a ON a.attempt_id=p.attempt_id WHERE a.instance_id=? AND a.attempt_state!='ADD_SENT'`, instanceID)
+	if err != nil {
+		return err
+	}
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return err
+		}
+		ids = append(ids, id)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return err
+	}
+	var failures []error
+	for _, id := range ids {
+		if err := firstconfirm.Replay(ctx, coordinator.database, id); err != nil {
+			failures = append(failures, err)
+		}
+	}
+	return errors.Join(failures...)
 }
 
 func (coordinator *Coordinator) advanceConfirmationTimeouts(ctx context.Context, instanceID string, now time.Time) error {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/vertex-pro/vertex-pro/internal/dispatchorchestrator"
 	"github.com/vertex-pro/vertex-pro/internal/placement"
@@ -12,7 +13,8 @@ import (
 	"github.com/vertex-pro/vertex-pro/internal/ruleaggregate"
 )
 
-// Coordinator serializes selection and dispatch for all configured instances.
+// Coordinator serializes local selection and reservation across instances.
+// Durable senders and background remote refresh never acquire this lock.
 // The reservation transaction remains the final authority across restarts.
 type Coordinator struct {
 	mu     sync.Mutex
@@ -86,6 +88,16 @@ func (c *Coordinator) dispatch(ctx context.Context, origin *Stage, job jobRow) (
 				existing = s
 			}
 		}
+		if err == nil && s.config.DurableQueue && decision.Winner.SeedTimeSeconds > 0 {
+			if s.config.EnsurePolicy == nil {
+				err = fmt.Errorf("POLICY_NOT_READY")
+			} else {
+				_, err = s.config.EnsurePolicy(ctx, decision.Winner)
+			}
+		}
+		if err == nil && s.config.DurableQueue {
+			err = s.sendAdmission(ctx, s.database)
+		}
 		if err == nil {
 			var cap capacityFact
 			cap, err = s.prepareCapacity(ctx, e)
@@ -103,7 +115,15 @@ func (c *Coordinator) dispatch(ctx context.Context, origin *Stage, job jobRow) (
 						candidate.CurrentDownloadLoad++
 					}
 				}
-				err = s.database.QueryRowContext(ctx, `SELECT COUNT(*) FROM placement_attempts WHERE instance_id=? AND attempt_state IN ('RESERVED','ADD_SENT','AWAITING_CONFIRMATION','UNKNOWN','EXPIRED_UNKNOWN')`, id).Scan(&candidate.Inflight)
+				err = s.database.QueryRowContext(ctx, `SELECT COUNT(*) FROM placement_attempts WHERE instance_id=? AND (attempt_state IN ('RESERVED','ADD_SENT','AWAITING_CONFIRMATION') OR (?=0 AND attempt_state IN ('UNKNOWN','EXPIRED_UNKNOWN')))`, id, s.config.DurableQueue).Scan(&candidate.Inflight)
+				if err == nil && s.config.DurableQueue {
+					var unknown int
+					err = s.database.QueryRowContext(ctx, `SELECT COUNT(*) FROM placement_attempts WHERE instance_id=? AND attempt_state IN ('UNKNOWN','EXPIRED_UNKNOWN')`, id).Scan(&unknown)
+					if unknown >= 2 {
+						candidate.CanPlace = false
+					}
+					candidate.CurrentDownloadLoad += int64(unknown)
+				}
 				if err == nil {
 					input.Candidates = append(input.Candidates, candidate)
 					byID[id] = s
@@ -136,7 +156,15 @@ func (s *Stage) SetPolicyProvisioner(fn func(context.Context, ruleaggregate.Matc
 	s.config.EnsurePolicy = fn
 }
 
+func (s *Stage) SetPolicyCache(ready, warm func(context.Context, ruleaggregate.Match) (string, error)) {
+	s.config.EnsurePolicy = ready
+	s.config.WarmPolicy = warm
+}
+
 // SetSelectionCollector must be called before starting workers.
 func (s *Stage) SetSelectionCollector(fn func(context.Context) (Evidence, func(), error)) {
 	s.config.CollectForSelection = fn
 }
+
+// SetProfileExpiry binds startup verification to its persisted expiry.
+func (s *Stage) SetProfileExpiry(at time.Time) { s.config.ProfileExpiresAt = at }

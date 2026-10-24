@@ -61,7 +61,7 @@ func (store *Store) Discover(ctx context.Context, site, feed string, entries []r
 			}
 			// Keep each consumer's original input, including its URL/title/publication.
 			// Another overlapping feed may update the shared source, but not this work.
-			if _, err := tx.ExecContext(ctx, `INSERT INTO rss_source_consumers(site_id,feed_id,source_key,source_json,state,next_attempt_at,deadline_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(site_id,feed_id,source_key) DO NOTHING`, site, feed, source.SourceKey, string(raw), state, stamp(now), stamp(now.Add(rsssource.ConsumerLifetime))); err != nil {
+			if _, err := tx.ExecContext(ctx, `INSERT INTO rss_source_consumers(site_id,feed_id,source_key,source_json,state,next_attempt_at,deadline_at,discovered_at) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(site_id,feed_id,source_key) DO NOTHING`, site, feed, source.SourceKey, string(raw), state, stamp(now), stamp(now.Add(rsssource.ConsumerLifetime)), stamp(now)); err != nil {
 				return err
 			}
 		}
@@ -110,6 +110,11 @@ func (store *Store) Finish(ctx context.Context, work rsssource.Consumer, code st
 			state = "FAILED"
 		}
 	}
-	_, err := store.database.ExecContext(ctx, `UPDATE rss_source_consumers SET state=?,last_error_code=?,next_attempt_at=? WHERE site_id=? AND feed_id=? AND source_key=? AND state='PENDING' AND attempts=?`, state, code, stamp(now.Add(rsssource.ConsumerRetry(work.Attempts))), work.Source.SiteID, work.FeedID, work.Source.SourceKey, work.Attempts)
-	return err
+	return db.RunImmediate(ctx, store.database, func(ctx context.Context, tx *db.ImmediateTx) error {
+		if _, err := tx.ExecContext(ctx, `UPDATE rss_source_consumers SET state=?,last_error_code=?,next_attempt_at=?,matched=? WHERE site_id=? AND feed_id=? AND source_key=? AND state='PENDING' AND attempts=?`, state, code, stamp(now.Add(rsssource.ConsumerRetry(work.Attempts))), work.Matched && code == "", work.Source.SiteID, work.FeedID, work.Source.SourceKey, work.Attempts); err != nil {
+			return err
+		}
+		_, err := tx.ExecContext(ctx, `UPDATE feed_runtime_state SET last_matched=(SELECT count(*) FROM rss_source_consumers c WHERE c.feed_id=feed_runtime_state.feed_id AND c.matched=1 AND julianday(c.discovered_at)>=julianday(feed_runtime_state.last_polled_at)) WHERE feed_id=?`, work.FeedID)
+		return err
+	})
 }

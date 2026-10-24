@@ -115,7 +115,7 @@ func newSelectionFixture(t *testing.T) selectionFixture {
 	t.Helper()
 	f := selectionFixture{database: deadlineDatabase(t), now: time.Date(2026, 10, 23, 12, 0, 0, 0, time.UTC)}
 	body := []byte("d4:infod6:lengthi42e4:name8:file.bin12:piece lengthi16384e6:pieces20:01234567890123456789ee")
-	decision := ruleaggregate.Result{Winner: ruleaggregate.Match{RuleID: "rule", TargetMode: "INSTANCE_GROUP", TargetGroupID: "group-1"}}
+	decision := ruleaggregate.Result{Winner: ruleaggregate.Match{RuleID: "rule", RuleRevision: 1, TargetMode: "INSTANCE_GROUP", TargetGroupID: "group-1"}}
 	seedDeadlineJob(t, f.database, body, "https://example.test/source.torrent", f.now.Add(time.Hour), decision)
 	if err := racejobstore.SaveLegacyArtifact(context.Background(), f.database, "job-1", body, f.now); err != nil {
 		t.Fatal(err)

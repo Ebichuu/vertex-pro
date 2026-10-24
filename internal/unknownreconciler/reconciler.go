@@ -85,6 +85,9 @@ func Sweep(ctx context.Context, database *sql.DB, provider SnapshotProvider, inp
 	}
 	query := `SELECT a.attempt_id, a.job_id, a.instance_id, a.identity_key, a.storage_target_id, s.submit_intent_id, r.reservation_id, w.waiter_id, w.reconciliation_deadline, s.pre_add_sync_generation, s.pre_add_snapshot_revision, s.pre_add_snapshot_digest, s.pre_add_identity_fact FROM placement_attempts a JOIN race_jobs j ON j.job_id = a.job_id AND j.job_state = 'UNKNOWN' AND j.current_attempt_id = a.attempt_id JOIN submit_intents s ON s.attempt_id = a.attempt_id JOIN capacity_reservations r ON r.attempt_id = a.attempt_id AND r.reservation_state = 'ACTIVE' JOIN sync_waiters w ON w.attempt_id = a.attempt_id AND w.waiter_state = 'ACTIVE' WHERE a.attempt_state = 'UNKNOWN'`
 	var args []any
+	// An earlier durable positive observation must not be overwritten by a
+	// later absence while its confirmation transaction is being retried.
+	query += ` AND NOT EXISTS(SELECT 1 FROM pending_confirmations p WHERE p.attempt_id=a.attempt_id)`
 	if input.InstanceID != "" {
 		query += ` AND a.instance_id = ?`
 		args = append(args, input.InstanceID)

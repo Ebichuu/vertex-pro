@@ -11,6 +11,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -55,6 +56,8 @@ func (coordinator *Coordinator) OnSyncEvent(ctx context.Context, event Event, no
 	if event.InstanceID == "" || now.IsZero() {
 		return nil, fmt.Errorf("instance id and time are required")
 	}
+	// Replay persisted observations before timeout transitions or absence sweeps.
+	replayErr := coordinator.replayPending(ctx, event.InstanceID)
 	if err := coordinator.advanceConfirmationTimeouts(ctx, event.InstanceID, now); err != nil {
 		return nil, err
 	}
@@ -63,8 +66,36 @@ func (coordinator *Coordinator) OnSyncEvent(ctx context.Context, event Event, no
 		return nil, fmt.Errorf("restore active waiters: %w", err)
 	}
 	outcomes := make([]Outcome, 0, len(waiters))
+	var failures []error
+	if replayErr != nil {
+		failures = append(failures, replayErr)
+	}
 	for _, waiter := range waiters {
 		outcome := Outcome{WaiterID: waiter.ID, AttemptID: waiter.AttemptID, IdentityKey: waiter.IdentityKey}
+		if err := firstconfirm.Replay(ctx, coordinator.database, waiter.AttemptID); err != nil {
+			failures = append(failures, err)
+			continue
+		}
+		var active int
+		if err := coordinator.database.QueryRowContext(ctx, `SELECT count(*) FROM sync_waiters WHERE waiter_id=? AND waiter_state='ACTIVE'`, waiter.ID).Scan(&active); err != nil {
+			failures = append(failures, err)
+			continue
+		}
+		if active == 0 {
+			outcome.Action = "CONFIRMED"
+			outcomes = append(outcomes, outcome)
+			continue
+		}
+		var state string
+		if err := coordinator.database.QueryRowContext(ctx, `SELECT attempt_state FROM placement_attempts WHERE attempt_id=?`, waiter.AttemptID).Scan(&state); err != nil {
+			failures = append(failures, err)
+			continue
+		}
+		if state == "RESERVED" {
+			outcome.Action = "NOT_STARTED"
+			outcomes = append(outcomes, outcome)
+			continue
+		}
 		_, present := event.Snapshot.Torrents[waiter.IdentityKey]
 		if !present {
 			// Without the identity in the snapshot there is nothing to
@@ -81,20 +112,24 @@ func (coordinator *Coordinator) OnSyncEvent(ctx context.Context, event Event, no
 		}
 		confirmed, err := coordinator.confirm(ctx, waiter, event, now)
 		if err != nil {
-			return nil, err
+			failures = append(failures, err)
+			continue
 		}
 		outcome.Action = "CONFIRMED"
+		if confirmed.Pending {
+			outcome.Action = "OBSERVATION_RECORDED"
+		}
 		outcome.Idempotent = confirmed.Idempotent
 		outcomes = append(outcomes, outcome)
 	}
 	sweepOutcomes, err := coordinator.sweep(ctx, event, now)
 	if err != nil {
-		return nil, err
+		failures = append(failures, err)
 	}
 	for _, sweepOutcome := range sweepOutcomes {
 		outcomes = append(outcomes, Outcome{AttemptID: sweepOutcome.AttemptID, Action: sweepOutcome.Outcome})
 	}
-	return outcomes, nil
+	return outcomes, errors.Join(failures...)
 }
 
 func (coordinator *Coordinator) confirm(ctx context.Context, waiter syncwaiter.Waiter, event Event, now time.Time) (firstconfirm.Result, error) {

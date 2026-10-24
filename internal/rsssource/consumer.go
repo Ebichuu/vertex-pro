@@ -15,6 +15,7 @@ type Consumer struct {
 	FeedID   string
 	Attempts int
 	Deadline time.Time
+	Matched  bool
 }
 
 // ConsumerStore keeps discovery and feed-specific consumption separate. Discover

@@ -85,6 +85,9 @@ func ExpireParticipationTx(ctx context.Context, tx *db.ImmediateTx, jobID string
 		if _, err := tx.ExecContext(ctx, `UPDATE sync_waiters SET waiter_state='CLOSED',closed_at=? WHERE attempt_id=? AND waiter_state='ACTIVE'`, stamp, attempt.String); err != nil {
 			return false, err
 		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM dispatch_queue WHERE attempt_id=?`, attempt.String); err != nil {
+			return false, err
+		}
 		if _, err := tx.ExecContext(ctx, `INSERT INTO race_events(job_id,attempt_id,event_type,from_state,to_state,reason_code,safe_metadata_json,occurred_at) VALUES(?,?,'attempt.state.changed','RESERVED','ADD_FAILED','PARTICIPATION_DEADLINE_EXPIRED','{}',?)`, jobID, attempt.String, stamp); err != nil {
 			return false, err
 		}

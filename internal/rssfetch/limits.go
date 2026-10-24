@@ -34,11 +34,18 @@ func (limits *Limits) acquire(ctx context.Context, host string) (func(), error) 
 		return nil, ctx.Err()
 	}
 	release := func() { <-limits.slots }
+	if err := limits.acquireRate(ctx, host); err != nil {
+		release()
+		return nil, err
+	}
+	return release, nil
+}
+
+func (limits *Limits) acquireRate(ctx context.Context, host string) error {
 	host = strings.ToLower(host)
 	for {
 		if err := ctx.Err(); err != nil {
-			release()
-			return nil, err
+			return err
 		}
 		limits.mu.Lock()
 		now := time.Now()
@@ -51,7 +58,7 @@ func (limits *Limits) acquire(ctx context.Context, host string) (func(), error) 
 			}
 			limits.next[host] = now.Add(limits.interval)
 			limits.mu.Unlock()
-			return release, nil
+			return nil
 		}
 		limits.mu.Unlock()
 		timer := time.NewTimer(wait)
@@ -59,10 +66,34 @@ func (limits *Limits) acquire(ctx context.Context, host string) (func(), error) 
 		case <-timer.C:
 		case <-ctx.Done():
 			timer.Stop()
-			release()
-			return nil, ctx.Err()
+			return ctx.Err()
 		}
 	}
+}
+
+// ArtifactClient shares the upstream request cadence with RSS, including
+// redirects, but uses preparation slots independently of RSS fetch slots.
+func (fetcher Fetcher) ArtifactClient(timeout time.Duration) *http.Client {
+	client := &http.Client{Timeout: timeout}
+	if fetcher.client == nil {
+		return client
+	}
+	if limited, ok := fetcher.client.Transport.(limitedTransport); ok {
+		client.Transport = artifactTransport{base: limited.base, limits: limited.limits}
+	}
+	return client
+}
+
+type artifactTransport struct {
+	base   http.RoundTripper
+	limits *Limits
+}
+
+func (transport artifactTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+	if err := transport.limits.acquireRate(request.Context(), request.URL.Hostname()); err != nil {
+		return nil, err
+	}
+	return transport.base.RoundTrip(request)
 }
 
 func (fetcher Fetcher) WithLimits(limits *Limits) Fetcher {
