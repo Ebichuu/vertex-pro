@@ -64,6 +64,7 @@ func TestSettingsApplyOnRestartToSessionsRetentionAndRSS(t *testing.T) {
 	values := original.Values
 	values.Timezone, values.SessionTTLHours = "Asia/Shanghai", 2
 	values.RSSPollIntervalMinutes, values.RateLimitPerMinute, values.MaxConcurrentRSSFetches = 7, 60, 2
+	values.RequestBurst = 2
 	values.StatsRawRetentionDays, values.StatsHourlyRetentionDays = 2, 4
 	if _, err := service.Update(ctx, original.Revision, values); err != nil {
 		t.Fatal(err)
@@ -123,6 +124,9 @@ func TestSettingsApplyOnRestartToSessionsRetentionAndRSS(t *testing.T) {
 	defer server.Close()
 	if _, err := runtime.rssFetcher.Fetch(ctx, rssfetch.Request{URL: server.URL}); err != nil {
 		t.Fatal(err)
+	}
+	if _, err := runtime.rssFetcher.Fetch(ctx, rssfetch.Request{URL: server.URL}); err != nil {
+		t.Fatal("saved burst was not applied", err)
 	}
 	limited, cancel := context.WithTimeout(ctx, 20*time.Millisecond)
 	defer cancel()

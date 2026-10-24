@@ -199,3 +199,40 @@ func ruleserviceFor(t *testing.T, database *sql.DB) *ruleservice.Service {
 	}
 	return &service
 }
+
+func TestMalformedDownloadURLDoesNotLoseOther29RSSJobs(t *testing.T) {
+	database := cycleDatabase(t)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/rss" {
+			fmt.Fprint(w, `<rss><channel><item><guid>bad</guid><title>Linux bad</title><enclosure url="http://%zz" length="1" type="application/x-bittorrent"/></item>`)
+			for i := 0; i < 29; i++ {
+				fmt.Fprintf(w, `<item><guid>%d</guid><title>Linux %d</title><enclosure url="http://%s/%d.torrent" length="1" type="application/x-bittorrent"/></item>`, i, i, r.Host, i)
+			}
+			fmt.Fprint(w, `</channel></rss>`)
+			return
+		}
+		w.Header().Set("Content-Type", "application/x-bittorrent")
+		w.Write(fixtureTorrent(strings.TrimPrefix(r.URL.Path, "/")))
+	}))
+	defer server.Close()
+	fetcher, _ := rssfetch.New(server.Client(), 1<<20)
+	downloader, _ := torrentdownload.New(torrentdownload.Config{Client: server.Client(), AllowedHosts: []string{strings.TrimPrefix(server.URL, "http://")}})
+	store, _ := rsssourcedb.New(database)
+	dedupe, _ := rsssource.New(store)
+	jobStore, _ := racejobstore.New(database)
+	creator, _ := racejob.New(jobStore, nil)
+	cycle, err := New(fetcher, downloader, dedupe, matchpipeline.Deps{Rules: ruleserviceFor(t, database), JobCreator: creator, MatchFactory: func(r ruleservice.Rule) (ruleaggregate.Match, error) {
+		return ruleaggregate.Match{TargetMode: "FIXED_INSTANCE", TargetInstanceID: "instance-1", ParticipationWindow: time.Hour}, nil
+	}}, 1<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := cycle.Run(context.Background(), FeedRef{SiteID: "site-1", FeedID: "feed-1", URL: server.URL + "/rss"})
+	if err != nil || result.Entries != 30 || result.Invalid != 1 || result.Matched != 29 || result.Failed != 1 || len(result.Failures) != 1 {
+		t.Fatalf("result=%+v err=%v", result, err)
+	}
+	var jobs int
+	if err := database.QueryRow(`SELECT count(*) FROM race_jobs`).Scan(&jobs); err != nil || jobs != 29 {
+		t.Fatalf("jobs=%d err=%v", jobs, err)
+	}
+}

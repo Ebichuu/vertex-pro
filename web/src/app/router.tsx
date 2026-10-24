@@ -77,6 +77,8 @@ function parseFeed(value: unknown, fallbackSiteId: string): Feed {
     updatedAt: typeof raw.updated_at === 'string' ? raw.updated_at : '',
     lastSuccess: typeof raw.last_success_at === 'string' ? raw.last_success_at : null,
     lastError: typeof raw.last_error_code === 'string' && raw.last_error_code ? raw.last_error_code : null,
+    rateWaiting: typeof raw.rate_waiting === 'number' ? raw.rate_waiting : undefined,
+    rateWaitMs: typeof raw.rate_wait_ms === 'number' ? raw.rate_wait_ms : undefined,
     discoveredCount: typeof raw.last_entries === 'number' ? raw.last_entries : 0,
   }
 }

@@ -49,6 +49,34 @@ func allocateQueue(t *testing.T, s *Stage) {
 	}
 }
 
+func TestDurableSenderRecoversReceiptAfterQueueRemoval(t *testing.T) {
+	f, s, calls := durableFixture(t)
+	allocateQueue(t, s)
+	if _, err := f.database.Exec(`CREATE TRIGGER reject_receipt BEFORE UPDATE OF response_fact_at ON submit_intents BEGIN SELECT RAISE(ABORT,'fixture commit failure'); END`); err != nil {
+		t.Fatal(err)
+	}
+	if worked, err := s.SendNext(context.Background()); !worked || err == nil {
+		t.Fatalf("worked=%v err=%v", worked, err)
+	}
+	var queued int
+	if err := f.database.QueryRow(`SELECT COUNT(*) FROM dispatch_queue`).Scan(&queued); err != nil || queued != 0 {
+		t.Fatalf("queue=%d err=%v", queued, err)
+	}
+	if _, err := f.database.Exec(`DROP TRIGGER reject_receipt`); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.RecoverReceipts(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	var state string
+	if err := f.database.QueryRow(`SELECT attempt_state FROM placement_attempts WHERE attempt_id='attempt-job-1'`).Scan(&state); err != nil || state != "AWAITING_CONFIRMATION" {
+		t.Fatalf("state=%s err=%v", state, err)
+	}
+	if worked, err := s.SendNext(context.Background()); worked || err != nil || calls.Load() != 1 {
+		t.Fatalf("worked=%v err=%v calls=%d", worked, err, calls.Load())
+	}
+}
+
 func TestDurableQueueRecoversUnsentButNeverReplaysStarted(t *testing.T) {
 	for _, phase := range []string{"queued", "claimed", "started", "returned"} {
 		t.Run(phase, func(t *testing.T) {

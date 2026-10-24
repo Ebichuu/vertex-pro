@@ -239,7 +239,7 @@ export function SitesRssPage({ initialSites, onChange, onCreateSite, onUpdateFee
                     <td data-label="RSS"><strong>{feed.name}</strong><span className="table-subline">{feed.url}</span></td>
                     <td data-label="状态"><span className={`status-chip tone-${health.tone}`}>{health.label}</span><label className="table-toggle"><input type="checkbox" checked={feed.enabled} onChange={(event) => { void toggleFeed(feed.id, event.target.checked) }} disabled={updatingFeedId === feed.id} />启用</label>{feed.lastError && <span className="table-error">{feed.lastError}</span>}</td>
                     <td data-label="轮询">{formatPollInterval(feed.pollMinutes)}</td>
-                    <td data-label="最近拉取">{feed.lastSuccess ? feed.lastSuccess.slice(0, 10) : '未运行'}</td>
+                    <td data-label="最近拉取">{feed.lastSuccess ? feed.lastSuccess.slice(0, 10) : '未运行'}{typeof feed.rateWaiting === 'number' && <small className="table-subline muted">限流等待 {feed.rateWaiting} 条 · 累计 {((feed.rateWaitMs ?? 0) / 1000).toFixed(1)} 秒</small>}</td>
                     <td data-label="发现">{feed.discoveredCount}</td>
                     <td data-label="操作"><button type="button" className="ghost-button" onClick={() => { void testFeed(feed) }} disabled={testingFeedId === feed.id}>{testingFeedId === feed.id ? '测试中…' : '测试 RSS'}</button>{onArchiveFeed && <button type="button" className="ghost-button" onClick={() => { void archive(selectedSite, feed) }}>删除 RSS</button>}</td>
                   </tr>

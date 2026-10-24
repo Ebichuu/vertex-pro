@@ -16,6 +16,8 @@ func (runtime *Runtime) recordFeedPoll(ctx context.Context, feed schedulercycle.
 	code := ""
 	if pollErr != nil {
 		code = "RSS_FETCH_OR_PARSE_FAILED"
+	} else if result.Invalid > 0 {
+		code = "RSS_ENTRY_INVALID"
 	} else if result.Failed > 0 {
 		code = "RSS_ITEM_PROCESSING_FAILED"
 	}

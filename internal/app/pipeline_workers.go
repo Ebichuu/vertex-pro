@@ -9,6 +9,22 @@ func (r *Runtime) startPipelineWorkers(ctx context.Context, interval time.Durati
 	r.workers.Add(1)
 	go func() {
 		defer r.workers.Done()
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
+		for {
+			if err := r.dispatchStage.RecoverReceipts(ctx); err != nil {
+				r.Metrics.Inc("vertex_receipt_recovery_errors_total", map[string]string{"instance": r.instanceID})
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+			}
+		}
+	}()
+	r.workers.Add(1)
+	go func() {
+		defer r.workers.Done()
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {

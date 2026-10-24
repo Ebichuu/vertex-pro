@@ -119,3 +119,107 @@ func TestLimitsAlsoPaceRedirectRequests(t *testing.T) {
 		t.Fatal("redirect cancellation leaked a slot")
 	}
 }
+
+func TestBurstRespectsRollingBudgetAndRSSReserve(t *testing.T) {
+	limits, _ := NewLimitsWithBurst(5, 2, 5)
+	ctx := context.Background()
+	for range 4 {
+		if err := limits.acquireRate(ctx, "site.example"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	queued, cancel := context.WithTimeout(ctx, 20*time.Millisecond)
+	defer cancel()
+	if err := limits.acquireRate(queued, "site.example"); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatal("torrent consumed RSS reserve", err)
+	}
+	release, err := limits.acquire(ctx, "site.example")
+	if err != nil {
+		t.Fatal(err)
+	}
+	release()
+	limits.mu.Lock()
+	b := limits.hosts["site.example"]
+	// Even a full token refill must not exceed five requests in any minute.
+	at := b.requests[0].Add(59 * time.Second)
+	if delay := limits.delay(b, at, true); delay <= 0 {
+		t.Fatal("rolling-minute cap was bypassed")
+	}
+	if delay := limits.delay(b, b.requests[len(b.requests)-1].Add(time.Minute), true); delay != 0 {
+		t.Fatal("expired requests retained", delay)
+	}
+	limits.mu.Unlock()
+}
+
+func TestQueuedRSSHasPriorityAndCancellationReleasesPriority(t *testing.T) {
+	limits, _ := NewLimitsWithBurst(600, 2, 1)
+	if err := limits.acquireRate(context.Background(), "site.example"); err != nil {
+		t.Fatal(err)
+	}
+	rssCtx, cancel := context.WithCancel(context.Background())
+	waiting := make(chan struct{})
+	rssCtx = WithWaitObserver(rssCtx, func(active bool, _ time.Duration) {
+		if active {
+			close(waiting)
+		}
+	})
+	done := make(chan error, 1)
+	go func() {
+		release, err := limits.acquire(rssCtx, "site.example")
+		if release != nil {
+			release()
+		}
+		done <- err
+	}()
+	<-waiting
+	limits.mu.Lock()
+	b := limits.hosts["site.example"]
+	if delay := limits.delay(b, time.Now().Add(time.Second), false); delay <= 0 {
+		t.Fatal("artifact jumped queued RSS")
+	}
+	limits.mu.Unlock()
+	cancel()
+	<-done
+	limits.mu.Lock()
+	defer limits.mu.Unlock()
+	if b.rssWaiting != 0 || b.waiting != 0 {
+		t.Fatal("cancel leaked priority")
+	}
+}
+
+func TestRateWaitDoesNotConsumeNetworkTimeout(t *testing.T) {
+	limits, _ := NewLimits(600, 1)
+	base := limitTestTransport(func(r *http.Request) (*http.Response, error) {
+		deadline, ok := r.Context().Deadline()
+		if !ok || time.Until(deadline) < 15*time.Millisecond {
+			t.Error("network timeout was spent in limiter")
+		}
+		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader("ok")), Header: make(http.Header)}, nil
+	})
+	fetcher, _ := New(&http.Client{Transport: base, Timeout: 25 * time.Millisecond}, 1024)
+	fetcher = fetcher.WithLimits(limits)
+	for _, artifact := range []bool{false, true} {
+		if err := limits.acquireRate(context.Background(), "site.example"); err != nil {
+			t.Fatal(err)
+		}
+		var elapsed time.Duration
+		ctx := WithWaitObserver(context.Background(), func(waiting bool, d time.Duration) {
+			if !waiting {
+				elapsed += d
+			}
+		})
+		if artifact {
+			req, _ := http.NewRequestWithContext(ctx, "GET", "https://site.example/file", nil)
+			resp, err := fetcher.ArtifactClient(25 * time.Millisecond).Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			resp.Body.Close()
+		} else if _, err := fetcher.Fetch(ctx, Request{URL: "https://site.example/rss"}); err != nil {
+			t.Fatal(err)
+		}
+		if elapsed < 50*time.Millisecond {
+			t.Fatal("rate wait was not observed", elapsed)
+		}
+	}
+}

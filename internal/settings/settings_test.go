@@ -38,12 +38,13 @@ func TestDefaultsAndPersistenceAcrossReopen(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if initial.Timezone != "UTC" || initial.RSSPollIntervalMinutes != 60 || initial.RateLimitPerMinute != 30 || initial.MaxConcurrentRSSFetches != 4 || initial.SessionTTLHours != 24 || initial.StatsRawRetentionDays != 30 || initial.StatsHourlyRetentionDays != 180 || initial.Revision != 1 {
+	if initial.Timezone != "UTC" || initial.RSSPollIntervalMinutes != 60 || initial.RateLimitPerMinute != 30 || initial.RequestBurst != 4 || initial.MaxConcurrentPreparations != 8 || initial.MaxPreparationsPerHost != 2 || initial.MaxConcurrentRSSFetches != 4 || initial.SessionTTLHours != 24 || initial.StatsRawRetentionDays != 30 || initial.StatsHourlyRetentionDays != 180 || initial.Revision != 1 {
 		t.Fatalf("defaults = %+v", initial)
 	}
 	values := initial.Values
 	values.Timezone = " Asia/Shanghai "
 	values.SessionTTLHours = 12
+	values.RequestBurst, values.MaxConcurrentPreparations, values.MaxPreparationsPerHost = 6, 12, 3
 	saved, err := service.Update(context.Background(), initial.Revision, values)
 	if err != nil {
 		t.Fatal(err)
@@ -70,17 +71,20 @@ func TestValidationDoesNotChangeStoredSettings(t *testing.T) {
 		t.Fatal(err)
 	}
 	for name, change := range map[string]func(*Values){
-		"blank zone":       func(v *Values) { v.Timezone = " " },
-		"local zone":       func(v *Values) { v.Timezone = "Local" },
-		"invalid zone":     func(v *Values) { v.Timezone = "Mars/Olympus" },
-		"poll zero":        func(v *Values) { v.RSSPollIntervalMinutes = 0 },
-		"poll high":        func(v *Values) { v.RSSPollIntervalMinutes = 1441 },
-		"rate high":        func(v *Values) { v.RateLimitPerMinute = 601 },
-		"concurrency high": func(v *Values) { v.MaxConcurrentRSSFetches = 33 },
-		"ttl high":         func(v *Values) { v.SessionTTLHours = 721 },
-		"raw negative":     func(v *Values) { v.StatsRawRetentionDays = -1 },
-		"hourly high":      func(v *Values) { v.StatsHourlyRetentionDays = 3651 },
-		"retention order":  func(v *Values) { v.StatsHourlyRetentionDays = 1 },
+		"blank zone":            func(v *Values) { v.Timezone = " " },
+		"local zone":            func(v *Values) { v.Timezone = "Local" },
+		"invalid zone":          func(v *Values) { v.Timezone = "Mars/Olympus" },
+		"poll zero":             func(v *Values) { v.RSSPollIntervalMinutes = 0 },
+		"poll high":             func(v *Values) { v.RSSPollIntervalMinutes = 1441 },
+		"rate high":             func(v *Values) { v.RateLimitPerMinute = 601 },
+		"concurrency high":      func(v *Values) { v.MaxConcurrentRSSFetches = 33 },
+		"burst high":            func(v *Values) { v.RequestBurst = 17 },
+		"preparation zero":      func(v *Values) { v.MaxConcurrentPreparations = 0 },
+		"site preparation high": func(v *Values) { v.MaxPreparationsPerHost = 9 },
+		"ttl high":              func(v *Values) { v.SessionTTLHours = 721 },
+		"raw negative":          func(v *Values) { v.StatsRawRetentionDays = -1 },
+		"hourly high":           func(v *Values) { v.StatsHourlyRetentionDays = 3651 },
+		"retention order":       func(v *Values) { v.StatsHourlyRetentionDays = 1 },
 	} {
 		t.Run(name, func(t *testing.T) {
 			value := initial.Values

@@ -37,6 +37,13 @@ type Result struct {
 	New        []Source
 	Updated    []Source
 	Duplicates int
+	Invalid    []InvalidEntry
+}
+
+// InvalidEntry deliberately excludes URLs, titles and credentials.
+type InvalidEntry struct {
+	Index int
+	Code  string
 }
 
 type Store interface {

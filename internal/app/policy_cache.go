@@ -41,8 +41,12 @@ func (c *policyCache) ready(_ context.Context, m ruleaggregate.Match) (string, e
 func (c *policyCache) warm(ctx context.Context, m ruleaggregate.Match) (string, error) {
 	c.warmMu.Lock()
 	defer c.warmMu.Unlock()
-	if tag, err := c.ready(ctx, m); err == nil {
-		return tag, nil
+	c.mu.Lock()
+	e, ok := c.entries[policyKey(m)]
+	age := c.service.Now().Sub(e.at)
+	c.mu.Unlock()
+	if ok && age >= 0 && age < 20*time.Second {
+		return e.tag, nil
 	}
 	tag, err := c.service.Ensure(ctx, m)
 	c.mu.Lock()
@@ -54,7 +58,7 @@ func (c *policyCache) warm(ctx context.Context, m ruleaggregate.Match) (string, 
 	}
 	if err == nil {
 		c.entries[policyKey(m)] = policyEntry{tag: tag, at: c.service.Now()}
-	} else {
+	} else if errors.Is(err, quipolicy.ErrPolicyInvalid) {
 		delete(c.entries, policyKey(m))
 	}
 	return tag, err

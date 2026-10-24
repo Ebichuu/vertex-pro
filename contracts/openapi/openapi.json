@@ -98,11 +98,14 @@
     "schemas": {
       "SettingsValues": {
         "x-typescript": true, "type": "object", "additionalProperties": false,
-        "required": ["timezone", "rss_poll_interval_minutes", "rate_limit_per_minute", "max_concurrent_rss_fetches", "session_ttl_hours", "stats_raw_retention_days", "stats_hourly_retention_days"],
+        "required": ["timezone", "rss_poll_interval_minutes", "rate_limit_per_minute", "request_burst", "max_concurrent_preparations", "max_preparations_per_host", "max_concurrent_rss_fetches", "session_ttl_hours", "stats_raw_retention_days", "stats_hourly_retention_days"],
         "properties": {
           "timezone": { "type": "string", "minLength": 1, "maxLength": 100, "description": "IANA display timezone. UTC storage and statistics buckets are unchanged." },
           "rss_poll_interval_minutes": { "type": "integer", "minimum": 1, "maximum": 1440 },
-          "rate_limit_per_minute": { "type": "integer", "minimum": 1, "maximum": 600, "description": "Paced RSS requests per target hostname, shared by polling, previews and redirects." },
+          "rate_limit_per_minute": { "type": "integer", "minimum": 1, "maximum": 600, "description": "Rolling-minute request budget per hostname, shared by RSS, torrent preparation and redirects; one request is reserved for RSS when greater than one." },
+          "request_burst": { "type": "integer", "minimum": 1, "maximum": 16, "description": "Token bucket burst, capped by the per-minute budget. Default 4." },
+          "max_concurrent_preparations": { "type": "integer", "minimum": 1, "maximum": 32, "description": "Independent torrent preparation workers. Default 8." },
+          "max_preparations_per_host": { "type": "integer", "minimum": 1, "maximum": 8, "description": "Preparation concurrency per site and hostname. Default 2." },
           "max_concurrent_rss_fetches": { "type": "integer", "minimum": 1, "maximum": 32 },
           "session_ttl_hours": { "type": "integer", "minimum": 1, "maximum": 720, "description": "Used for new logins after restart; existing sessions keep their expiry." },
           "stats_raw_retention_days": { "type": "integer", "minimum": 1, "maximum": 3650 },

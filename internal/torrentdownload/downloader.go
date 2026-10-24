@@ -83,6 +83,9 @@ func New(config Config) (*Downloader, error) {
 		resolver = outbound.DefaultResolver{}
 	}
 	client.CheckRedirect = func(request *http.Request, via []*http.Request) error {
+		if len(via) >= 10 {
+			return errors.New("too many torrent redirects")
+		}
 		parsed, err := parseAllowedURL(request.URL.String(), hosts)
 		if err != nil {
 			return err

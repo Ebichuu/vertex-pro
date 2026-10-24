@@ -13,6 +13,9 @@ export function validateSettings(values: SettingsValues): SettingsErrors {
   const limits = [
     ['rss_poll_interval_minutes', 1440, 'RSS 轮询间隔', '分钟'],
     ['rate_limit_per_minute', 600, '站点请求限流', '次/分钟'],
+    ['request_burst', 16, '短时突发额度', '次'],
+    ['max_concurrent_preparations', 32, '种子准备并发数', ''],
+    ['max_preparations_per_host', 8, '同站点准备并发数', ''],
     ['max_concurrent_rss_fetches', 32, '并发 RSS 请求数', ''],
     ['session_ttl_hours', 720, '管理员会话有效期', '小时'],
     ['stats_raw_retention_days', 3650, '原始统计保留期', '天'],

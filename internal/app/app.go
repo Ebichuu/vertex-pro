@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/vertex-pro/vertex-pro/internal/adminauth"
@@ -41,6 +42,7 @@ import (
 	"github.com/vertex-pro/vertex-pro/internal/snapshot"
 	"github.com/vertex-pro/vertex-pro/internal/sseserver"
 	"github.com/vertex-pro/vertex-pro/internal/startuprecover"
+	"github.com/vertex-pro/vertex-pro/internal/syncmerge"
 	"github.com/vertex-pro/vertex-pro/internal/syncwatcher"
 	"github.com/vertex-pro/vertex-pro/internal/torrentdownload"
 	"github.com/vertex-pro/vertex-pro/internal/webembed"
@@ -136,6 +138,7 @@ type Runtime struct {
 	// Protected by observationMu. Published evidence is immutable; capacity
 	// and final-send authorization are always revalidated in the database.
 	selectionEvidence *dispatchstage.Evidence
+	monitorSnapshot   atomic.Pointer[syncmerge.Snapshot]
 	schedulerMu       sync.Mutex
 	now               func() time.Time
 	confirmations     *confirmcoordinator.Coordinator
@@ -245,7 +248,7 @@ func New(ctx context.Context, config Config) (*Runtime, error) {
 		return nil, err
 	}
 	feedFetcher = feedFetcher.WithBoundary(boundary)
-	limits, err := rssfetch.NewLimits(activeSettings.RateLimitPerMinute, activeSettings.MaxConcurrentRSSFetches)
+	limits, err := rssfetch.NewLimitsWithBurst(activeSettings.RateLimitPerMinute, activeSettings.MaxConcurrentRSSFetches, activeSettings.RequestBurst)
 	if err != nil {
 		return nil, err
 	}
@@ -517,9 +520,6 @@ func (runtime *Runtime) startQui(ctx context.Context, config QuiConfig, dispatch
 	if !found {
 		return fmt.Errorf("qui instance %s was not found", config.InstanceID)
 	}
-	if _, err := controlClient.TransferInfo(ctx, config.InstanceID); err != nil {
-		return fmt.Errorf("read qui transfer info: %w", err)
-	}
 	if _, err := controlClient.Capabilities(ctx, config.InstanceID); err != nil {
 		return fmt.Errorf("read qui capabilities: %w", err)
 	}
@@ -595,6 +595,7 @@ func (runtime *Runtime) startQui(ctx context.Context, config QuiConfig, dispatch
 	if err != nil {
 		return fmt.Errorf("initialize qui sync: %w", err)
 	}
+	runtime.monitorSnapshot.Store(&initialEvent.Snapshot)
 	if err := updateSyncState(ctx, runtime.Database, config.InstanceID, "READY", now()); err != nil {
 		return err
 	}
@@ -605,8 +606,8 @@ func (runtime *Runtime) startQui(ctx context.Context, config QuiConfig, dispatch
 	runtime.confirmations = confirmations
 	runtime.Profile = &profile
 	runtime.watcher = watcher
-	if err := runtime.RefreshMonitoring(ctx, now(), &initialEvent.Snapshot); err != nil {
-		return fmt.Errorf("initialize instance monitoring: %w", err)
+	if err := runtime.refreshInstanceMetadata(ctx, now()); err != nil {
+		return fmt.Errorf("initialize instance availability: %w", err)
 	}
 	if err := runtime.refreshCapacityAt(ctx, now()); err != nil {
 		runtime.Metrics.Inc("vertex_capacity_refresh_errors_total", map[string]string{"instance": runtime.instanceID})
@@ -635,6 +636,7 @@ func (runtime *Runtime) startQuiWorkers(config QuiConfig, dispatchStageConfig *D
 	if interval <= 0 {
 		interval = 10 * time.Second
 	}
+	runtime.startMonitoringWorker(workerContext, interval)
 	runtime.workers.Add(1)
 	go func() {
 		defer runtime.workers.Done()
@@ -861,11 +863,19 @@ func (runtime *Runtime) syncEvidenceLocked(ctx context.Context, now func() time.
 	// Keep a validated observation until replacement or failure. Readers still
 	// verify its TTL and exact persisted revision without waiting on syncMu.
 	observedAt := now().UTC()
-	// Policy shutdown must still run when the downloader's snapshot is offline.
+	// Fetch availability before publishing a new snapshot revision. Optional
+	// monitoring and policy shutdown run independently of this sync worker.
 	if background && runtime.controlClient != nil {
-		if err := (quipolicy.Service{DB: runtime.Database, Client: runtime.controlClient, Instance: runtime.instanceID, Now: runtime.now}).SyncDisabled(ctx); err != nil {
-			runtime.Metrics.Add("vertex_policy_sync_errors_total", map[string]string{"instance": runtime.instanceID}, 1)
+		if err := runtime.refreshInstanceMetadata(ctx, observedAt); err != nil {
+			runtime.storeObservation(nil)
+			_, deadlineErr := runtime.confirmations.OnSyncUnavailable(ctx, runtime.instanceID, now())
+			return errors.Join(err, deadlineErr)
 		}
+	}
+	var preferences map[string]any
+	var preferenceErr error
+	if background && runtime.dispatchStage != nil {
+		preferences, preferenceErr = runtime.proxyClient.Preferences(ctx)
 	}
 	state := "READY"
 	event, err := runtime.watcher.RunOnce(ctx)
@@ -884,6 +894,7 @@ func (runtime *Runtime) syncEvidenceLocked(ctx context.Context, now func() time.
 		}
 		return errors.Join(err, deadlineErr)
 	}
+	runtime.monitorSnapshot.Store(&event.Snapshot)
 	// The confirmation coordinator only touches chains created by the
 	// dispatcher; a failed cycle is retried on the next tick because every
 	// operation it performs is idempotent.
@@ -908,18 +919,17 @@ func (runtime *Runtime) syncEvidenceLocked(ctx context.Context, now func() time.
 		}
 	}
 	if background {
-		evidence, err := runtime.readCapacityAt(ctx, observedAt)
+		evidence, err := runtime.capacityFromPreferences(ctx, observedAt, preferences)
+		if preferenceErr != nil {
+			evidence, err = nil, preferenceErr
+		}
 		if err == nil && evidence != nil {
 			err = runtime.dispatchStage.RefreshCapacity(ctx, *evidence)
 		}
 		if err != nil {
 			runtime.Metrics.Add("vertex_capacity_refresh_errors_total", map[string]string{"instance": runtime.instanceID}, 1)
 		}
-		if err := runtime.RefreshMonitoring(ctx, now(), &event.Snapshot); err != nil {
-			runtime.storeObservation(nil)
-			return err
-		}
-		// Publish only after the control plane confirms the instance is enabled.
+		// The control plane already confirmed the instance is enabled.
 		// Capacity can remain uncertain while positive identity evidence is useful.
 		runtime.storeObservation(evidence)
 	}

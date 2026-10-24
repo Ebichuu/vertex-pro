@@ -63,7 +63,7 @@ func (r *Runtime) startDiscoveryWorkers(ctx context.Context, interval time.Durat
 						status = "error"
 					}
 					r.Metrics.Inc("vertex_rss_feeds_total", map[string]string{"result": status})
-					for outcome, count := range map[string]int{"new": result.New, "updated": result.Updated, "duplicate": result.Duplicates, "skipped": result.Skipped} {
+					for outcome, count := range map[string]int{"new": result.New, "updated": result.Updated, "duplicate": result.Duplicates, "skipped": result.Skipped, "invalid": result.Invalid} {
 						if count > 0 {
 							r.Metrics.Add("vertex_rss_items_total", map[string]string{"outcome": outcome}, uint64(count))
 						}
@@ -74,7 +74,7 @@ func (r *Runtime) startDiscoveryWorkers(ctx context.Context, interval time.Durat
 					}
 					r.preparationMu.Unlock()
 					if saveErr == nil {
-						for i := 0; i < 8; i++ {
+						for i := 0; i < r.Settings.MaxConcurrentPreparations; i++ {
 							select {
 							case r.prepareWake <- struct{}{}:
 							default:
@@ -114,7 +114,7 @@ func (r *Runtime) preparationFeeds(ctx context.Context) ([]schedulercycle.FeedRe
 }
 
 func (r *Runtime) startPreparationWorkers(ctx context.Context) {
-	for i := 0; i < 8; i++ {
+	for i := 0; i < r.Settings.MaxConcurrentPreparations; i++ {
 		r.workers.Add(1)
 		go func() {
 			defer r.workers.Done()
@@ -133,7 +133,7 @@ func (r *Runtime) startPreparationWorkers(ctx context.Context) {
 						feed := feeds[index]
 						available := true
 						for _, key := range feedBudgetKeys(feed) {
-							available = available && r.preparing[key] < 2
+							available = available && r.preparing[key] < r.Settings.MaxPreparationsPerHost
 						}
 						if available {
 							f := feed

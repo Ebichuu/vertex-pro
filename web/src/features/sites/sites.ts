@@ -18,6 +18,8 @@ export type Feed = {
   lastSuccess: string | null
   lastError: string | null
   discoveredCount: number
+  rateWaiting?: number
+  rateWaitMs?: number
   updatedAt?: string
 }
 
@@ -90,6 +92,7 @@ export function formatPollInterval(minutes: number): string {
 
 export function formatFeedHealth(feed: Feed): { label: string; tone: 'ok' | 'warn' | 'bad' } {
   if (!feed.enabled) return { label: '已停用', tone: 'warn' }
+  if (feed.lastError === 'RSS_ENTRY_INVALID') return { label: '部分条目无效', tone: 'warn' }
   if (feed.lastError) return { label: '最近失败', tone: 'bad' }
   if (feed.lastSuccess) return { label: '运行正常', tone: 'ok' }
   return { label: '等待首次拉取', tone: 'warn' }

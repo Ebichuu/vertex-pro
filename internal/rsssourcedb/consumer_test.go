@@ -3,7 +3,9 @@ package rsssourcedb
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -71,13 +73,21 @@ func TestConsumerDiscoveryAtomicAndFeedScoped(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now()
 	entry := rsssource.Entry{GUID: "new", Title: "A", URL: "https://site.example/a.torrent", PublishedAt: "2026-10-23T00:00:00Z"}
-	if _, err := store.Discover(ctx, "site-1", "a", []rsssource.Entry{entry, {URL: "invalid"}}, false, now); err == nil {
-		t.Fatal("expected invalid entry")
+	result, err := store.Discover(ctx, "site-1", "a", []rsssource.Entry{entry, {URL: "http://%zz?passkey=private-test-value"}}, false, now)
+	if err != nil || len(result.New) != 1 || len(result.Invalid) != 1 || result.Invalid[0].Index != 1 {
+		t.Fatalf("result=%+v err=%v", result, err)
 	}
 	var n int
 	database.QueryRow(`SELECT COUNT(*) FROM rss_sources`).Scan(&n)
-	if n != 0 {
-		t.Fatal("partial discovery committed")
+	if n != 1 {
+		t.Fatal("valid entry was lost")
+	}
+	var event string
+	if err := database.QueryRow(`SELECT safe_message||safe_data_json FROM system_events WHERE code='RSS_ENTRY_INVALID'`).Scan(&event); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(event, "passkey") || strings.Contains(event, "private-test-value") {
+		t.Fatal("invalid input leaked into event")
 	}
 	if _, err := store.Discover(ctx, "site-1", "a", []rsssource.Entry{entry}, false, now); err != nil {
 		t.Fatal(err)
@@ -109,6 +119,41 @@ func TestConsumerDiscoveryAtomicAndFeedScoped(t *testing.T) {
 	}
 	if work, err := store.Claim(ctx, "site-1", "a", now.Add(time.Hour)); err != nil || work != nil {
 		t.Fatal("DONE source was replayed")
+	}
+}
+
+func TestDiscoveryKeeps29ValidEntriesAndRollsBackDatabaseFailure(t *testing.T) {
+	for _, dbFailure := range []bool{false, true} {
+		t.Run(fmt.Sprint(dbFailure), func(t *testing.T) {
+			database := storeDatabase(t)
+			consumerFeeds(t, database)
+			store, _ := New(database)
+			entries := []rsssource.Entry{{URL: "http://%zz"}}
+			for i := 0; i < 29; i++ {
+				entries = append(entries, rsssource.Entry{GUID: fmt.Sprint(i), URL: fmt.Sprintf("https://site.example/%d", i)})
+			}
+			if dbFailure {
+				if _, err := database.Exec(`CREATE TRIGGER reject_consumer BEFORE INSERT ON rss_source_consumers WHEN NEW.source_key='guid:15' BEGIN SELECT RAISE(ABORT,'fixture write failure'); END`); err != nil {
+					t.Fatal(err)
+				}
+			}
+			result, err := store.Discover(context.Background(), "site-1", "a", entries, false, time.Now())
+			want := 29
+			if dbFailure {
+				want = 0
+				if err == nil || len(result.New) != 0 {
+					t.Fatal("failed transaction reported success")
+				}
+			} else if err != nil || len(result.Invalid) != 1 {
+				t.Fatal(err, result)
+			}
+			for _, table := range []string{"rss_sources", "rss_source_consumers"} {
+				var n int
+				if err := database.QueryRow(`SELECT COUNT(*) FROM ` + table).Scan(&n); err != nil || n != want {
+					t.Fatalf("%s count=%d err=%v", table, n, err)
+				}
+			}
+		})
 	}
 }
 

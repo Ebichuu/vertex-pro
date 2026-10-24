@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"testing"
 	"time"
@@ -15,11 +16,16 @@ import (
 type cachePolicyClient struct {
 	list          []control.Automation
 	reads, writes int
+	err           error
+	onRead        func()
 }
 
 func (c *cachePolicyClient) Automations(context.Context, string) ([]control.Automation, error) {
 	c.reads++
-	return c.list, nil
+	if c.onRead != nil {
+		c.onRead()
+	}
+	return c.list, c.err
 }
 func (c *cachePolicyClient) SaveAutomation(_ context.Context, _ string, a control.Automation) (control.Automation, error) {
 	c.writes++
@@ -76,8 +82,31 @@ func TestPolicyCachePrewarmIsLocalAndExternalDriftFailsClosed(t *testing.T) {
 	if client.writes != writes {
 		t.Fatal("unchanged remote policy was rewritten")
 	}
+	// Refresh at 20 seconds while the previous entry remains usable.
+	now = now.Add(20 * time.Second)
+	client.onRead = func() {
+		if _, err := cache.ready(ctx, match); err != nil {
+			t.Fatal("refresh blocked unexpired cache", err)
+		}
+	}
+	client.err = errors.New("temporary transport error")
+	if _, err := cache.warm(ctx, match); err == nil {
+		t.Fatal("expected transport error")
+	}
+	if _, err := cache.ready(ctx, match); err != nil {
+		t.Fatal("transient error discarded valid entry", err)
+	}
+	client.onRead = nil
+	now = now.Add(11 * time.Second)
+	if _, err := cache.ready(ctx, match); err == nil {
+		t.Fatal("transient failure extended hard TTL")
+	}
+	client.err = nil
+	if _, err := cache.warm(ctx, match); err != nil {
+		t.Fatal(err)
+	}
 	client.list[0].Enabled = false
-	now = now.Add(31 * time.Second)
+	now = now.Add(20 * time.Second)
 	if _, err := cache.warm(ctx, match); err == nil {
 		t.Fatal("external disable was accepted")
 	}

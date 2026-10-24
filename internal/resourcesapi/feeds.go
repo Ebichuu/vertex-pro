@@ -214,6 +214,18 @@ func (d Deps) feedRuntimePayload(request *http.Request, feed rssservice.Feed) ma
 	} else if err != sql.ErrNoRows {
 		payload["last_error_code"] = "RUNTIME_STATUS_UNAVAILABLE"
 	}
+	var waiting int
+	var waitMS int64
+	// Ignore expired claims after a process exit. Current waits are clamped to
+	// the claim lease; completed durations remain available for this poll.
+	now := d.currentTime().Format(time.RFC3339Nano)
+	err = d.Database.QueryRowContext(request.Context(), `SELECT COALESCE(SUM(CASE WHEN c.state='PENDING' AND c.rate_wait_started_at IS NOT NULL AND julianday(c.next_attempt_at)>julianday(?) THEN 1 ELSE 0 END),0),COALESCE(SUM(c.rate_wait_ms+CASE WHEN c.rate_wait_started_at IS NOT NULL THEN max(0,CAST((min(julianday(?),julianday(c.next_attempt_at))-julianday(c.rate_wait_started_at))*86400000 AS INTEGER)) ELSE 0 END),0) FROM rss_source_consumers c JOIN feed_runtime_state r ON r.feed_id=c.feed_id WHERE c.feed_id=? AND (c.state='PENDING' OR julianday(c.discovered_at)>=julianday(r.last_polled_at))`, now, now, feed.ID).Scan(&waiting, &waitMS)
+	if err == nil {
+		payload["rate_waiting"] = waiting
+		payload["rate_wait_ms"] = waitMS
+	} else {
+		payload["rate_waiting"], payload["rate_wait_ms"] = nil, nil
+	}
 	return payload
 }
 

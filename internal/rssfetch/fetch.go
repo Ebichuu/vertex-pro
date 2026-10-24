@@ -55,6 +55,9 @@ type Fetcher struct {
 func (fetcher Fetcher) WithBoundary(boundary Boundary) Fetcher {
 	client := *fetcher.client
 	client.CheckRedirect = func(request *http.Request, via []*http.Request) error {
+		if len(via) >= 10 {
+			return errors.New("too many RSS redirects")
+		}
 		parsed, err := url.Parse(request.URL.String())
 		if err != nil {
 			return fmt.Errorf("parse redirect target: %w", err)

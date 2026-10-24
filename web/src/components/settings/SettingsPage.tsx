@@ -164,7 +164,10 @@ export function SettingsPage({ loadSettings, saveSettings, downloadDiagnostics, 
           <fieldset disabled={saving || !canSave}>
             <legend className="settings-section-title">限流</legend>
             <div className="settings-form-grid">
-              {input('rate_limit_per_minute', '站点请求上限（次/分钟）', '同一目标主机的轮询和手动测试共享预算', 600)}
+          {input('rate_limit_per_minute', '站点请求上限（次/分钟）', 'RSS、种子获取及重定向共享滚动一分钟预算；大于 1 时为 RSS 保留 1 次', 600)}
+          {input('request_burst', '短时突发额度（次）', '允许集中获取少量种子，仍受每分钟预算限制；请按站点要求设置', 16)}
+          {input('max_concurrent_preparations', '种子准备并发数', '独立于 RSS 轮询并发，默认 8', 32)}
+          {input('max_preparations_per_host', '同站点准备并发数', '同一站点或主机共享此并发上限，默认 2', 8)}
               {input('max_concurrent_rss_fetches', '并发 RSS 请求数', '所有站点共享上限，达到上限后等待空位', 32)}
             </div>
           </fieldset>

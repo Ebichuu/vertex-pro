@@ -32,6 +32,7 @@ type selectionFixture struct {
 	instances, sync, preferences, transfers atomic.Int32
 	fail                                    atomic.Int32 // 1: instances, 2: sync, 3: preferences, 4: transfer
 	disabled                                atomic.Bool
+	blockTransfer                           atomic.Bool
 }
 
 func newSelectionFixture(t *testing.T, withStage bool) *selectionFixture {
@@ -50,6 +51,10 @@ func newSelectionFixture(t *testing.T, withStage bool) *selectionFixture {
 			fmt.Fprintf(w, `[{"id":2,"name":"selected","enabled":%t}]`, !f.disabled.Load())
 		case "/api/instances/2/transfer-info":
 			f.transfers.Add(1)
+			if f.blockTransfer.Load() {
+				<-r.Context().Done()
+				return
+			}
 			if f.fail.Load() == 4 {
 				w.WriteHeader(http.StatusServiceUnavailable)
 				return
@@ -279,7 +284,7 @@ func TestBackgroundSyncWarmsSelectionCacheWithCapacityEvidence(t *testing.T) {
 	if err := f.runtime.TickSync(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	f.assertCounts(t, selectionRequests{1, 1, 1, 1})
+	f.assertCounts(t, selectionRequests{1, 1, 1, 0})
 	var state string
 	var free int64
 	if err := f.runtime.Database.QueryRow(`SELECT capacity_state,effective_free_bytes FROM capacity_epochs WHERE storage_target_id='managed'`).Scan(&state, &free); err != nil {
@@ -294,15 +299,18 @@ func TestBackgroundSyncWarmsSelectionCacheWithCapacityEvidence(t *testing.T) {
 	if !warmed.CollectedAt.Equal(observedAt) {
 		t.Fatal("background evidence was not reused at its original collection time")
 	}
-	f.assertCounts(t, selectionRequests{1, 1, 1, 1})
+	f.assertCounts(t, selectionRequests{1, 1, 1, 0})
 	f.mustCollect(t, true)
-	f.assertCounts(t, selectionRequests{2, 2, 2, 1})
+	f.assertCounts(t, selectionRequests{2, 2, 2, 0})
 }
 
-func TestBackgroundMonitoringFailureKeepsCapacityRefreshButClearsCache(t *testing.T) {
+func TestBackgroundMonitoringFailureDoesNotClearDispatchCache(t *testing.T) {
 	f := newSelectionFixture(t, true)
 	f.fail.Store(4)
-	if err := f.runtime.TickSync(context.Background()); err == nil {
+	if err := f.runtime.TickSync(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.runtime.refreshTransferMonitoring(context.Background(), f.now, nil); err == nil {
 		t.Fatal("monitoring failure was not reported")
 	}
 	f.assertCounts(t, selectionRequests{1, 1, 1, 1})
@@ -314,10 +322,44 @@ func TestBackgroundMonitoringFailureKeepsCapacityRefreshButClearsCache(t *testin
 	if state != "TRUSTED" || free != 1024 {
 		t.Fatalf("monitoring failure prevented capacity refresh: state=%s free=%d", state, free)
 	}
-	if f.runtime.selectionEvidence != nil {
-		t.Fatal("monitoring failure left cached selection evidence")
+	// This is the production cache-only gate, not the legacy live collector.
+	if _, release, err := f.runtime.collectCachedEvidence(context.Background()); err != nil {
+		t.Fatal(err)
+	} else if release != nil {
+		release()
 	}
-	// Placement recovers live evidence independently of transfer-info sampling.
-	f.mustCollect(t, false)
-	f.assertCounts(t, selectionRequests{2, 2, 2, 1})
+	f.assertCounts(t, selectionRequests{1, 1, 1, 1})
+}
+
+func TestBlockedMonitoringDoesNotDelaySyncPublication(t *testing.T) {
+	f := newSelectionFixture(t, true)
+	f.blockTransfer.Store(true)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- f.runtime.refreshTransferMonitoring(ctx, f.now, nil) }()
+	deadline := time.Now().Add(time.Second)
+	for f.transfers.Load() == 0 && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if f.transfers.Load() == 0 {
+		t.Fatal("monitoring did not start")
+	}
+	syncCtx, stop := context.WithTimeout(context.Background(), time.Second)
+	defer stop()
+	for range 2 {
+		if err := f.runtime.TickSync(syncCtx); err != nil {
+			t.Fatal(err)
+		}
+		if _, release, err := f.runtime.collectCachedEvidence(syncCtx); err != nil {
+			t.Fatal(err)
+		} else if release != nil {
+			release()
+		}
+	}
+	if f.runtime.monitorSnapshot.Load() == nil {
+		t.Fatal("monitoring snapshot not published")
+	}
+	cancel()
+	<-done
 }

@@ -5,6 +5,7 @@ import { validateSettings } from '../features/settings/validation'
 export function settingsFixture(values: Partial<SettingsValues> = {}): SettingsResponse {
   const defaults: SettingsValues = {
     timezone: 'UTC', rss_poll_interval_minutes: 60, rate_limit_per_minute: 30,
+    request_burst: 4, max_concurrent_preparations: 8, max_preparations_per_host: 2,
     max_concurrent_rss_fetches: 4, session_ttl_hours: 24, stats_raw_retention_days: 30,
     stats_hourly_retention_days: 180, ...values,
   }

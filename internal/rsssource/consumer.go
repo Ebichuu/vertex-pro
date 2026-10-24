@@ -26,6 +26,11 @@ type ConsumerStore interface {
 	Finish(context.Context, Consumer, string, time.Time) error
 }
 
+// RateWaitStore is optional observational data, separate from processing state.
+type RateWaitStore interface {
+	RecordRateWait(context.Context, Consumer, bool, time.Duration, time.Time) error
+}
+
 func (dedupe *Dedupe) Consumers() (ConsumerStore, error) {
 	store, ok := dedupe.store.(ConsumerStore)
 	if !ok {

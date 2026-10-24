@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/vertex-pro/vertex-pro/internal/quipolicy"
 	"github.com/vertex-pro/vertex-pro/internal/realtimecards"
 	"github.com/vertex-pro/vertex-pro/internal/statsstore"
 	"github.com/vertex-pro/vertex-pro/internal/syncmerge"
@@ -13,6 +14,14 @@ import (
 // RefreshMonitoring reads only qui's control API. Missing data leaves the last
 // sample timestamp unchanged, so the API correctly reports stale rates.
 func (runtime *Runtime) RefreshMonitoring(ctx context.Context, now time.Time, selectedSnapshot *syncmerge.Snapshot) error {
+	if err := runtime.refreshInstanceMetadata(ctx, now); err != nil {
+		return err
+	}
+	return runtime.refreshTransferMonitoring(ctx, now, selectedSnapshot)
+}
+
+// Instance availability is a dispatch gate; transfer statistics are not.
+func (runtime *Runtime) refreshInstanceMetadata(ctx context.Context, now time.Time) error {
 	if runtime.controlClient == nil {
 		return nil
 	}
@@ -42,34 +51,6 @@ func (runtime *Runtime) RefreshMonitoring(ctx context.Context, now time.Time, se
 			firstErr = fmt.Errorf("configured qui instance is disabled")
 			continue
 		}
-		transfer, err := runtime.controlClient.TransferInfo(ctx, instance.ID)
-		if err != nil {
-			if firstErr == nil {
-				firstErr = fmt.Errorf("read instance transfer: %w", err)
-			}
-			continue
-		}
-		state := "OFFLINE"
-		if err := runtime.Database.QueryRowContext(ctx, `SELECT sync_state FROM sync_instance_state WHERE instance_id=?`, instance.ID).Scan(&state); err != nil {
-			return err
-		}
-		card := realtimecards.Card{InstanceID: instance.ID, SyncState: state, DownloadRate: transfer.DownloadSpeed, UploadRate: transfer.UploadSpeed, Source: "TRANSFER_INFO"}
-		if instance.ID == runtime.instanceID && selectedSnapshot != nil {
-			card.CountsKnown = true
-			for _, torrent := range selectedSnapshot.Torrents {
-				status, _ := torrent.Fields["state"].(string)
-				if status == "downloading" || status == "forcedDL" || status == "stalledDL" || status == "metaDL" || status == "forcedMetaDL" {
-					card.DownloadingCount++
-				}
-				if status == "uploading" || status == "stalledUP" || status == "queuedUP" || status == "forcedUP" {
-					card.SeedingCount++
-				}
-			}
-		}
-		if err := statsstore.RecordCounters(ctx, runtime.Database, instance.ID, now, transfer.Downloaded, transfer.Uploaded, transfer.DownloadSpeed, transfer.UploadSpeed); err != nil {
-			return err
-		}
-		runtime.realtime.Update(card, now)
 	}
 	if !selectedFound {
 		if err := updateSyncState(ctx, runtime.Database, runtime.instanceID, "OFFLINE", now); err != nil {
@@ -78,4 +59,61 @@ func (runtime *Runtime) RefreshMonitoring(ctx context.Context, now time.Time, se
 		return fmt.Errorf("configured qui instance is missing")
 	}
 	return firstErr
+}
+
+func (runtime *Runtime) refreshTransferMonitoring(ctx context.Context, now time.Time, selectedSnapshot *syncmerge.Snapshot) error {
+	if runtime.controlClient == nil {
+		return nil
+	}
+	transfer, err := runtime.controlClient.TransferInfo(ctx, runtime.instanceID)
+	if err != nil {
+		return fmt.Errorf("read instance transfer: %w", err)
+	}
+	state := "OFFLINE"
+	if err := runtime.Database.QueryRowContext(ctx, `SELECT sync_state FROM sync_instance_state WHERE instance_id=?`, runtime.instanceID).Scan(&state); err != nil {
+		return err
+	}
+	card := realtimecards.Card{InstanceID: runtime.instanceID, SyncState: state, DownloadRate: transfer.DownloadSpeed, UploadRate: transfer.UploadSpeed, Source: "TRANSFER_INFO"}
+	if selectedSnapshot != nil {
+		card.CountsKnown = true
+		for _, torrent := range selectedSnapshot.Torrents {
+			status, _ := torrent.Fields["state"].(string)
+			if status == "downloading" || status == "forcedDL" || status == "stalledDL" || status == "metaDL" || status == "forcedMetaDL" {
+				card.DownloadingCount++
+			}
+			if status == "uploading" || status == "stalledUP" || status == "queuedUP" || status == "forcedUP" {
+				card.SeedingCount++
+			}
+		}
+	}
+	if err := statsstore.RecordCounters(ctx, runtime.Database, runtime.instanceID, now, transfer.Downloaded, transfer.Uploaded, transfer.DownloadSpeed, transfer.UploadSpeed); err != nil {
+		return err
+	}
+	runtime.realtime.Update(card, now)
+	return nil
+}
+
+func (r *Runtime) startMonitoringWorker(ctx context.Context, interval time.Duration) {
+	r.workers.Add(1)
+	go func() {
+		defer r.workers.Done()
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			if r.controlClient != nil {
+				if err := (quipolicy.Service{DB: r.Database, Client: r.controlClient, Instance: r.instanceID, Now: r.now}).SyncDisabled(ctx); err != nil {
+					r.Metrics.Inc("vertex_policy_sync_errors_total", map[string]string{"instance": r.instanceID})
+				}
+			}
+			current := r.monitorSnapshot.Load()
+			if err := r.refreshTransferMonitoring(ctx, r.now(), current); err != nil {
+				r.Metrics.Inc("vertex_monitoring_errors_total", map[string]string{"instance": r.instanceID})
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+			}
+		}
+	}()
 }

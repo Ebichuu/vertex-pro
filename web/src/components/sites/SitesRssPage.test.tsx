@@ -18,6 +18,13 @@ const sites: Site[] = [
 ]
 
 describe('UI-03 Sites & RSS', () => {
+  it('显示本地限流等待数量与累计时间', () => {
+    const data = structuredClone(sites)
+    data[0].feeds[0].rateWaiting = 2
+    data[0].feeds[0].rateWaitMs = 12345
+    render(<SitesRssPage initialSites={data} />)
+    expect(screen.getByText('限流等待 2 条 · 累计 12.3 秒')).toBeInTheDocument()
+  })
   it('renders source metadata and feed health without exposing secrets', () => {
     render(<SitesRssPage initialSites={sites} />)
     expect(screen.getByRole('heading', { name: '站点与 RSS' })).toBeInTheDocument()

@@ -179,6 +179,7 @@ func (s *Stage) SendNext(ctx context.Context) (worked bool, resultErr error) {
 	if err != nil {
 		return false, err
 	}
+	runner.SetReceiptRecovery(s.receipts)
 	_, err = runner.Run(ctx, dispatchflow.Request{AttemptID: attempt, SubmitIntentID: intent, WaiterID: waiter, APIVersion: s.config.Profile.WebAPIVersion, HTTPRequest: request,
 		Recheck: func(ctx context.Context, tx *db.ImmediateTx) error {
 			if err := s.validateSnapshot(ctx, tx, evidence); err != nil {

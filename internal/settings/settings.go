@@ -18,13 +18,16 @@ var (
 
 // Values contains only editable, non-secret configuration.
 type Values struct {
-	Timezone                 string `json:"timezone"`
-	RSSPollIntervalMinutes   int    `json:"rss_poll_interval_minutes"`
-	RateLimitPerMinute       int    `json:"rate_limit_per_minute"`
-	MaxConcurrentRSSFetches  int    `json:"max_concurrent_rss_fetches"`
-	SessionTTLHours          int    `json:"session_ttl_hours"`
-	StatsRawRetentionDays    int    `json:"stats_raw_retention_days"`
-	StatsHourlyRetentionDays int    `json:"stats_hourly_retention_days"`
+	Timezone                  string `json:"timezone"`
+	RSSPollIntervalMinutes    int    `json:"rss_poll_interval_minutes"`
+	RateLimitPerMinute        int    `json:"rate_limit_per_minute"`
+	RequestBurst              int    `json:"request_burst"`
+	MaxConcurrentPreparations int    `json:"max_concurrent_preparations"`
+	MaxPreparationsPerHost    int    `json:"max_preparations_per_host"`
+	MaxConcurrentRSSFetches   int    `json:"max_concurrent_rss_fetches"`
+	SessionTTLHours           int    `json:"session_ttl_hours"`
+	StatsRawRetentionDays     int    `json:"stats_raw_retention_days"`
+	StatsHourlyRetentionDays  int    `json:"stats_hourly_retention_days"`
 }
 
 type Settings struct {
@@ -48,13 +51,14 @@ func New(database *sql.DB, now func() time.Time) (*Service, error) {
 	return &Service{database: database, now: now}, nil
 }
 
-const columns = `timezone, rss_poll_interval_minutes, rate_limit_per_minute,
+const columns = `timezone, rss_poll_interval_minutes, rate_limit_per_minute, request_burst, max_concurrent_preparations, max_preparations_per_host,
 	max_concurrent_rss_fetches, session_ttl_hours, stats_raw_retention_days,
 	stats_hourly_retention_days, revision, updated_at`
 
 func scan(row *sql.Row) (Settings, error) {
 	var value Settings
 	err := row.Scan(&value.Timezone, &value.RSSPollIntervalMinutes, &value.RateLimitPerMinute,
+		&value.RequestBurst, &value.MaxConcurrentPreparations, &value.MaxPreparationsPerHost,
 		&value.MaxConcurrentRSSFetches, &value.SessionTTLHours, &value.StatsRawRetentionDays,
 		&value.StatsHourlyRetentionDays, &value.Revision, &value.UpdatedAt)
 	return value, err
@@ -85,6 +89,9 @@ func Validate(value Values) error {
 	}{
 		{"rss_poll_interval_minutes", value.RSSPollIntervalMinutes, 1440},
 		{"rate_limit_per_minute", value.RateLimitPerMinute, 600},
+		{"request_burst", value.RequestBurst, 16},
+		{"max_concurrent_preparations", value.MaxConcurrentPreparations, 32},
+		{"max_preparations_per_host", value.MaxPreparationsPerHost, 8},
 		{"max_concurrent_rss_fetches", value.MaxConcurrentRSSFetches, 32},
 		{"session_ttl_hours", value.SessionTTLHours, 720},
 		{"stats_raw_retention_days", value.StatsRawRetentionDays, 3650},
@@ -110,11 +117,12 @@ func (service *Service) Update(ctx context.Context, expectedRevision int, value 
 	value.Timezone = strings.TrimSpace(value.Timezone)
 	// RETURNING binds the response to this update, even if another writer saves next.
 	updated, err := scan(service.database.QueryRowContext(ctx, `UPDATE app_settings SET
-		timezone = ?, rss_poll_interval_minutes = ?, rate_limit_per_minute = ?,
+		timezone = ?, rss_poll_interval_minutes = ?, rate_limit_per_minute = ?, request_burst = ?, max_concurrent_preparations = ?, max_preparations_per_host = ?,
 		max_concurrent_rss_fetches = ?, session_ttl_hours = ?, stats_raw_retention_days = ?,
 		stats_hourly_retention_days = ?, revision = revision + 1, updated_at = ?
 		WHERE id = 1 AND revision = ? RETURNING `+columns,
 		value.Timezone, value.RSSPollIntervalMinutes, value.RateLimitPerMinute,
+		value.RequestBurst, value.MaxConcurrentPreparations, value.MaxPreparationsPerHost,
 		value.MaxConcurrentRSSFetches, value.SessionTTLHours, value.StatsRawRetentionDays,
 		value.StatsHourlyRetentionDays, service.now().UTC().Format(time.RFC3339Nano), expectedRevision))
 	if errors.Is(err, sql.ErrNoRows) {

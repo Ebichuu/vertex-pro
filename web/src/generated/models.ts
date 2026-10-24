@@ -6,5 +6,5 @@ export type SettingsResponse = { "active": SettingsValues; "restart_required": b
 
 export type SettingsSecurity = { "csrf_protection": boolean; "diagnostics_redacted": boolean; "secure_cookies": boolean; };
 
-export type SettingsValues = { "max_concurrent_rss_fetches": number; "rate_limit_per_minute": number; "rss_poll_interval_minutes": number; "session_ttl_hours": number; "stats_hourly_retention_days": number; "stats_raw_retention_days": number; "timezone": string; };
+export type SettingsValues = { "max_concurrent_preparations": number; "max_concurrent_rss_fetches": number; "max_preparations_per_host": number; "rate_limit_per_minute": number; "request_burst": number; "rss_poll_interval_minutes": number; "session_ttl_hours": number; "stats_hourly_retention_days": number; "stats_raw_retention_days": number; "timezone": string; };
 

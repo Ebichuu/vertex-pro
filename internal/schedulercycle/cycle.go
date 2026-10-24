@@ -75,6 +75,7 @@ type Result struct {
 	Matched      int
 	Skipped      int
 	Failed       int
+	Invalid      int
 	Failures     []string
 	Outcomes     []matchpipeline.Outcome
 	ETag         string
@@ -106,8 +107,7 @@ func (cycle *Cycle) Run(ctx context.Context, feed FeedRef) (Result, error) {
 		if work == nil {
 			break
 		}
-		attemptTimeout := min(45*time.Second, work.Deadline.Sub(cycle.now()))
-		attemptCtx, cancel := context.WithTimeout(ctx, attemptTimeout)
+		attemptCtx, cancel := cycle.attemptContext(ctx, *work)
 		outcome, err := cycle.process(attemptCtx, feed, *work)
 		cancel()
 		code := ""
@@ -164,10 +164,14 @@ func (cycle *Cycle) discover(ctx context.Context, feed FeedRef) (Result, error) 
 		New:        len(dedupeResult.New),
 		Updated:    len(dedupeResult.Updated),
 		Duplicates: dedupeResult.Duplicates,
-		ETag:       response.ETag, LastModified: response.LastModified,
+		Failed:     len(dedupeResult.Invalid), Invalid: len(dedupeResult.Invalid),
+		ETag: response.ETag, LastModified: response.LastModified,
+	}
+	for range dedupeResult.Invalid {
+		result.Failures = append(result.Failures, "RSS_ENTRY_INVALID")
 	}
 	if feed.BaselineOnly {
-		result.Skipped = len(entries)
+		result.Skipped = len(entries) - result.Invalid
 	}
 	return result, nil
 }
@@ -185,7 +189,7 @@ func (cycle *Cycle) ConsumeOne(ctx context.Context, feed FeedRef) (matchpipeline
 	if err != nil || work == nil {
 		return matchpipeline.Outcome{}, false, err
 	}
-	attemptCtx, cancel := context.WithTimeout(ctx, min(45*time.Second, work.Deadline.Sub(cycle.now())))
+	attemptCtx, cancel := cycle.attemptContext(ctx, *work)
 	outcome, processErr := cycle.process(attemptCtx, feed, *work)
 	cancel()
 	code := ""
@@ -202,6 +206,21 @@ func (cycle *Cycle) ConsumeOne(ctx context.Context, feed FeedRef) (matchpipeline
 // Configure the clock before starting workers; durable claims and the runtime's
 // due-work query must use exactly the same time base.
 func (cycle *Cycle) SetClock(now func() time.Time) { cycle.now = now; cycle.pipeline.Now = now }
+
+func (cycle *Cycle) attemptContext(ctx context.Context, work rsssource.Consumer) (context.Context, context.CancelFunc) {
+	// Bound total work by its durable lease; the transport separately starts
+	// the network deadline after a rate permit has been granted.
+	attemptCtx, cancel := context.WithTimeout(ctx, min(rsssource.ConsumerLease-5*time.Second, work.Deadline.Sub(cycle.now())))
+	if observer, ok := cycle.consumers.(rsssource.RateWaitStore); ok {
+		attemptCtx = rssfetch.WithWaitObserver(attemptCtx, func(waiting bool, elapsed time.Duration) {
+			writeCtx, stop := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
+			defer stop()
+			// Observational failures must not prevent acquisition or processing.
+			_ = observer.RecordRateWait(writeCtx, work, waiting, elapsed, cycle.now())
+		})
+	}
+	return attemptCtx, cancel
+}
 
 func (cycle *Cycle) process(ctx context.Context, feed FeedRef, work rsssource.Consumer) (matchpipeline.Outcome, error) {
 	preview := matchpipeline.Item{Source: work.Source, FeedID: feed.FeedID, PublishedAt: parsePublished(work.Source.PublishedAt)}

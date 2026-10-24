@@ -14,6 +14,8 @@ import (
 	"github.com/vertex-pro/vertex-pro/internal/ruleaggregate"
 )
 
+var ErrPolicyInvalid = errors.New("managed policy is not valid")
+
 type Client interface {
 	Automations(context.Context, string) ([]control.Automation, error)
 	SaveAutomation(context.Context, string, control.Automation) (control.Automation, error)
@@ -30,17 +32,17 @@ func (s Service) Ensure(ctx context.Context, m ruleaggregate.Match) (string, err
 		return "", nil
 	}
 	if m.DeleteMode != "TORRENT_ONLY" && m.DeleteMode != "WITH_FILES" {
-		return "", fmt.Errorf("invalid delete mode")
+		return "", fmt.Errorf("%w: invalid delete mode", ErrPolicyInvalid)
 	}
 	if m.RuleID == "" || m.RuleRevision <= 0 || s.DB == nil || s.Client == nil || s.Now == nil {
-		return "", fmt.Errorf("invalid qui policy identity or dependencies")
+		return "", fmt.Errorf("%w: invalid qui policy identity or dependencies", ErrPolicyInvalid)
 	}
 	var active int
 	if err := s.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM rules r LEFT JOIN sites site ON site.site_id=r.site_id WHERE r.rule_id=? AND r.revision=? AND r.enabled=1 AND r.archived=0 AND (site.site_id IS NULL OR (site.enabled=1 AND site.archived=0))`, m.RuleID, m.RuleRevision).Scan(&active); err != nil {
 		return "", err
 	}
 	if active != 1 {
-		return "", fmt.Errorf("rule is disabled or unavailable")
+		return "", fmt.Errorf("%w: rule is disabled or unavailable", ErrPolicyInvalid)
 	}
 	var token string
 	if err := s.DB.QueryRowContext(ctx, `SELECT token FROM installation_identity WHERE id=1`).Scan(&token); err != nil {
@@ -60,12 +62,12 @@ func (s Service) Ensure(ctx context.Context, m ruleaggregate.Match) (string, err
 		return "", bindErr
 	}
 	if bindErr == nil && boundTag != tag {
-		return "", fmt.Errorf("managed qui policy binding changed")
+		return "", fmt.Errorf("%w: managed qui policy binding changed", ErrPolicyInvalid)
 	}
 	var bound control.Automation
 	if bindErr == nil {
 		if err := json.Unmarshal([]byte(boundJSON), &bound); err != nil {
-			return "", fmt.Errorf("managed qui policy binding is invalid: %w", err)
+			return "", fmt.Errorf("%w: managed qui policy binding is invalid", ErrPolicyInvalid)
 		}
 	}
 	list, err := s.Client.Automations(ctx, s.Instance)
@@ -79,23 +81,23 @@ func (s Service) Ensure(ctx context.Context, m ruleaggregate.Match) (string, err
 		if boundID > 0 && existing.ID == boundID {
 			boundFound = true
 			if existing.Name != tag {
-				return "", fmt.Errorf("managed qui policy renamed externally")
+				return "", fmt.Errorf("%w: managed qui policy renamed externally", ErrPolicyInvalid)
 			}
 		}
 		if existing.Name == tag {
 			count++
 			if boundID > 0 && existing.ID != boundID {
-				return "", fmt.Errorf("managed qui policy identity changed externally")
+				return "", fmt.Errorf("%w: managed qui policy identity changed externally", ErrPolicyInvalid)
 			}
 			if boundID > 0 && !sameManagedSettings(existing, bound) {
-				return "", fmt.Errorf("managed qui policy changed externally")
+				return "", fmt.Errorf("%w: managed qui policy changed externally", ErrPolicyInvalid)
 			}
 			if !sameManagedSettings(existing, desired) {
-				return "", fmt.Errorf("managed qui policy changed externally")
+				return "", fmt.Errorf("%w: managed qui policy changed externally", ErrPolicyInvalid)
 			}
 			if !existing.Enabled {
 				if bindErr != nil || boundEnabled != 0 {
-					return "", fmt.Errorf("managed qui policy disabled externally")
+					return "", fmt.Errorf("%w: managed qui policy disabled externally", ErrPolicyInvalid)
 				}
 			}
 			desired.ID = existing.ID
@@ -104,10 +106,10 @@ func (s Service) Ensure(ctx context.Context, m ruleaggregate.Match) (string, err
 		}
 	}
 	if boundID > 0 && !boundFound {
-		return "", fmt.Errorf("managed qui policy missing externally")
+		return "", fmt.Errorf("%w: managed qui policy missing externally", ErrPolicyInvalid)
 	}
 	if count > 1 {
-		return "", fmt.Errorf("duplicate managed qui policy")
+		return "", fmt.Errorf("%w: duplicate managed qui policy", ErrPolicyInvalid)
 	}
 	if !alreadyEnabled {
 		if _, err := s.Client.SaveAutomation(ctx, s.Instance, desired); err != nil {
@@ -123,13 +125,13 @@ func (s Service) Ensure(ctx context.Context, m ruleaggregate.Match) (string, err
 	for i := range list {
 		if list[i].Name == tag {
 			if saved != nil {
-				return "", fmt.Errorf("duplicate managed qui policy")
+				return "", fmt.Errorf("%w: duplicate managed qui policy", ErrPolicyInvalid)
 			}
 			saved = &list[i]
 		}
 	}
 	if saved == nil || saved.ID <= 0 || saved.ID != desired.ID && desired.ID > 0 || !saved.Enabled || !sameManagedSettings(*saved, desired) {
-		return "", fmt.Errorf("qui policy readback mismatch")
+		return "", fmt.Errorf("%w: qui policy readback mismatch", ErrPolicyInvalid)
 	}
 	raw, _ := json.Marshal(saved)
 	_, err = s.DB.ExecContext(ctx, `INSERT INTO qui_policy_bindings(instance_id,rule_id,rule_revision,qui_id,tag,payload_json,enabled,updated_at) VALUES(?,?,?,?,?,?,1,?) ON CONFLICT(instance_id,rule_id,rule_revision) DO UPDATE SET qui_id=excluded.qui_id,payload_json=excluded.payload_json,enabled=1,last_error_code='',updated_at=excluded.updated_at`, s.Instance, m.RuleID, m.RuleRevision, saved.ID, tag, string(raw), s.Now().UTC().Format(time.RFC3339Nano))
@@ -194,7 +196,7 @@ func (s Service) SyncDisabled(ctx context.Context) error {
 			}
 		}
 		if current == nil || !sameManagedSettings(*current, a) {
-			return fail("QUI_POLICY_CONFLICT", fmt.Errorf("managed qui policy changed externally"))
+			return fail("QUI_POLICY_CONFLICT", fmt.Errorf("%w: managed qui policy changed externally", ErrPolicyInvalid))
 		}
 		if current.Enabled {
 			a.Enabled = false

@@ -19,6 +19,7 @@ type Runner struct {
 	database *sql.DB
 	worker   *dispatchworker.Worker
 	now      func() time.Time
+	receipts *ReceiptRecovery
 }
 
 type Request struct {
@@ -108,15 +109,19 @@ func (runner *Runner) Run(ctx context.Context, request Request) (Result, error) 
 	// cannot remain at ADD_SENT merely because the request context expired.
 	commitContext, cancelCommit := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancelCommit()
-	committed, commitErr := dispatchcommit.Record(commitContext, runner.database, dispatchcommit.Request{
+	receipt := dispatchcommit.Request{
 		AttemptID:      request.AttemptID,
 		SubmitIntentID: request.SubmitIntentID,
 		WaiterID:       request.WaiterID,
 		Result:         dispatched,
 		DispatchErr:    dispatchErr,
 		Now:            runner.now().UTC(),
-	})
+	}
+	committed, commitErr := dispatchcommit.Record(commitContext, runner.database, receipt)
 	if commitErr != nil {
+		if runner.receipts != nil && committed.AttemptID == "" {
+			runner.receipts.remember(receipt)
+		}
 		return result, commitErr
 	}
 	result.Commit = committed
@@ -125,6 +130,10 @@ func (runner *Runner) Run(ctx context.Context, request Request) (Result, error) 
 	}
 	return result, nil
 }
+
+// SetReceiptRecovery attaches the instance-owned, bounded recovery buffer.
+// Configure before Run; it never stores an HTTP request or invokes a sender.
+func (runner *Runner) SetReceiptRecovery(recovery *ReceiptRecovery) { runner.receipts = recovery }
 
 func uncertainResult(attemptID, apiVersion string) dispatchworker.Result {
 	response := qbresponse.Result{

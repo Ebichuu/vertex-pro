@@ -74,6 +74,7 @@ type Stage struct {
 	active      map[string]bool
 	slots       chan struct{}
 	wake        chan struct{}
+	receipts    *dispatchflow.ReceiptRecovery
 }
 
 func New(database *sql.DB, config Config) (*Stage, error) {
@@ -95,8 +96,10 @@ func New(database *sql.DB, config Config) (*Stage, error) {
 	if config.Now == nil {
 		config.Now = func() time.Time { return time.Now().UTC() }
 	}
-	return &Stage{database: database, config: config, active: map[string]bool{}, slots: make(chan struct{}, senderConcurrency), wake: make(chan struct{}, senderConcurrency)}, nil
+	return &Stage{database: database, config: config, active: map[string]bool{}, slots: make(chan struct{}, senderConcurrency), wake: make(chan struct{}, senderConcurrency), receipts: dispatchflow.NewReceiptRecovery(database)}, nil
 }
+
+func (stage *Stage) RecoverReceipts(ctx context.Context) error { return stage.receipts.Retry(ctx) }
 
 type jobRow struct {
 	jobID       string
