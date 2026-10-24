@@ -253,15 +253,15 @@ func TestPipelineBurst30WithSlowPreparationAndSlowInstance(t *testing.T) {
 		case <-poll.C:
 		}
 	}
-	rows, err := runtime.Database.Query(`SELECT torrent_ready_at,add_started_at FROM dispatch_pipeline_times WHERE add_started_at IS NOT NULL`)
+	rows, err := runtime.Database.Query(`SELECT job_id,torrent_ready_at,allocated_at,add_started_at FROM dispatch_pipeline_times WHERE add_started_at IS NOT NULL ORDER BY torrent_ready_at`)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer rows.Close()
 	var latencies []time.Duration
 	for rows.Next() {
-		var ready, started string
-		if err := rows.Scan(&ready, &started); err != nil {
+		var job, ready, allocated, started string
+		if err := rows.Scan(&job, &ready, &allocated, &started); err != nil {
 			t.Fatal(err)
 		}
 		a, err := time.Parse(time.RFC3339Nano, ready)
@@ -273,6 +273,13 @@ func TestPipelineBurst30WithSlowPreparationAndSlowInstance(t *testing.T) {
 			t.Fatal(err)
 		}
 		latencies = append(latencies, b.Sub(a))
+		placed, err := time.Parse(time.RFC3339Nano, allocated)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if b.Sub(a) > 100*time.Millisecond {
+			t.Logf("tail job=%s ready-to-reserve=%s reserve-to-Add=%s", job, placed.Sub(a), b.Sub(placed))
+		}
 	}
 	if err := rows.Err(); err != nil {
 		t.Fatal(err)
@@ -294,5 +301,9 @@ func TestPipelineBurst30WithSlowPreparationAndSlowInstance(t *testing.T) {
 	if requests.Load() != 1 {
 		t.Fatalf("preparation altered RSS cadence: %d polls", requests.Load())
 	}
+	if strings.Contains(runtime.Metrics.Render(), `vertex_sync_ticks_total{result="stale"}`) {
+		t.Fatal("healthy instance lost its snapshot during concurrent dispatch")
+	}
 	t.Logf("30 samples ready-to-Add p50=%s p95=%s max=%s; end-to-end=%s; max site preparation=%d; 10 Adds each on A/B/C", latencies[14], latencies[28], latencies[29], time.Since(began), maxActive.Load())
+	t.Logf("database pool wait count=%d duration=%s", runtime.Database.Stats().WaitCount, runtime.Database.Stats().WaitDuration)
 }

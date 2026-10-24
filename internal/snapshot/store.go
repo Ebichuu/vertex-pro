@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/vertex-pro/vertex-pro/internal/db"
 	"github.com/vertex-pro/vertex-pro/internal/syncmerge"
 )
 
@@ -78,33 +79,28 @@ func (store Store) Save(ctx context.Context, instanceID string, generation, revi
 	}
 
 	createdAt := time.Now().UTC().Format(time.RFC3339Nano)
-	transaction, err := store.database.BeginTx(ctx, nil)
-	if err != nil {
-		return Record{}, fmt.Errorf("begin snapshot transaction: %w", err)
-	}
-	committed := false
-	defer func() {
-		if !committed {
-			_ = transaction.Rollback()
+	// Acquire the writer before reading the coordinates. A deferred read
+	// transaction cannot safely upgrade while another instance is writing in
+	// WAL mode, even with busy_timeout set. File I/O remains outside this lock.
+	err = db.RunImmediate(ctx, store.database, func(ctx context.Context, transaction *db.ImmediateTx) error {
+		var stateGeneration, stateRevision int64
+		if err := transaction.QueryRowContext(ctx, "SELECT sync_generation, snapshot_revision FROM sync_instance_state WHERE instance_id = ?", instanceID).Scan(&stateGeneration, &stateRevision); err != nil {
+			return fmt.Errorf("read sync instance state: %w", err)
 		}
-	}()
-	var stateGeneration, stateRevision int64
-	if err := transaction.QueryRowContext(ctx, "SELECT sync_generation, snapshot_revision FROM sync_instance_state WHERE instance_id = ?", instanceID).Scan(&stateGeneration, &stateRevision); err != nil {
-		return Record{}, fmt.Errorf("read sync instance state: %w", err)
+		if stateGeneration > int64(generation) || (stateGeneration == int64(generation) && stateRevision >= int64(revision)) {
+			return errors.New("snapshot coordinates are not newer than current state")
+		}
+		if _, err := transaction.ExecContext(ctx, `INSERT INTO sync_snapshots(instance_id, sync_generation, snapshot_revision, rid, snapshot_digest, snapshot_path, is_complete, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, instanceID, generation, revision, snapshot.RID, digest, relativePath, boolInt(complete), createdAt); err != nil {
+			return fmt.Errorf("insert snapshot reference: %w", err)
+		}
+		if _, err := transaction.ExecContext(ctx, `UPDATE sync_instance_state SET sync_generation = ?, rid = ?, snapshot_revision = ?, snapshot_digest = ?, updated_at = ? WHERE instance_id = ?`, generation, snapshot.RID, revision, digest, createdAt, instanceID); err != nil {
+			return fmt.Errorf("update sync instance state: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return Record{}, fmt.Errorf("persist snapshot transaction: %w", err)
 	}
-	if stateGeneration > int64(generation) || (stateGeneration == int64(generation) && stateRevision >= int64(revision)) {
-		return Record{}, fmt.Errorf("snapshot coordinates are not newer than current state")
-	}
-	if _, err := transaction.ExecContext(ctx, `INSERT INTO sync_snapshots(instance_id, sync_generation, snapshot_revision, rid, snapshot_digest, snapshot_path, is_complete, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, instanceID, generation, revision, snapshot.RID, digest, relativePath, boolInt(complete), createdAt); err != nil {
-		return Record{}, fmt.Errorf("insert snapshot reference: %w", err)
-	}
-	if _, err := transaction.ExecContext(ctx, `UPDATE sync_instance_state SET sync_generation = ?, rid = ?, snapshot_revision = ?, snapshot_digest = ?, updated_at = ? WHERE instance_id = ?`, generation, snapshot.RID, revision, digest, createdAt, instanceID); err != nil {
-		return Record{}, fmt.Errorf("update sync instance state: %w", err)
-	}
-	if err := transaction.Commit(); err != nil {
-		return Record{}, fmt.Errorf("commit snapshot transaction: %w", err)
-	}
-	committed = true
 	return Record{InstanceID: instanceID, Generation: generation, Revision: revision, RID: snapshot.RID, Digest: digest, Path: relativePath, Complete: complete, CreatedAt: createdAt}, nil
 }
 
