@@ -217,7 +217,13 @@ type artifactTransport struct {
 }
 
 func (transport artifactTransport) RoundTrip(request *http.Request) (*http.Response, error) {
-	release, err := transport.limits.acquireArtifact(request.Context(), request.URL.Hostname())
+	var release func()
+	var err error
+	if NonblockingArtifacts(request.Context()) {
+		release, err = transport.limits.tryArtifact(request.Context(), request.URL.Hostname())
+	} else {
+		release, err = transport.limits.acquireArtifact(request.Context(), request.URL.Hostname())
+	}
 	if err != nil {
 		return nil, err
 	}

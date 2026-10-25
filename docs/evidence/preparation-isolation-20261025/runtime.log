@@ -1,0 +1,36 @@
+=== RUN   TestPipelineBurst30WithSlowPreparationAndSlowInstance
+    pipeline_burst_test.go:275: 29 ready and B/C confirmed before slow paths completed: 2.8339338s
+    pipeline_burst_test.go:408: 30 samples internal ready-to-STARTED p50=8.2378ms p95=30.4233ms max=38.3113ms; end-to-end=20.2342923s; max site preparation=2
+    pipeline_burst_test.go:409: database pool wait count=5479 duration=775.5327ms
+--- PASS: TestPipelineBurst30WithSlowPreparationAndSlowInstance (20.29s)
+=== RUN   TestPipelineGroup30WithDefaultBudgetAndUnequalCapacity
+    pipeline_burst_test.go:394: default30/min burst4 sync10s group allocation=map[2:11 7:11 9:8]; RSS response to HTTP Add arrival first=17.1005ms last=1m0.0279312s; summed limiter wait=12m49.219s
+    pipeline_burst_test.go:396: RSS response to ready first=4.1783ms last=1m0.0054335s
+    pipeline_burst_test.go:396: RSS response to STARTED first=16.0925ms last=1m0.0269034s
+    pipeline_burst_test.go:396: RSS response to hash first=10.0005823s last=1m10.0078303s
+    pipeline_burst_test.go:396: RSS response to download_growth first=10.0065853s last=1m10.0113141s
+    pipeline_burst_test.go:408: 30 samples internal ready-to-STARTED p50=13.3913ms p95=27.4204ms max=27.495ms; end-to-end=1m10.0462125s; max site preparation=2
+    pipeline_burst_test.go:409: database pool wait count=1668 duration=227.3992ms
+--- PASS: TestPipelineGroup30WithDefaultBudgetAndUnequalCapacity (70.08s)
+=== RUN   TestPreparationPoolSaturation
+=== RUN   TestPreparationPoolSaturation/rss_origins_1_redirect_false
+    preparation_saturation_test.go:233: SATURATION_PROBE {"H_http_active":2,"H_jobs":8,"H_release_to_K_http_ms":-9.869,"H_waiting_for_permission":0,"K_attempts_before_H_release":1,"K_discovered_to_http_ms":0.51,"K_jobs":1,"K_rss_response_to_http_ms":1.053,"K_started_before_H_release":true,"all_consumers_done":9,"max_H_http":2,"preparation_workers_occupied_before_K":2,"prepared_jobs":9,"rate_limit_per_minute":30,"real_downloads_added":0,"redirect_entry_requests":0,"redirect_to_H":false,"rss_origins_for_H":1,"total_attempts":9}
+--- PASS: TestPreparationPoolSaturation/rss_origins_1_redirect_false (8.05s)
+=== RUN   TestPreparationPoolSaturation/rss_origins_4_redirect_false
+    preparation_saturation_test.go:233: SATURATION_PROBE {"H_http_active":2,"H_jobs":8,"H_release_to_K_http_ms":-9.019,"H_waiting_for_permission":6,"K_attempts_before_H_release":1,"K_discovered_to_http_ms":1.023,"K_jobs":1,"K_rss_response_to_http_ms":1.023,"K_started_before_H_release":true,"all_consumers_done":9,"max_H_http":2,"preparation_workers_occupied_before_K":2,"prepared_jobs":9,"rate_limit_per_minute":30,"real_downloads_added":0,"redirect_entry_requests":0,"redirect_to_H":false,"rss_origins_for_H":4,"total_attempts":9}
+--- PASS: TestPreparationPoolSaturation/rss_origins_4_redirect_false (8.05s)
+=== RUN   TestPreparationPoolSaturation/rss_origins_4_redirect_true
+    preparation_saturation_test.go:233: SATURATION_PROBE {"H_http_active":2,"H_jobs":8,"H_release_to_K_http_ms":0,"H_waiting_for_permission":6,"K_attempts_before_H_release":1,"K_discovered_to_http_ms":1.25,"K_jobs":1,"K_rss_response_to_http_ms":1.25,"K_started_before_H_release":true,"all_consumers_done":9,"max_H_http":2,"preparation_workers_occupied_before_K":2,"prepared_jobs":9,"rate_limit_per_minute":30,"real_downloads_added":0,"redirect_entry_requests":8,"redirect_to_H":true,"rss_origins_for_H":4,"total_attempts":9}
+--- PASS: TestPreparationPoolSaturation/rss_origins_4_redirect_true (8.05s)
+--- PASS: TestPreparationPoolSaturation (24.15s)
+=== RUN   TestPreparationPoolIsolationFast
+=== RUN   TestPreparationPoolIsolationFast/rss_origins_1_redirect_false
+    preparation_saturation_test.go:233: SATURATION_PROBE {"H_http_active":2,"H_jobs":8,"H_release_to_K_http_ms":-8.578,"H_waiting_for_permission":0,"K_attempts_before_H_release":1,"K_discovered_to_http_ms":1.042,"K_jobs":1,"K_rss_response_to_http_ms":1.042,"K_started_before_H_release":true,"all_consumers_done":9,"max_H_http":2,"preparation_workers_occupied_before_K":2,"prepared_jobs":9,"rate_limit_per_minute":600,"real_downloads_added":0,"redirect_entry_requests":0,"redirect_to_H":false,"rss_origins_for_H":1,"total_attempts":9}
+--- PASS: TestPreparationPoolIsolationFast/rss_origins_1_redirect_false (0.45s)
+=== RUN   TestPreparationPoolIsolationFast/rss_origins_4_redirect_false
+    preparation_saturation_test.go:233: SATURATION_PROBE {"H_http_active":2,"H_jobs":8,"H_release_to_K_http_ms":0,"H_waiting_for_permission":6,"K_attempts_before_H_release":1,"K_discovered_to_http_ms":1.292,"K_jobs":1,"K_rss_response_to_http_ms":1.292,"K_started_before_H_release":true,"all_consumers_done":9,"max_H_http":2,"preparation_workers_occupied_before_K":2,"prepared_jobs":9,"rate_limit_per_minute":600,"real_downloads_added":0,"redirect_entry_requests":0,"redirect_to_H":false,"rss_origins_for_H":4,"total_attempts":9}
+--- PASS: TestPreparationPoolIsolationFast/rss_origins_4_redirect_false (0.50s)
+=== RUN   TestPreparationPoolIsolationFast/rss_origins_4_redirect_true
+    preparation_saturation_test.go:233: SATURATION_PROBE {"H_http_active":2,"H_jobs":8,"H_release_to_K_http_ms":-0.508,"H_waiting_for_permission":6,"K_attempts_before_H_release":1,"K_discovered_to_http_ms":1.049,"K_jobs":1,"K_rss_response_to_http_ms":1.049,"K_started_before_H_release":true,"all_consumers_done":9,"max_H_http":2,"preparation_workers_occupied_before_K":3,"prepared_jobs":9,"rate_limit_per_minute":600,"real_downloads_added":0,"redirect_entry_requests":8,"redirect_to_H":true,"rss_origins_for_H":4,"total_attempts":9}
+--- PASS: TestPreparationPoolIsolationFast/rss_origins_4_redirect_true (0.45s)
+--- PASS: TestPreparationPoolIsolationFast (1.40s)

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/vertex-pro/vertex-pro/internal/matchpipeline"
+	"github.com/vertex-pro/vertex-pro/internal/rssfetch"
 	"github.com/vertex-pro/vertex-pro/internal/rsssource"
 )
 
@@ -58,6 +59,9 @@ func (cache *artifactCache) get(ctx context.Context, source rsssource.Source, fe
 	}
 	if flight, ok := cache.flights[key]; ok {
 		cache.mu.Unlock()
+		if rssfetch.NonblockingArtifacts(ctx) {
+			return matchpipeline.Item{}, &rssfetch.ArtifactDeferred{RetryAt: time.Now().Add(250 * time.Millisecond)}
+		}
 		select {
 		case <-ctx.Done():
 			return matchpipeline.Item{}, ctx.Err()

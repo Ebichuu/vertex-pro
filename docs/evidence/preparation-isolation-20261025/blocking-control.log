@@ -1,0 +1,8 @@
+=== RUN   TestPreparationPoolSaturation
+=== RUN   TestPreparationPoolSaturation/rss_origins_4_redirect_false
+    preparation_saturation_test.go:187: H permission wait prevented K from preparing
+--- FAIL: TestPreparationPoolSaturation (3.08s)
+    --- FAIL: TestPreparationPoolSaturation/rss_origins_4_redirect_false (3.08s)
+FAIL
+FAIL	github.com/vertex-pro/vertex-pro/internal/app	3.097s
+FAIL

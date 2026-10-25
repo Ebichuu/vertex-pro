@@ -44,7 +44,7 @@ func (d Deps) listPreparations(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	rows, err := d.Database.QueryContext(r.Context(), `SELECT c.rowid,c.source_json,c.state,c.attempts,c.next_attempt_at,c.deadline_at,c.last_error_code,c.discovered_at,c.matched,c.rate_wait_started_at,c.rate_wait_ms,c.preparation_started_at,
+	rows, err := d.Database.QueryContext(r.Context(), `SELECT c.rowid,c.source_json,c.state,c.attempts,c.next_attempt_at,c.deadline_at,c.last_error_code,c.discovered_at,c.matched,c.rate_wait_started_at,c.rate_wait_ms,c.preparation_started_at,c.artifact_deferred_until,
  COALESCE((SELECT j.job_id FROM race_jobs j WHERE j.source_id=c.site_id||'/'||c.source_key LIMIT 1),'')
  FROM rss_source_consumers c WHERE c.feed_id=? AND c.rowid<? ORDER BY c.rowid DESC LIMIT ?`, r.PathValue("id"), before, limit+1)
 	if err != nil {
@@ -65,8 +65,8 @@ func (d Deps) listPreparations(w http.ResponseWriter, r *http.Request) {
 		var raw, state, nextAt, deadline, code, discovered, job string
 		var attempts int
 		var matched bool
-		var wait, started sql.NullString
-		if err = rows.Scan(&id, &raw, &state, &attempts, &nextAt, &deadline, &code, &discovered, &matched, &wait, &waitMS, &started, &job); err != nil {
+		var wait, started, deferred sql.NullString
+		if err = rows.Scan(&id, &raw, &state, &attempts, &nextAt, &deadline, &code, &discovered, &matched, &wait, &waitMS, &started, &deferred, &job); err != nil {
 			break
 		}
 		var source rsssource.Source
@@ -79,7 +79,10 @@ func (d Deps) listPreparations(w http.ResponseWriter, r *http.Request) {
 			since, parseErr := time.Parse(time.RFC3339Nano, wait.String)
 			if parseErr == nil {
 				end := now
-				if due.Before(end) {
+				if expiry.Before(end) {
+					end = expiry
+				}
+				if due.Before(end) && !deferred.Valid {
 					end = due
 				}
 				waitMS += max(0, end.Sub(since).Milliseconds())
@@ -99,6 +102,8 @@ func (d Deps) listPreparations(w http.ResponseWriter, r *http.Request) {
 			case !now.Before(expiry):
 				state = "FAILED"
 				code = "PROCESSING_DEADLINE"
+			case deferred.Valid:
+				state = "RATE_WAIT"
 			case !now.Before(due) && attempts >= rsssource.MaxConsumerAttempts:
 				state = "FAILED"
 				code = "PROCESSING_ATTEMPTS_EXHAUSTED"

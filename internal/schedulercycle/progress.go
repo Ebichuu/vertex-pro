@@ -49,7 +49,7 @@ func newRateProgressReporter(store rsssource.RateWaitStore) *rateProgressReporte
 func (reporter *rateProgressReporter) attempt(work rsssource.Consumer) *rateProgressAttempt {
 	// Only the durable identity and generation are needed; do not retain source
 	// URLs, titles or other artifact inputs in the background queue.
-	identity := rsssource.Consumer{Source: rsssource.Source{SiteID: work.Source.SiteID, SourceKey: work.Source.SourceKey}, FeedID: work.FeedID, Attempts: work.Attempts}
+	identity := rsssource.Consumer{Source: rsssource.Source{SiteID: work.Source.SiteID, SourceKey: work.Source.SourceKey}, FeedID: work.FeedID, Attempts: work.Attempts, ClaimGeneration: work.ClaimGeneration}
 	return &rateProgressAttempt{reporter: reporter, work: identity}
 }
 

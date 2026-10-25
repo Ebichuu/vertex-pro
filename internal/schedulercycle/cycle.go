@@ -7,6 +7,7 @@ package schedulercycle
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -204,8 +205,27 @@ func (cycle *Cycle) ConsumeOne(ctx context.Context, feed FeedRef) (matchpipeline
 		return matchpipeline.Outcome{}, false, err
 	}
 	attemptCtx, cancel := cycle.attemptContext(ctx, *work)
+	deferredStore, canDefer := cycle.consumers.(rsssource.DeferredConsumerStore)
+	if canDefer {
+		attemptCtx = rssfetch.WithNonblockingArtifacts(attemptCtx)
+	}
 	outcome, processErr := cycle.process(attemptCtx, feed, *work)
 	cancel()
+	var deferred *torrentdownload.Deferred
+	var cacheWait *rssfetch.ArtifactDeferred
+	if canDefer && errors.As(processErr, &cacheWait) {
+		resumeURL := work.ResumeURL
+		if resumeURL == "" {
+			resumeURL = work.Source.URL
+		}
+		processErr = &torrentdownload.Deferred{URL: resumeURL, Redirects: work.Redirects, RetryAt: cacheWait.RetryAt}
+	}
+	if canDefer && errors.As(processErr, &deferred) {
+		if err := deferredStore.Defer(ctx, *work, deferred.RetryAt, deferred.URL, deferred.Redirects, cycle.now()); err != nil {
+			return outcome, true, err
+		}
+		return outcome, true, deferred
+	}
 	code := ""
 	if processErr != nil {
 		code = "RSS_ITEM_PROCESSING_FAILED"
@@ -243,7 +263,7 @@ func (cycle *Cycle) process(ctx context.Context, feed FeedRef, work rsssource.Co
 	if outcome, rejected, err := matchpipeline.Prefilter(ctx, cycle.pipeline, preview); err != nil || rejected {
 		return outcome, err
 	}
-	item, err := cycle.identify(ctx, work.Source, feed)
+	item, err := cycle.identifyWork(ctx, work, feed)
 	if err != nil {
 		return matchpipeline.Outcome{}, err
 	}
@@ -256,7 +276,12 @@ func (cycle *Cycle) process(ctx context.Context, feed FeedRef, work rsssource.Co
 }
 
 func (cycle *Cycle) identify(ctx context.Context, source rsssource.Source, feed FeedRef) (matchpipeline.Item, error) {
-	item, err := cycle.artifacts.get(ctx, source, feed, func() (matchpipeline.Item, error) { return cycle.downloadIdentity(ctx, source, feed) })
+	return cycle.identifyWork(ctx, rsssource.Consumer{Source: source}, feed)
+}
+
+func (cycle *Cycle) identifyWork(ctx context.Context, work rsssource.Consumer, feed FeedRef) (matchpipeline.Item, error) {
+	source := work.Source
+	item, err := cycle.artifacts.get(ctx, source, feed, func() (matchpipeline.Item, error) { return cycle.downloadIdentityWork(ctx, work, feed) })
 	if err != nil {
 		return matchpipeline.Item{}, err
 	}
@@ -268,7 +293,12 @@ func (cycle *Cycle) identify(ctx context.Context, source rsssource.Source, feed 
 }
 
 func (cycle *Cycle) downloadIdentity(ctx context.Context, source rsssource.Source, feed FeedRef) (matchpipeline.Item, error) {
-	artifact, err := cycle.downloader.Download(ctx, torrentdownload.Request{URL: source.URL, CredentialRef: feed.CredentialRef, CredentialOrigin: feed.CredentialOrigin})
+	return cycle.downloadIdentityWork(ctx, rsssource.Consumer{Source: source}, feed)
+}
+
+func (cycle *Cycle) downloadIdentityWork(ctx context.Context, work rsssource.Consumer, feed FeedRef) (matchpipeline.Item, error) {
+	source := work.Source
+	artifact, err := cycle.downloader.Download(ctx, torrentdownload.Request{URL: source.URL, ResumeURL: work.ResumeURL, Redirects: work.Redirects, CredentialRef: feed.CredentialRef, CredentialOrigin: feed.CredentialOrigin})
 	if err != nil {
 		return matchpipeline.Item{}, fmt.Errorf("download artifact: %w", err)
 	}

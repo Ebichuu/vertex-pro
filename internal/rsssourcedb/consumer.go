@@ -93,9 +93,11 @@ func (store *Store) Claim(ctx context.Context, site, feed string, now time.Time)
 		if _, err := tx.ExecContext(ctx, `UPDATE rss_source_consumers SET state='FAILED',last_error_code=CASE WHEN deadline_at<=? THEN 'PROCESSING_DEADLINE' ELSE 'PROCESSING_ATTEMPTS_EXHAUSTED' END WHERE site_id=? AND feed_id=? AND state='PENDING' AND (deadline_at<=? OR (attempts>=? AND next_attempt_at<=?))`, stamp(now), site, feed, stamp(now), rsssource.MaxConsumerAttempts, stamp(now)); err != nil {
 			return err
 		}
-		var raw, key, deadline string
+		var raw, key, deadline, resume string
 		var attempts int
-		err := tx.QueryRowContext(ctx, `SELECT source_key,source_json,attempts,deadline_at FROM rss_source_consumers WHERE site_id=? AND feed_id=? AND state='PENDING' AND attempts<? AND next_attempt_at<=? AND deadline_at>? ORDER BY next_attempt_at,source_key LIMIT 1`, site, feed, rsssource.MaxConsumerAttempts, stamp(now), stamp(now)).Scan(&key, &raw, &attempts, &deadline)
+		var generation int64
+		var redirects int
+		err := tx.QueryRowContext(ctx, `SELECT source_key,source_json,attempts,deadline_at,claim_generation,artifact_resume_url,artifact_redirects FROM rss_source_consumers WHERE site_id=? AND feed_id=? AND state='PENDING' AND attempts<? AND next_attempt_at<=? AND deadline_at>? AND (artifact_deferred_until IS NULL OR artifact_deferred_until<=?) ORDER BY next_attempt_at,source_key LIMIT 1`, site, feed, rsssource.MaxConsumerAttempts, stamp(now), stamp(now), stamp(time.Now())).Scan(&key, &raw, &attempts, &deadline, &generation, &resume, &redirects)
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil
 		}
@@ -110,10 +112,10 @@ func (store *Store) Claim(ctx context.Context, site, feed string, now time.Time)
 		if err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, `UPDATE rss_source_consumers SET attempts=attempts+1,next_attempt_at=?,rate_wait_started_at=NULL,preparation_started_at=? WHERE site_id=? AND feed_id=? AND source_key=?`, stamp(now.Add(rsssource.ConsumerLease)), stamp(now), site, feed, key); err != nil {
+		if _, err := tx.ExecContext(ctx, `UPDATE rss_source_consumers SET attempts=attempts+1,claim_generation=claim_generation+1,next_attempt_at=?,rate_wait_ms=rate_wait_ms+CASE WHEN artifact_deferred_until IS NOT NULL AND rate_wait_started_at IS NOT NULL THEN max(0,CAST((julianday(?)-julianday(rate_wait_started_at))*86400000 AS INTEGER)) ELSE 0 END,rate_wait_started_at=NULL,preparation_started_at=?,artifact_deferred_until=NULL WHERE site_id=? AND feed_id=? AND source_key=?`, stamp(now.Add(rsssource.ConsumerLease)), stamp(now), stamp(now), site, feed, key); err != nil {
 			return err
 		}
-		result = &rsssource.Consumer{Source: source, FeedID: feed, Attempts: attempts + 1, Deadline: at}
+		result = &rsssource.Consumer{Source: source, FeedID: feed, Attempts: attempts + 1, Deadline: at, ClaimGeneration: generation + 1, ResumeURL: resume, Redirects: redirects}
 		return nil
 	})
 	return result, err
@@ -128,7 +130,7 @@ func (store *Store) Finish(ctx context.Context, work rsssource.Consumer, code st
 		}
 	}
 	return db.RunImmediate(ctx, store.database, func(ctx context.Context, tx *db.ImmediateTx) error {
-		if _, err := tx.ExecContext(ctx, `UPDATE rss_source_consumers SET state=?,last_error_code=?,next_attempt_at=?,matched=?,rate_wait_started_at=NULL,preparation_started_at=NULL WHERE site_id=? AND feed_id=? AND source_key=? AND state='PENDING' AND attempts=?`, state, code, stamp(now.Add(rsssource.ConsumerRetry(work.Attempts))), work.Matched && code == "", work.Source.SiteID, work.FeedID, work.Source.SourceKey, work.Attempts); err != nil {
+		if _, err := tx.ExecContext(ctx, `UPDATE rss_source_consumers SET state=?,last_error_code=?,next_attempt_at=?,matched=?,rate_wait_started_at=NULL,preparation_started_at=NULL,artifact_deferred_until=NULL,artifact_resume_url='',artifact_redirects=0 WHERE site_id=? AND feed_id=? AND source_key=? AND state='PENDING' AND attempts=? AND claim_generation=?`, state, code, stamp(now.Add(rsssource.ConsumerRetry(work.Attempts))), work.Matched && code == "", work.Source.SiteID, work.FeedID, work.Source.SourceKey, work.Attempts, work.ClaimGeneration); err != nil {
 			return err
 		}
 		_, err := tx.ExecContext(ctx, `UPDATE feed_runtime_state SET last_matched=(SELECT count(*) FROM rss_source_consumers c WHERE c.feed_id=feed_runtime_state.feed_id AND c.matched=1 AND julianday(c.discovered_at)>=julianday(feed_runtime_state.last_polled_at)) WHERE feed_id=?`, work.FeedID)
@@ -145,6 +147,20 @@ func (store *Store) RecordRateWait(ctx context.Context, work rsssource.Consumer,
 	// but never revive a completed attempt's active wait (including retries that
 	// are PENDING without an active preparation). The generation still fences
 	// every delayed observation from a subsequently claimed attempt.
-	_, err := store.database.ExecContext(ctx, `UPDATE rss_source_consumers SET rate_wait_started_at=CASE WHEN state='PENDING' AND preparation_started_at IS NOT NULL THEN ? ELSE NULL END,rate_wait_ms=rate_wait_ms+? WHERE site_id=? AND feed_id=? AND source_key=? AND attempts=?`, started, max(0, elapsed.Milliseconds()), work.Source.SiteID, work.FeedID, work.Source.SourceKey, work.Attempts)
+	_, err := store.database.ExecContext(ctx, `UPDATE rss_source_consumers SET rate_wait_started_at=CASE WHEN state='PENDING' AND preparation_started_at IS NOT NULL THEN ? ELSE NULL END,rate_wait_ms=rate_wait_ms+? WHERE site_id=? AND feed_id=? AND source_key=? AND attempts=? AND claim_generation=?`, started, max(0, elapsed.Milliseconds()), work.Source.SiteID, work.FeedID, work.Source.SourceKey, work.Attempts, work.ClaimGeneration)
+	return err
+}
+
+func (store *Store) Defer(ctx context.Context, work rsssource.Consumer, retryAt time.Time, resume string, redirects int, now time.Time) error {
+	if retryAt.IsZero() || resume == "" || redirects < 0 || redirects >= 10 {
+		return errors.New("invalid preparation deferral")
+	}
+	if !now.Before(work.Deadline) {
+		return store.Finish(ctx, work, "PROCESSING_DEADLINE", now)
+	}
+	// The generation fences both completion and delayed telemetry. Returning the
+	// retry budget is safe only for the exact active lease that received no HTTP
+	// permission; a duplicate yield cannot decrement attempts a second time.
+	_, err := store.database.ExecContext(ctx, `UPDATE rss_source_consumers SET attempts=attempts-1,next_attempt_at=?,artifact_deferred_until=?,artifact_resume_url=?,artifact_redirects=?,preparation_started_at=NULL,rate_wait_started_at=?,last_error_code='' WHERE site_id=? AND feed_id=? AND source_key=? AND state='PENDING' AND attempts=? AND claim_generation=? AND preparation_started_at IS NOT NULL`, stamp(now), stamp(retryAt), resume, redirects, stamp(now), work.Source.SiteID, work.FeedID, work.Source.SourceKey, work.Attempts, work.ClaimGeneration)
 	return err
 }

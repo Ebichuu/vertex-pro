@@ -2,11 +2,13 @@ package app
 
 import (
 	"context"
+	"errors"
 	"net/url"
 	"strings"
 	"time"
 
 	"github.com/vertex-pro/vertex-pro/internal/schedulercycle"
+	"github.com/vertex-pro/vertex-pro/internal/torrentdownload"
 )
 
 func feedBudgetKeys(f schedulercycle.FeedRef) []string {
@@ -97,7 +99,7 @@ func (r *Runtime) startDiscoveryWorkers(ctx context.Context, interval time.Durat
 
 func (r *Runtime) preparationFeeds(ctx context.Context) ([]schedulercycle.FeedRef, error) {
 	stamp := r.now().UTC().Format("2006-01-02T15:04:05.000000000Z")
-	rows, err := r.Database.QueryContext(ctx, `SELECT f.site_id,f.feed_id,f.feed_url,s.credential_ref,s.base_url FROM feeds f JOIN sites s ON s.site_id=f.site_id JOIN feed_runtime_state r ON r.feed_id=f.feed_id WHERE f.enabled=1 AND f.archived=0 AND s.enabled=1 AND s.archived=0 AND r.initialized=1 AND EXISTS(SELECT 1 FROM rss_source_consumers c WHERE c.site_id=f.site_id AND c.feed_id=f.feed_id AND c.state='PENDING' AND (c.next_attempt_at<=? OR c.deadline_at<=?)) ORDER BY f.feed_id`, stamp, stamp)
+	rows, err := r.Database.QueryContext(ctx, `SELECT f.site_id,f.feed_id,f.feed_url,s.credential_ref,s.base_url FROM feeds f JOIN sites s ON s.site_id=f.site_id JOIN feed_runtime_state r ON r.feed_id=f.feed_id WHERE f.enabled=1 AND f.archived=0 AND s.enabled=1 AND s.archived=0 AND r.initialized=1 AND EXISTS(SELECT 1 FROM rss_source_consumers c WHERE c.site_id=f.site_id AND c.feed_id=f.feed_id AND c.state='PENDING' AND ((c.next_attempt_at<=? AND (c.artifact_deferred_until IS NULL OR c.artifact_deferred_until<=?)) OR c.deadline_at<=?)) ORDER BY f.feed_id`, stamp, time.Now().UTC().Format("2006-01-02T15:04:05.000000000Z"), stamp)
 	if err != nil {
 		return nil, err
 	}
@@ -118,8 +120,8 @@ func (r *Runtime) startPreparationWorkers(ctx context.Context) {
 		r.workers.Add(1)
 		go func() {
 			defer r.workers.Done()
-			ticker := time.NewTicker(time.Second)
-			defer ticker.Stop()
+			timer := time.NewTimer(time.Second)
+			defer timer.Stop()
 			for {
 				if ctx.Err() != nil {
 					return
@@ -156,7 +158,10 @@ func (r *Runtime) startPreparationWorkers(ctx context.Context) {
 					r.preparationMu.Unlock()
 					if worked {
 						status := "skipped"
-						if err != nil {
+						var deferred *torrentdownload.Deferred
+						if errors.As(err, &deferred) {
+							status = "deferred"
+						} else if err != nil {
 							status = "failed"
 						} else if outcome.Matched {
 							status = "matched"
@@ -166,13 +171,30 @@ func (r *Runtime) startPreparationWorkers(ctx context.Context) {
 						continue
 					}
 				}
+				timer.Reset(r.preparationRetryDelay(ctx))
 				select {
 				case <-ctx.Done():
 					return
-				case <-ticker.C:
+				case <-timer.C:
 				case <-r.prepareWake:
 				}
+				timer.Stop()
 			}
 		}()
 	}
+}
+
+// A yielded preparation is durable, so restart needs no in-memory waiter list.
+// Poll its earliest due time, capped by the ordinary one-second recovery poll.
+func (r *Runtime) preparationRetryDelay(ctx context.Context) time.Duration {
+	var raw string
+	err := r.Database.QueryRowContext(ctx, `SELECT COALESCE(MIN(c.artifact_deferred_until),'') FROM rss_source_consumers c JOIN feeds f ON f.feed_id=c.feed_id JOIN sites s ON s.site_id=c.site_id WHERE c.state='PENDING' AND f.enabled=1 AND f.archived=0 AND s.enabled=1 AND s.archived=0 AND c.artifact_deferred_until>?`, time.Now().UTC().Format("2006-01-02T15:04:05.000000000Z")).Scan(&raw)
+	if err != nil || raw == "" {
+		return time.Second
+	}
+	at, err := time.Parse(time.RFC3339Nano, raw)
+	if err != nil {
+		return time.Second
+	}
+	return max(time.Millisecond, min(time.Second, time.Until(at)))
 }

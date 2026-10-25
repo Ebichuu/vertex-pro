@@ -11,11 +11,21 @@ const ConsumerLifetime = 24 * time.Hour
 const ConsumerLease = 2 * time.Minute
 
 type Consumer struct {
-	Source   Source
-	FeedID   string
-	Attempts int
-	Deadline time.Time
-	Matched  bool
+	Source          Source
+	FeedID          string
+	Attempts        int
+	Deadline        time.Time
+	Matched         bool
+	ClaimGeneration int64
+	ResumeURL       string
+	Redirects       int
+}
+
+// DeferredConsumerStore persists a yielded HTTP preparation independently of
+// retry backoff. retryAt uses wall time like the shared request limiter; now is
+// the domain clock used for job deadlines and observable progress.
+type DeferredConsumerStore interface {
+	Defer(context.Context, Consumer, time.Time, string, int, time.Time) error
 }
 
 // ConsumerStore keeps discovery and feed-specific consumption separate. Discover

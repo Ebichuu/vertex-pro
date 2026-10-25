@@ -101,3 +101,56 @@ func TestPreparationsExposeProgressWithoutPrivateSourceAndRecoverExpiredLease(t 
 		t.Fatal(w.Code)
 	}
 }
+
+func TestYieldedPreparationShowsWaitWithoutFailureOrContinuationURL(t *testing.T) {
+	database := openMigrated(t)
+	now := time.Date(2026, 10, 25, 0, 0, 0, 0, time.UTC)
+	ctx := context.Background()
+	service, _ := rssservice.NewWithClock(database, func() time.Time { return now })
+	if _, err := service.CreateSite(ctx, rssservice.CreateSiteInput{ID: "s", Name: "Site", BaseURL: "https://site.example", Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.CreateFeed(ctx, rssservice.CreateFeedInput{ID: "f", SiteID: "s", Name: "Feed", FeedURL: "https://site.example/rss", Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	store, _ := rsssourcedb.New(database)
+	if _, err := store.Discover(ctx, "s", "f", []rsssource.Entry{{GUID: "one", URL: "https://site.example/file", Title: "One"}}, false, now); err != nil {
+		t.Fatal(err)
+	}
+	work, err := store.Claim(ctx, "s", "f", now)
+	if err != nil || work == nil {
+		t.Fatal(err)
+	}
+	if err := store.Defer(ctx, *work, time.Now().Add(time.Hour), "https://private.example/continuation", 1, now); err != nil {
+		t.Fatal(err)
+	}
+	d := Deps{Database: database, Now: func() time.Time { return now }}
+	for _, state := range []string{"RATE_WAIT", "FAILED"} {
+		if state == "RATE_WAIT" {
+			now = now.Add(time.Second)
+		} else {
+			now = work.Deadline.Add(time.Hour)
+		}
+		r := httptest.NewRequest("GET", "/api/v1/feeds/f/preparations", nil)
+		r.SetPathValue("id", "f")
+		w := httptest.NewRecorder()
+		d.listPreparations(w, r)
+		var page struct {
+			Items []struct {
+				State    string
+				Attempts int
+				WaitMS   int64 `json:"rate_wait_ms"`
+			}
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &page); err != nil || w.Code != 200 || len(page.Items) != 1 {
+			t.Fatal(w.Code, err)
+		}
+		item := page.Items[0]
+		if item.State != state || item.Attempts != 0 || item.WaitMS < 1000 || item.WaitMS > rsssource.ConsumerLifetime.Milliseconds() {
+			t.Fatalf("invalid yielded status: %+v", item)
+		}
+		if strings.Contains(w.Body.String(), "example") || strings.Contains(w.Body.String(), "artifact_resume") {
+			t.Fatal("continuation URL exposed")
+		}
+	}
+}

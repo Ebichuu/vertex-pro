@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/vertex-pro/vertex-pro/internal/matchpipeline"
+	"github.com/vertex-pro/vertex-pro/internal/rssfetch"
 	"github.com/vertex-pro/vertex-pro/internal/rsssource"
 	"sync"
 	"sync/atomic"
@@ -91,6 +92,26 @@ func TestArtifactCacheDoesNotCacheFailureAndCancelsWaiter(t *testing.T) {
 		})
 	}()
 	<-entered
+	deferredCtx := rssfetch.WithNonblockingArtifacts(context.Background())
+	deferredResult := make(chan error, 1)
+	go func() {
+		_, err := cache.get(deferredCtx, source, feed, func() (matchpipeline.Item, error) {
+			t.Error("duplicate cache acquisition")
+			return matchpipeline.Item{}, nil
+		})
+		deferredResult <- err
+	}()
+	select {
+	case err := <-deferredResult:
+		var deferred *rssfetch.ArtifactDeferred
+		if !errors.As(err, &deferred) {
+			t.Fatalf("cache waiter did not yield: %v", err)
+		}
+	case <-time.After(time.Second):
+		close(release)
+		<-done
+		t.Fatal("cache waiter held a preparation worker")
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	if _, err := cache.get(ctx, source, feed, func() (matchpipeline.Item, error) { t.Error("second request"); return matchpipeline.Item{}, nil }); !errors.Is(err, context.Canceled) {

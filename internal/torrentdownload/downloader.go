@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/vertex-pro/vertex-pro/internal/rssfetch"
 	"github.com/vertex-pro/vertex-pro/internal/sitecredentials"
 	"io"
 	"net/http"
@@ -38,7 +39,19 @@ type Request struct {
 	CredentialRef    string
 	CredentialOrigin string
 	URL              string
+	ResumeURL        string // Internal continuation; validated like the original URL.
+	Redirects        int
 }
+
+// Deferred is a preparation continuation, not a failed network attempt. Its
+// URL stays in the private consumer store and must never be logged as an error.
+type Deferred struct {
+	URL       string
+	Redirects int
+	RetryAt   time.Time
+}
+
+func (*Deferred) Error() string { return "artifact preparation deferred for request permission" }
 
 type Artifact struct {
 	URL         string
@@ -111,7 +124,14 @@ func (downloader *Downloader) Download(ctx context.Context, input Request) (Arti
 	if downloader == nil || downloader.client == nil || downloader.maxBytes <= 0 {
 		return Artifact{}, errors.New("downloader is not initialized")
 	}
-	parsed, err := parseAllowedURL(input.URL, downloader.allowedHosts)
+	if input.Redirects < 0 || input.Redirects >= 10 {
+		return Artifact{}, errors.New("invalid artifact continuation")
+	}
+	target := input.URL
+	if input.ResumeURL != "" {
+		target = input.ResumeURL
+	}
+	parsed, err := parseAllowedURL(target, downloader.allowedHosts)
 	if err != nil {
 		return Artifact{}, err
 	}
@@ -130,8 +150,31 @@ func (downloader *Downloader) Download(ctx context.Context, input Request) (Arti
 	if err != nil {
 		return Artifact{}, err
 	}
-	response, err := credentialClient.Do(request)
+	// Retain the allowed redirect destination when admission yields. Resuming
+	// starts at this destination, avoiding repeated requests to the RSS origin.
+	// Keep the total hop count across yields and revalidate allowlist/credentials
+	// on every continuation, including after a restart or settings change.
+	client := *credentialClient
+	previousRedirect := client.CheckRedirect
+	resumeURL, redirects := parsed.String(), input.Redirects
+	client.CheckRedirect = func(next *http.Request, via []*http.Request) error {
+		if input.Redirects+len(via) >= 10 {
+			return errors.New("too many torrent redirects")
+		}
+		if previousRedirect != nil {
+			if err := previousRedirect(next, via); err != nil {
+				return err
+			}
+		}
+		resumeURL, redirects = next.URL.String(), input.Redirects+len(via)
+		return nil
+	}
+	response, err := client.Do(request)
 	if err != nil {
+		var deferred *rssfetch.ArtifactDeferred
+		if errors.As(err, &deferred) {
+			return Artifact{}, &Deferred{URL: resumeURL, Redirects: redirects, RetryAt: deferred.RetryAt}
+		}
 		return Artifact{}, fmt.Errorf("download artifact: %w", err)
 	}
 	defer response.Body.Close()
