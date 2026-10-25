@@ -1,0 +1,10 @@
+=== RUN   TestPreparationPoolSaturation
+=== RUN   TestPreparationPoolSaturation/rss_origins_1
+    preparation_saturation_test.go:198: SATURATION_PROBE {"H_http_active":2,"H_jobs":8,"H_release_to_K_http_ms":-9.056,"H_waiting_for_permission":0,"K_attempts_before_H_release":1,"K_discovered_to_http_ms":1.168,"K_jobs":1,"K_rss_response_to_http_ms":1.168,"K_started_before_H_release":true,"all_consumers_done":9,"max_H_http":2,"preparation_workers_occupied_before_K":2,"prepared_jobs":9,"real_downloads_added":0,"rss_origins_for_H":1}
+=== RUN   TestPreparationPoolSaturation/rss_origins_4
+    preparation_saturation_test.go:198: SATURATION_PROBE {"H_http_active":2,"H_jobs":8,"H_release_to_K_http_ms":1.569,"H_waiting_for_permission":6,"K_attempts_before_H_release":0,"K_discovered_to_http_ms":3002.694,"K_jobs":1,"K_rss_response_to_http_ms":3002.694,"K_started_before_H_release":false,"all_consumers_done":9,"max_H_http":2,"preparation_workers_occupied_before_K":8,"prepared_jobs":9,"real_downloads_added":0,"rss_origins_for_H":4}
+--- PASS: TestPreparationPoolSaturation (16.09s)
+    --- PASS: TestPreparationPoolSaturation/rss_origins_1 (8.04s)
+    --- PASS: TestPreparationPoolSaturation/rss_origins_4 (8.05s)
+PASS
+ok  	github.com/vertex-pro/vertex-pro/internal/app	16.101s
