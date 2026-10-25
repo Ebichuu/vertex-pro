@@ -47,26 +47,3 @@ export function useLanguagePreference(): { language: Language; toggleLanguage: (
   }, [])
   return { language, toggleLanguage }
 }
-
-export type ConnectionState = 'online' | 'offline' | 'reconnecting'
-
-// useConnectionStatus 跟踪浏览器在线状态与 SSE 流状态机。subscribe 注入
-// 便于测试；生产接线（API-09 streamEvents）后续传入真实订阅器。
-export function useConnectionStatus(
-  subscribe: (handler: (state: ConnectionState) => void) => () => void = subscribeBrowserConnectivity,
-): ConnectionState {
-  const [state, setState] = useState<ConnectionState>(() => (typeof navigator !== 'undefined' && !navigator.onLine ? 'offline' : 'online'))
-  useEffect(() => subscribe(setState), [subscribe])
-  return state
-}
-
-function subscribeBrowserConnectivity(handler: (state: ConnectionState) => void): () => void {
-  const goOnline = () => handler('online')
-  const goOffline = () => handler('offline')
-  window.addEventListener('online', goOnline)
-  window.addEventListener('offline', goOffline)
-  return () => {
-    window.removeEventListener('online', goOnline)
-    window.removeEventListener('offline', goOffline)
-  }
-}

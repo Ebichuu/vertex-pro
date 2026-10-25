@@ -183,7 +183,7 @@ function Dashboard() {
     <section aria-labelledby="dashboard-title" className="dashboard-page">
       <p className="eyebrow">DASHBOARD</p>
       <h1 id="dashboard-title">下载器总览</h1>
-      <p className="muted">实时速率来自 API-10 快照，容量与新鲜度来自数据质量投影；SSE 瞬时事件驱动 15 秒自动刷新。</p>
+      <p className="muted">查看下载器速率、可用容量和数据更新时间。状态变化时自动刷新，每 15 秒定期更新。</p>
       <DashboardCards data={query.data} onOpen={(downloaderId) => { void navigate({ to: '/downloaders/$downloaderId', params: { downloaderId } }) }} />
     </section>
   )

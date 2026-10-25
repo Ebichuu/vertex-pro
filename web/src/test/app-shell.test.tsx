@@ -1,15 +1,23 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
-import { describe, expect, it, afterEach } from 'vitest'
+import { describe, expect, it, afterEach, beforeEach, vi } from 'vitest'
+import userEvent from '@testing-library/user-event'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { RouterProvider } from '@tanstack/react-router'
 import { queryClient } from '../app/query-client'
 import { router } from '../app/router'
 import { server } from '../mocks/server'
 import { ErrorBoundary } from '../components/ui/ErrorBoundary'
+import { TestEventSource } from './event-source'
+
+beforeEach(() => {
+  TestEventSource.instances = []
+  vi.stubGlobal('EventSource', TestEventSource)
+})
 
 afterEach(() => {
   cleanup()
+  vi.unstubAllGlobals()
 })
 
 function renderApp() {
@@ -41,13 +49,17 @@ describe('UI-01 App Shell', () => {
     expect(window.localStorage.getItem('vertex.theme')).toBe(document.documentElement.dataset.theme)
   })
 
-  it('连接状态渲染状态文本并响应浏览器在线事件', async () => {
+  it('连接状态等待 SSE 确认；仅浏览器在线不足以恢复连接', async () => {
     renderApp()
     const status = await screen.findByRole('status')
     expect(['已连接', '离线', '重连中'].some((label) => status.textContent?.includes(label))).toBe(true)
-    window.dispatchEvent(new Event('offline'))
+    act(() => TestEventSource.instances.at(-1)!.emit('stream.ready'))
+    expect(await screen.findByText('已连接')).toBeInTheDocument()
+    act(() => window.dispatchEvent(new Event('offline')))
     expect(await screen.findByText('离线')).toBeInTheDocument()
-    window.dispatchEvent(new Event('online'))
+    act(() => window.dispatchEvent(new Event('online')))
+    expect(await screen.findByText('重连中')).toBeInTheDocument()
+    act(() => TestEventSource.instances.at(-1)!.emit('stream.ready'))
     expect(await screen.findByText('已连接')).toBeInTheDocument()
   })
 
@@ -125,10 +137,35 @@ describe('UI-01 App Shell', () => {
     await waitFor(() => expect(toggle).not.toBeChecked())
     expect(await screen.findByText('v4 · 更新于 2026-08-25')).toBeInTheDocument()
   })
-  it('移动端提供导航折叠开关', async () => {
+  it('移动端键盘展开与关闭导航，选择页面后收起并移动焦点', async () => {
+    const media = new EventTarget() as MediaQueryList
+    Object.defineProperty(media, 'matches', { value: true, writable: true })
+    vi.stubGlobal('matchMedia', () => media)
+    const user = userEvent.setup()
     renderApp()
     const toggle = await screen.findByRole('button', { name: /切换导航/ })
     expect(toggle).toHaveAttribute('aria-controls', 'primary-nav')
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByRole('navigation')).not.toBeInTheDocument()
+    toggle.focus()
+    await user.keyboard('{Enter}')
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    await user.tab()
+    await user.tab()
+    expect(screen.getByRole('link', { name: '总览' })).toHaveFocus()
+    await user.keyboard('{Escape}')
+    expect(toggle).toHaveFocus()
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    await user.click(toggle)
+    await user.click(screen.getByRole('link', { name: '总览' }))
+    expect(await screen.findByRole('heading', { name: '下载器总览' })).toBeInTheDocument()
+    expect(screen.getByRole('main')).toHaveFocus()
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    act(() => {
+      Object.defineProperty(media, 'matches', { value: false })
+      media.dispatchEvent(new Event('change'))
+    })
+    expect(screen.getByRole('navigation')).toBeVisible()
   })
 
   it('全局错误边界捕获渲染异常', () => {

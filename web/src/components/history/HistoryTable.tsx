@@ -15,7 +15,7 @@ type HistoryTableProps = {
 export function HistoryTable({ pages, statusFilter, onStatusFilterChange, hasMore, loading, onLoadMore, onOpen }: HistoryTableProps) {
   const entries = mergePages(pages)
   return (
-    <section aria-labelledby="history-table-title">
+    <section aria-label="历史记录">
       <div className="history-toolbar">
         <label htmlFor="history-status-filter">状态筛选</label>
         <select id="history-status-filter" value={statusFilter} onChange={(event) => onStatusFilterChange(event.target.value)}>
@@ -25,6 +25,7 @@ export function HistoryTable({ pages, statusFilter, onStatusFilterChange, hasMor
         </select>
         <span className="muted" role="note">共 {entries.length} 条</span>
       </div>
+      <div className="history-table-scroll" role="region" aria-label="投递历史表格，可横向滚动" tabIndex={0}>
       <table className="history-table" aria-label="投递历史">
         <thead>
           <tr>
@@ -44,6 +45,7 @@ export function HistoryTable({ pages, statusFilter, onStatusFilterChange, hasMor
           )}
         </tbody>
       </table>
+      </div>
       {hasMore && (
         <button type="button" className="ghost-button" onClick={onLoadMore} disabled={loading}>
           {loading ? '加载中…' : '加载更多'}

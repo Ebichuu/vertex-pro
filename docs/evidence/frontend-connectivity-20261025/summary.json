@@ -1,0 +1,300 @@
+{
+  "date": "2026-10-25",
+  "browser": "Headless Edge",
+  "backend": "Existing local deployment",
+  "frontend": "Isolated development preview",
+  "reports": [
+    {
+      "theme": "light-final",
+      "pages": [
+        {
+          "route": "/",
+          "width": 1440,
+          "scrollWidth": 1440,
+          "violations": []
+        },
+        {
+          "route": "/sites",
+          "width": 1440,
+          "scrollWidth": 1440,
+          "violations": []
+        },
+        {
+          "route": "/rules",
+          "width": 1440,
+          "scrollWidth": 1440,
+          "violations": []
+        },
+        {
+          "route": "/history",
+          "width": 1440,
+          "scrollWidth": 1440,
+          "violations": []
+        },
+        {
+          "route": "/exceptions",
+          "width": 1440,
+          "scrollWidth": 1440,
+          "violations": []
+        },
+        {
+          "route": "/settings",
+          "width": 1440,
+          "scrollWidth": 1440,
+          "violations": []
+        },
+        {
+          "route": "/rules/new",
+          "width": 1440,
+          "scrollWidth": 1440,
+          "violations": []
+        },
+        {
+          "route": "/",
+          "width": 1024,
+          "scrollWidth": 1024,
+          "violations": []
+        },
+        {
+          "route": "/sites",
+          "width": 1024,
+          "scrollWidth": 1024,
+          "violations": []
+        },
+        {
+          "route": "/rules",
+          "width": 1024,
+          "scrollWidth": 1024,
+          "violations": []
+        },
+        {
+          "route": "/history",
+          "width": 1024,
+          "scrollWidth": 1024,
+          "violations": []
+        },
+        {
+          "route": "/exceptions",
+          "width": 1024,
+          "scrollWidth": 1024,
+          "violations": []
+        },
+        {
+          "route": "/settings",
+          "width": 1024,
+          "scrollWidth": 1024,
+          "violations": []
+        },
+        {
+          "route": "/rules/new",
+          "width": 1024,
+          "scrollWidth": 1024,
+          "violations": []
+        },
+        {
+          "route": "/",
+          "width": 390,
+          "scrollWidth": 390,
+          "violations": []
+        },
+        {
+          "route": "/sites",
+          "width": 390,
+          "scrollWidth": 390,
+          "violations": []
+        },
+        {
+          "route": "/rules",
+          "width": 390,
+          "scrollWidth": 390,
+          "violations": []
+        },
+        {
+          "route": "/history",
+          "width": 390,
+          "scrollWidth": 390,
+          "violations": []
+        },
+        {
+          "route": "/exceptions",
+          "width": 390,
+          "scrollWidth": 390,
+          "violations": []
+        },
+        {
+          "route": "/settings",
+          "width": 390,
+          "scrollWidth": 390,
+          "violations": []
+        },
+        {
+          "route": "/rules/new",
+          "width": 390,
+          "scrollWidth": 390,
+          "violations": []
+        }
+      ],
+      "nav": {
+        "before": "false",
+        "visibleBefore": false,
+        "after": "true",
+        "visibleAfter": true,
+        "keyboardClosed": true
+      },
+      "connection": {
+        "initial": "online",
+        "outage": "reconnecting",
+        "restored": "online",
+        "draftPreserved": true
+      },
+      "pageErrors": 0,
+      "unexpectedWrites": 0
+    },
+    {
+      "theme": "dark-final",
+      "pages": [
+        {
+          "route": "/",
+          "width": 1440,
+          "scrollWidth": 1440,
+          "violations": []
+        },
+        {
+          "route": "/sites",
+          "width": 1440,
+          "scrollWidth": 1440,
+          "violations": []
+        },
+        {
+          "route": "/rules",
+          "width": 1440,
+          "scrollWidth": 1440,
+          "violations": []
+        },
+        {
+          "route": "/history",
+          "width": 1440,
+          "scrollWidth": 1440,
+          "violations": []
+        },
+        {
+          "route": "/exceptions",
+          "width": 1440,
+          "scrollWidth": 1440,
+          "violations": []
+        },
+        {
+          "route": "/settings",
+          "width": 1440,
+          "scrollWidth": 1440,
+          "violations": []
+        },
+        {
+          "route": "/rules/new",
+          "width": 1440,
+          "scrollWidth": 1440,
+          "violations": []
+        },
+        {
+          "route": "/",
+          "width": 1024,
+          "scrollWidth": 1024,
+          "violations": []
+        },
+        {
+          "route": "/sites",
+          "width": 1024,
+          "scrollWidth": 1024,
+          "violations": []
+        },
+        {
+          "route": "/rules",
+          "width": 1024,
+          "scrollWidth": 1024,
+          "violations": []
+        },
+        {
+          "route": "/history",
+          "width": 1024,
+          "scrollWidth": 1024,
+          "violations": []
+        },
+        {
+          "route": "/exceptions",
+          "width": 1024,
+          "scrollWidth": 1024,
+          "violations": []
+        },
+        {
+          "route": "/settings",
+          "width": 1024,
+          "scrollWidth": 1024,
+          "violations": []
+        },
+        {
+          "route": "/rules/new",
+          "width": 1024,
+          "scrollWidth": 1024,
+          "violations": []
+        },
+        {
+          "route": "/",
+          "width": 390,
+          "scrollWidth": 390,
+          "violations": []
+        },
+        {
+          "route": "/sites",
+          "width": 390,
+          "scrollWidth": 390,
+          "violations": []
+        },
+        {
+          "route": "/rules",
+          "width": 390,
+          "scrollWidth": 390,
+          "violations": []
+        },
+        {
+          "route": "/history",
+          "width": 390,
+          "scrollWidth": 390,
+          "violations": []
+        },
+        {
+          "route": "/exceptions",
+          "width": 390,
+          "scrollWidth": 390,
+          "violations": []
+        },
+        {
+          "route": "/settings",
+          "width": 390,
+          "scrollWidth": 390,
+          "violations": []
+        },
+        {
+          "route": "/rules/new",
+          "width": 390,
+          "scrollWidth": 390,
+          "violations": []
+        }
+      ],
+      "nav": {
+        "before": "false",
+        "visibleBefore": false,
+        "after": "true",
+        "visibleAfter": true,
+        "keyboardClosed": true
+      },
+      "connection": {
+        "initial": "online",
+        "outage": "reconnecting",
+        "restored": "online",
+        "draftPreserved": true
+      },
+      "pageErrors": 0,
+      "unexpectedWrites": 0
+    }
+  ]
+}
