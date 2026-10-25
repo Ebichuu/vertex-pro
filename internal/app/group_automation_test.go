@@ -27,6 +27,8 @@ import (
 
 // This is a local HTTP fixture test, not evidence for a real qB profile.
 // Workers, persistence, RSS matching, reservation, Add and confirmation are real.
+// Its 60-second correctness waits include instrumented SQLite under -race.
+// Latency thresholds are enforced separately by the pipeline burst tests.
 func TestGroupBatchLifecycleAndQuiPolicy(t *testing.T) {
 	ctx := context.Background()
 	base := time.Date(2026, 10, 23, 0, 0, 0, 0, time.UTC)
@@ -197,7 +199,7 @@ func TestGroupBatchLifecycleAndQuiPolicy(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { runtime.Close() }()
-	waitAutomation(t, func() bool {
+	waitAutomationWithin(t, 60*time.Second, func() bool {
 		var initialized int
 		return runtime.Database.QueryRow(`SELECT initialized FROM feed_runtime_state WHERE feed_id='f'`).Scan(&initialized) == nil && initialized == 1
 	})
@@ -228,7 +230,7 @@ func TestGroupBatchLifecycleAndQuiPolicy(t *testing.T) {
 	if _, err := runtime.Database.Exec(`UPDATE feeds SET enabled=1 WHERE feed_id='f'`); err != nil {
 		t.Fatal(err)
 	}
-	waitAutomation(t, func() bool {
+	waitAutomationWithin(t, 60*time.Second, func() bool {
 		return runtime.Database.QueryRow(`SELECT COUNT(*) FROM race_jobs WHERE job_state='HASH_SEEN'`).Scan(&count) == nil && count == 10
 	}, runtime.Database)
 	mu.Lock()
@@ -248,7 +250,7 @@ func TestGroupBatchLifecycleAndQuiPolicy(t *testing.T) {
 	entries = append(entries, "group-after-restart")
 	mu.Unlock()
 	clock.Add(int64(2 * time.Minute))
-	waitAutomation(t, func() bool {
+	waitAutomationWithin(t, 60*time.Second, func() bool {
 		var at string
 		return runtime.Database.QueryRow(`SELECT last_success_at FROM feed_runtime_state WHERE feed_id='f'`).Scan(&at) == nil && at == now().Format(time.RFC3339Nano)
 	})
@@ -276,7 +278,7 @@ func TestGroupBatchLifecycleAndQuiPolicy(t *testing.T) {
 		}
 	}
 	mu.Unlock()
-	waitAutomation(t, func() bool {
+	waitAutomationWithin(t, 60*time.Second, func() bool {
 		var n int
 		return runtime.Database.QueryRow(`SELECT COUNT(*) FROM capacity_reservations WHERE release_reason='TERMINAL_COMPLETED'`).Scan(&n) == nil && n == 1
 	})
@@ -299,7 +301,7 @@ func TestGroupBatchLifecycleAndQuiPolicy(t *testing.T) {
 	mu.Lock()
 	delete(tasks[removedInstance], removedHash)
 	mu.Unlock()
-	waitAutomation(t, func() bool {
+	waitAutomationWithin(t, 60*time.Second, func() bool {
 		var n int
 		return runtime.Database.QueryRow(`SELECT COUNT(*) FROM capacity_reservations WHERE release_reason='TERMINAL_QB_REMOVED'`).Scan(&n) == nil && n == 1
 	})
@@ -314,7 +316,7 @@ func TestGroupBatchLifecycleAndQuiPolicy(t *testing.T) {
 	if err := runtime.syncDisabledPolicies(ctx); err != nil {
 		t.Fatal(err)
 	}
-	waitAutomation(t, func() bool {
+	waitAutomationWithin(t, 60*time.Second, func() bool {
 		var n int
 		return runtime.Database.QueryRow(`SELECT COUNT(*) FROM qui_policy_bindings WHERE enabled=0`).Scan(&n) == nil && n == 2
 	})

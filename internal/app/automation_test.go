@@ -249,7 +249,12 @@ func TestAutomationWorkersRouteTwoInstancesAndSurviveRestart(t *testing.T) {
 
 func waitAutomation(t *testing.T, ready func() bool, diagnosticDB ...*sql.DB) {
 	t.Helper()
-	deadline := time.Now().Add(8 * time.Second)
+	waitAutomationWithin(t, 8*time.Second, ready, diagnosticDB...)
+}
+
+func waitAutomationWithin(t *testing.T, timeout time.Duration, ready func() bool, diagnosticDB ...*sql.DB) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
 		if ready() {
 			return
