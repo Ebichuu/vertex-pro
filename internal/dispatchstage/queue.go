@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/vertex-pro/vertex-pro/internal/db"
@@ -95,7 +96,12 @@ func (s *Stage) SendNext(ctx context.Context) (worked bool, resultErr error) {
 	defer func() {
 		worked = true
 		if resultErr != nil {
-			_, _ = s.database.ExecContext(ctx, `UPDATE dispatch_queue SET next_attempt_at=? WHERE attempt_id=?`, time.Now().Add(100*time.Millisecond).UTC().Format("2006-01-02T15:04:05.000000000Z"), attempt)
+			// A snapshot can change between the local read and Begin. Give the
+			// publication a few milliseconds, not an entire 100ms latency budget.
+			// Bound fast retries so a persistently invalid cache cannot busy-loop.
+			fast := evidenceChanged(resultErr)
+			now := time.Now()
+			_, _ = s.database.ExecContext(ctx, `UPDATE dispatch_queue SET next_attempt_at=CASE WHEN ? AND evidence_retries<3 THEN ? ELSE ? END,evidence_retries=CASE WHEN ? THEN evidence_retries+1 ELSE 0 END WHERE attempt_id=?`, fast, now.Add(5*time.Millisecond).UTC().Format("2006-01-02T15:04:05.000000000Z"), now.Add(100*time.Millisecond).UTC().Format("2006-01-02T15:04:05.000000000Z"), fast, attempt)
 		}
 	}()
 	defer func() { s.queueMu.Lock(); delete(s.active, attempt); s.queueMu.Unlock() }()
@@ -249,34 +255,47 @@ func (s *Stage) SendNext(ctx context.Context) (worked bool, resultErr error) {
 	return err == nil, err
 }
 
+func evidenceChanged(err error) bool {
+	for _, code := range []string{"INSTANCE_EVIDENCE_CHANGED", "INSTANCE_EVIDENCE_NOT_READY", "sync changed before placement", "CAPACITY_CHANGED_BEFORE_SEND"} {
+		if strings.Contains(err.Error(), code) {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *Stage) cancelQueued(ctx context.Context, attempt, job, reason string) error {
 	return db.RunImmediate(ctx, s.database, func(ctx context.Context, tx *db.ImmediateTx) error {
-		var safe int
-		if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM placement_attempts a JOIN submit_intents i ON i.attempt_id=a.attempt_id JOIN capacity_reservations r ON r.attempt_id=a.attempt_id WHERE a.attempt_id=? AND a.job_id=? AND a.attempt_state='RESERVED' AND a.dispatch_state='NOT_STARTED' AND i.dispatch_state='NOT_STARTED' AND i.response_fact_at IS NULL AND r.reservation_state='ACTIVE' AND r.reflected_physical_bytes=0 AND NOT EXISTS(SELECT 1 FROM capacity_task_bindings b WHERE b.reservation_id=r.reservation_id)`, attempt, job).Scan(&safe); err != nil {
+		return s.cancelQueuedTx(ctx, tx, attempt, job, reason)
+	})
+}
+
+func (s *Stage) cancelQueuedTx(ctx context.Context, tx *db.ImmediateTx, attempt, job, reason string) error {
+	var safe int
+	if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM placement_attempts a JOIN submit_intents i ON i.attempt_id=a.attempt_id JOIN capacity_reservations r ON r.attempt_id=a.attempt_id JOIN race_jobs j ON j.current_attempt_id=a.attempt_id WHERE a.attempt_id=? AND a.job_id=? AND j.job_state='RESERVED' AND a.attempt_state='RESERVED' AND a.dispatch_state='NOT_STARTED' AND i.dispatch_state='NOT_STARTED' AND i.dispatch_started_at IS NULL AND i.response_fact_at IS NULL AND r.reservation_state='ACTIVE' AND r.reflected_physical_bytes=0 AND NOT EXISTS(SELECT 1 FROM capacity_task_bindings b WHERE b.reservation_id=r.reservation_id) AND NOT EXISTS(SELECT 1 FROM pending_confirmations p WHERE p.attempt_id=a.attempt_id)`, attempt, job).Scan(&safe); err != nil {
+		return err
+	}
+	if safe != 1 {
+		return errors.New("CANCEL_NO_EFFECT_NOT_PROVEN")
+	}
+	at := s.config.Now().UTC().Format(time.RFC3339Nano)
+	statements := []struct {
+		q    string
+		args []any
+	}{
+		{`UPDATE placement_attempts SET attempt_state='ADD_FAILED',side_effect_fact='FAILED_NO_EFFECT',finished_at=? WHERE attempt_id=?`, []any{at, attempt}},
+		{`UPDATE capacity_reservations SET reservation_state='RELEASED',release_reason='NO_EFFECT',released_unconsumed_bytes=reserved_bytes,released_at=?,revision=revision+1 WHERE attempt_id=?`, []any{at, attempt}},
+		{`UPDATE race_jobs SET job_state='ADD_FAILED',current_attempt_id=NULL,placement_wait_reason=?,updated_at=? WHERE job_id=?`, []any{reason, at, job}},
+		{`UPDATE sync_waiters SET waiter_state='CLOSED',closed_at=? WHERE attempt_id=?`, []any{at, attempt}},
+		{`DELETE FROM dispatch_queue WHERE attempt_id=?`, []any{attempt}},
+		{`INSERT INTO race_events(job_id,attempt_id,event_type,from_state,to_state,reason_code,safe_metadata_json,occurred_at) VALUES(?,?,'attempt.state.changed','RESERVED','ADD_FAILED',?,'{}',?)`, []any{job, attempt, reason, at}},
+	}
+	for _, v := range statements {
+		if _, err := tx.ExecContext(ctx, v.q, v.args...); err != nil {
 			return err
 		}
-		if safe != 1 {
-			return errors.New("CANCEL_NO_EFFECT_NOT_PROVEN")
-		}
-		at := s.config.Now().UTC().Format(time.RFC3339Nano)
-		statements := []struct {
-			q    string
-			args []any
-		}{
-			{`UPDATE placement_attempts SET attempt_state='ADD_FAILED',side_effect_fact='FAILED_NO_EFFECT',finished_at=? WHERE attempt_id=?`, []any{at, attempt}},
-			{`UPDATE capacity_reservations SET reservation_state='RELEASED',release_reason='NO_EFFECT',released_unconsumed_bytes=reserved_bytes,released_at=?,revision=revision+1 WHERE attempt_id=?`, []any{at, attempt}},
-			{`UPDATE race_jobs SET job_state='ADD_FAILED',current_attempt_id=NULL,placement_wait_reason=?,updated_at=? WHERE job_id=?`, []any{reason, at, job}},
-			{`UPDATE sync_waiters SET waiter_state='CLOSED',closed_at=? WHERE attempt_id=?`, []any{at, attempt}},
-			{`DELETE FROM dispatch_queue WHERE attempt_id=?`, []any{attempt}},
-			{`INSERT INTO race_events(job_id,attempt_id,event_type,from_state,to_state,reason_code,safe_metadata_json,occurred_at) VALUES(?,?,'attempt.state.changed','RESERVED','ADD_FAILED',?,'{}',?)`, []any{job, attempt, reason, at}},
-		}
-		for _, v := range statements {
-			if _, err := tx.ExecContext(ctx, v.q, v.args...); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
+	}
+	return nil
 }
 
 // Policies and legacy artifacts are prepared outside the coordinator and send

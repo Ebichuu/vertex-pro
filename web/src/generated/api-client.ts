@@ -135,6 +135,10 @@ export class ApiClient {
     return this.request<T>(`/api/v1/auth/initialize`, { method: "POST", body: JSON.stringify(opts?.body ?? {}), headers: {"Content-Type": "application/json", ...(opts?.headers ?? {})}, signal: opts?.signal }, opts?.query);
   }
 
+  async listFeedPreparations<T = JsonObject>(id: string, opts?: RequestOptions): Promise<T> {
+    return this.request<T>(`/api/v1/feeds/${encodeURIComponent(id)}/preparations`, { method: "GET", headers: opts?.headers, signal: opts?.signal }, opts?.query);
+  }
+
   async listFeeds<T = JsonObject>(opts?: RequestOptions): Promise<T> {
     return this.request<T>(`/api/v1/feeds`, { method: "GET", headers: opts?.headers, signal: opts?.signal }, opts?.query);
   }

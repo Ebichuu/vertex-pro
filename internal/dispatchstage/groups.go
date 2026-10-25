@@ -53,6 +53,13 @@ func (c *Coordinator) dispatch(ctx context.Context, origin *Stage, job jobRow) (
 	for _, id := range members {
 		allowed[id] = true
 	}
+	if job.replaceAttempt != "" {
+		var previous string
+		if err := origin.database.QueryRowContext(ctx, `SELECT instance_id FROM placement_attempts WHERE attempt_id=?`, job.replaceAttempt).Scan(&previous); err != nil {
+			return nil, err
+		}
+		delete(allowed, previous)
+	}
 	input := placement.DecisionInput{IdentityKey: job.identityKey, TargetMode: placement.TargetInstanceGroup, RequiredBytes: size, Weights: placement.DecisionWeights{InstanceWeight: 1, FreeRatioWeight: 1, InflightPenaltyWeight: 1_000_000, CurrentDownloadLoadPenaltyWeight: 1_000_000, RecentAddLatencyPenaltyWeight: 1}}
 	byID := map[string]*Stage{}
 	var existing *Stage
@@ -138,6 +145,9 @@ func (c *Coordinator) dispatch(ctx context.Context, origin *Stage, job jobRow) (
 		return nil, err
 	}
 	if existing != nil {
+		if job.replaceAttempt != "" {
+			return nil, fmt.Errorf("RESELECT_IDENTITY_ALREADY_PRESENT")
+		}
 		return existing.dispatchJob(ctx, job)
 	}
 	selection, err := placement.Decide(input)

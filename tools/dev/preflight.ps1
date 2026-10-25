@@ -44,6 +44,8 @@ try {
         'verify-implementation-plan' = { & $shellExe -NoProfile -ExecutionPolicy Bypass -File tools/dev/verify-implementation-plan.ps1 }
     }
     $targetResults = @()
+    $logRoot = Join-Path $root 'artifacts/preflight'
+    New-Item -ItemType Directory -Path $logRoot -Force | Out-Null
     foreach ($target in $targetScripts.Keys) {
         $output = ''
         $exitCode = 0
@@ -55,10 +57,14 @@ try {
             $output = $_.Exception.Message
             $exitCode = 1
         }
+        Set-Content -LiteralPath (Join-Path $logRoot "$target.log") -Value $output -Encoding utf8
+        $failureLines = @($output -split '\r?\n' | Where-Object { $_ -match '^FAIL\s|--- FAIL:|panic:|fatal error:|Error:|exceeds 100ms' })
         $targetResults += [ordered]@{
             name = $target
             status = if ($exitCode -eq 0) { 'PASS' } else { 'FAIL' }
             exit_code = $exitCode
+            failure_lines = $failureLines
+            output_log = "artifacts/preflight/$target.log"
             output_tail = if ($output.Length -gt 1000) { $output.Substring($output.Length - 1000) } else { $output }
         }
     }

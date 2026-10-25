@@ -8,7 +8,7 @@ import { ApiClient } from '../generated/api-client'
 import type { HistoryPageData } from '../features/history/history'
 import type { DashboardData } from '../features/dashboard/dashboard'
 import { SitesRssPage } from '../components/sites/SitesRssPage'
-import type { Feed, FeedPatch, FeedPreview, Site, SiteFormValues } from '../features/sites/sites'
+import type { Feed, FeedPatch, FeedPreview, PreparationPage, Site, SiteFormValues } from '../features/sites/sites'
 import { siteIdForName } from '../features/sites/sites'
 import { RequestState, RulesPage, SavedRuleEditor } from './rules-pages'
 import { LiveDryRunPage } from '../components/rules/LiveDryRunPage'
@@ -239,6 +239,7 @@ function Sites() {
     onArchiveFeed={feed => refreshAfter(async () => { await apiClient.archiveFeed(feed.id, { headers: { ...csrfHeaders(), 'If-Match': `"${feed.updatedAt}"` } }) })}
     onUpdateFeed={(feed, patch) => refreshAfter(() => updateFeedOnAPI(feed, patch))}
     onTestFeed={testFeedOnAPI}
+    onLoadPreparations={(id, cursor, signal) => apiClient.listFeedPreparations<PreparationPage>(id, { query: { cursor: cursor || undefined, limit: '50' }, signal })}
   />
 }
 

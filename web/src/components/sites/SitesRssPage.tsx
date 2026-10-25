@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { ApiRequestError } from '../../generated/api-client'
+import { PreparationPanel } from './PreparationPanel'
 import {
   EMPTY_SITE_FORM,
   formatFeedHealth,
@@ -10,6 +11,7 @@ import {
   type Feed,
   type FeedPatch,
   type FeedPreview,
+  type PreparationLoader,
   type Site,
   type SiteFormValues,
 } from '../../features/sites/sites'
@@ -25,6 +27,7 @@ type SitesRssPageProps = {
   onCreateSite?: (form: SiteFormValues) => Promise<SiteCreationResult>
   onUpdateFeed?: (feed: Feed, patch: FeedPatch) => Promise<Feed>
   onTestFeed?: (feed: Feed) => Promise<FeedPreview>
+  onLoadPreparations?: PreparationLoader
   onArchiveSite?: (site: Site) => Promise<void>
   onArchiveFeed?: (feed: Feed) => Promise<void>
   onUpdateSite?: (site: Site, enabled: boolean, credentialRef?: string) => Promise<Site>
@@ -51,7 +54,7 @@ function CredentialRefInput({ site, onSave }: { site: Site; onSave: (site: Site,
   }} /></label>
 }
 
-export function SitesRssPage({ initialSites, onChange, onCreateSite, onUpdateFeed, onTestFeed, onUpdateSite, onArchiveSite, onArchiveFeed }: SitesRssPageProps) {
+export function SitesRssPage({ initialSites, onChange, onCreateSite, onUpdateFeed, onTestFeed, onUpdateSite, onArchiveSite, onArchiveFeed, onLoadPreparations }: SitesRssPageProps) {
   const [sites, setSites] = useState(() => cloneSites(initialSites))
   const sitesRef = useRef(sites)
   useEffect(() => { sitesRef.current = cloneSites(initialSites); setSites(sitesRef.current) }, [initialSites])
@@ -60,6 +63,7 @@ export function SitesRssPage({ initialSites, onChange, onCreateSite, onUpdateFee
   const [errors, setErrors] = useState<ReturnType<typeof validateSiteForm>>({})
   const [notice, setNotice] = useState<string | null>(null)
   const [preview, setPreview] = useState<FeedPreview | null>(null)
+  const [preparationFeedId, setPreparationFeedId] = useState<string | null>(null)
   const [testingFeedId, setTestingFeedId] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [updatingFeedId, setUpdatingFeedId] = useState<string | null>(null)
@@ -240,7 +244,7 @@ export function SitesRssPage({ initialSites, onChange, onCreateSite, onUpdateFee
                     <td data-label="状态"><span className={`status-chip tone-${health.tone}`}>{health.label}</span><label className="table-toggle"><input type="checkbox" checked={feed.enabled} onChange={(event) => { void toggleFeed(feed.id, event.target.checked) }} disabled={updatingFeedId === feed.id} />启用</label>{feed.lastError && <span className="table-error">{feed.lastError}</span>}</td>
                     <td data-label="轮询">{formatPollInterval(feed.pollMinutes)}</td>
                     <td data-label="最近拉取">{feed.lastSuccess ? feed.lastSuccess.slice(0, 10) : '未运行'}{typeof feed.rateWaiting === 'number' && <small className="table-subline muted">限流等待 {feed.rateWaiting} 条 · 累计 {((feed.rateWaitMs ?? 0) / 1000).toFixed(1)} 秒</small>}</td>
-                    <td data-label="发现">{feed.discoveredCount}</td>
+                    <td data-label="发现">{feed.discoveredCount}{onLoadPreparations && <button type="button" className="ghost-button" onClick={() => setPreparationFeedId(feed.id)}>准备状态</button>}</td>
                     <td data-label="操作"><button type="button" className="ghost-button" onClick={() => { void testFeed(feed) }} disabled={testingFeedId === feed.id}>{testingFeedId === feed.id ? '测试中…' : '测试 RSS'}</button>{onArchiveFeed && <button type="button" className="ghost-button" onClick={() => { void archive(selectedSite, feed) }}>删除 RSS</button>}</td>
                   </tr>
                 })}</tbody>
@@ -248,6 +252,7 @@ export function SitesRssPage({ initialSites, onChange, onCreateSite, onUpdateFee
             </div>
           </>}
 
+          {onLoadPreparations && selectedSite?.feeds.filter(feed => feed.id === preparationFeedId).map(feed => <PreparationPanel key={feed.id} feedId={feed.id} name={feed.name} load={onLoadPreparations} onClose={() => setPreparationFeedId(null)} />)}
           {preview && <aside className="rss-preview" aria-live="polite" aria-labelledby="rss-preview-title">
             <div className="sites-rss-section-heading"><div><p className="eyebrow">READ ONLY</p><h3 id="rss-preview-title">测试结果</h3></div><span className="status-chip tone-ok">{preview.source === 'LOCAL_FIXTURE' ? '本地预览' : '已读取'}</span></div>
             <p className="muted">检查时间：{preview.checkedAt}</p>

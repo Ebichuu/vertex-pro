@@ -75,6 +75,7 @@ func Router(deps Deps) http.Handler {
 	mux.Handle("DELETE /api/v1/rules/{id}", guard(deps.archiveResource))
 	mux.Handle("GET /api/v1/feeds", guard(deps.listFeeds))
 	mux.Handle("GET /api/v1/feeds/{id}", guard(deps.getFeed))
+	mux.Handle("GET /api/v1/feeds/{id}/preparations", guard(deps.listPreparations))
 	mux.Handle("POST /api/v1/feeds", guard(deps.createFeed))
 	mux.Handle("PUT /api/v1/feeds/{id}", guard(deps.updateFeed))
 	mux.Handle("POST /api/v1/feeds/{id}/test", guard(deps.testFeed))

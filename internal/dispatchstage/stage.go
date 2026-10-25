@@ -102,10 +102,11 @@ func New(database *sql.DB, config Config) (*Stage, error) {
 func (stage *Stage) RecoverReceipts(ctx context.Context) error { return stage.receipts.Retry(ctx) }
 
 type jobRow struct {
-	jobID       string
-	sourceID    string
-	identityKey string
-	state       string
+	jobID          string
+	sourceID       string
+	identityKey    string
+	state          string
+	replaceAttempt string
 }
 
 // Run advances every discovered job of the configured instance: prepare,
@@ -156,6 +157,9 @@ func (stage *Stage) advancePreparedJob(ctx context.Context, job jobRow) (*dispat
 	if current == "RESERVED" {
 		if stage.config.DurableQueue {
 			stage.Wake()
+			if stage.coordinator != nil {
+				return stage.coordinator.reselect(ctx, stage, job)
+			}
 		}
 		return nil, nil
 	}
@@ -287,6 +291,9 @@ func (stage *Stage) dispatchJob(ctx context.Context, job jobRow) (*dispatchorche
 		return nil, err
 	}
 	if _, exists := evidence.Snapshot.Torrents[job.identityKey]; exists {
+		if job.replaceAttempt != "" {
+			return nil, errors.New("RESELECT_IDENTITY_ALREADY_PRESENT")
+		}
 		return nil, stage.recordAlreadyPresent(ctx, job, evidence, capacity)
 	}
 	if decision.Winner.SeedTimeSeconds > 0 {
@@ -314,11 +321,19 @@ func (stage *Stage) dispatchJob(ctx context.Context, job jobRow) (*dispatchorche
 		return nil, err
 	}
 	now := stage.config.Now()
+	var nextAttempt int
+	if err := stage.database.QueryRowContext(ctx, `SELECT COALESCE(MAX(attempt_no),0)+1 FROM placement_attempts WHERE job_id=?`, job.jobID).Scan(&nextAttempt); err != nil {
+		return nil, err
+	}
+	id := job.jobID
+	if nextAttempt > 1 {
+		id = fmt.Sprintf("%s-%d", id, nextAttempt)
+	}
 	request := dispatchorchestrator.Request{
 		Prepare:   stage.prepareJob(job),
 		Placement: stage.placementInput(job.identityKey, parsed.TotalSize, capacity.EffectiveFree),
 		Reservation: reservation.Request{
-			JobID: job.jobID, AttemptID: "attempt-" + job.jobID, SubmitIntentID: "intent-" + job.jobID, ReservationID: "reservation-" + job.jobID,
+			JobID: job.jobID, AttemptID: "attempt-" + id, SubmitIntentID: "intent-" + id, ReservationID: "reservation-" + id,
 			IdentityKey: job.identityKey, InstanceID: stage.config.Storage.InstanceID, StorageTargetID: stage.config.Storage.StorageTargetID, RequiredBytes: parsed.TotalSize,
 			CapacityEpochID: capacity.ID, AllocationEpoch: capacity.AllocationEpoch, CapacityRevision: int64(evidence.Record.Revision), SnapshotGeneration: int64(evidence.Record.Generation),
 			SnapshotRevision: int64(evidence.Record.Revision), SnapshotDigest: evidence.Record.Digest, RequestFingerprint: "fp-" + job.jobID, TargetFingerprint: "target-" + stage.config.Storage.StorageTargetID,
@@ -326,14 +341,14 @@ func (stage *Stage) dispatchJob(ctx context.Context, job jobRow) (*dispatchorche
 			Now: now.Format(time.RFC3339Nano),
 		},
 		Waiter: syncwaiter.Request{
-			WaiterID: "waiter-attempt-" + job.jobID, InstanceID: stage.config.Storage.InstanceID, RegisteredGeneration: int64(evidence.Record.Generation),
+			WaiterID: "waiter-attempt-" + id, InstanceID: stage.config.Storage.InstanceID, RegisteredGeneration: int64(evidence.Record.Generation),
 			SourceSnapshotRevision: int64(evidence.Record.Revision), IdentityKey: job.identityKey,
 			ConfirmationDeadline:   now.Add(stage.config.ConfirmWindow).Format(time.RFC3339),
 			ReconciliationDeadline: now.Add(stage.config.ReconcileWindow).Format(time.RFC3339),
 			CreatedAt:              now.Format(time.RFC3339Nano),
 		},
 		Dispatch: dispatchflow.Request{
-			AttemptID: "attempt-" + job.jobID, SubmitIntentID: "intent-" + job.jobID, WaiterID: "waiter-attempt-" + job.jobID,
+			AttemptID: "attempt-" + id, SubmitIntentID: "intent-" + id, WaiterID: "waiter-attempt-" + id,
 			APIVersion: stage.config.Profile.WebAPIVersion, HTTPRequest: addRequest,
 		},
 		Sender: stage.config.Sender,
@@ -353,6 +368,9 @@ func (stage *Stage) dispatchJob(ctx context.Context, job jobRow) (*dispatchorche
 			}
 			if !enabled {
 				return errors.New("RULE_CHANGED_BEFORE_RESERVATION")
+			}
+			if job.replaceAttempt != "" {
+				return stage.releaseForReselection(ctx, tx, job)
 			}
 			return nil
 		}

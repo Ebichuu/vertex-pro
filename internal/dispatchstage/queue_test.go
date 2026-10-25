@@ -3,6 +3,7 @@ package dispatchstage
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"path/filepath"
@@ -46,6 +47,42 @@ func allocateQueue(t *testing.T, s *Stage) {
 	result, failures, err := s.Run(context.Background())
 	if err != nil || len(failures) > 0 || len(result) == 0 {
 		t.Fatalf("allocation=%v failures=%v err=%v", result, failures, err)
+	}
+}
+
+func TestSnapshotRetryIsFastButBoundedAndNeverSends(t *testing.T) {
+	f, s, calls := durableFixture(t)
+	allocateQueue(t, s)
+	s.config.Collect = func(context.Context) (Evidence, func(), error) {
+		return Evidence{}, nil, errors.New("INSTANCE_EVIDENCE_CHANGED")
+	}
+	for i := 0; i < 4; i++ {
+		if _, err := f.database.Exec(`UPDATE dispatch_queue SET next_attempt_at=''`); err != nil {
+			t.Fatal(err)
+		}
+		before := time.Now()
+		if worked, err := s.SendNext(context.Background()); !worked || err == nil {
+			t.Fatalf("worked=%v err=%v", worked, err)
+		}
+		after := time.Now()
+		var retry int
+		var raw string
+		if err := f.database.QueryRow(`SELECT evidence_retries,next_attempt_at FROM dispatch_queue`).Scan(&retry, &raw); err != nil {
+			t.Fatal(err)
+		}
+		if retry != i+1 || calls.Load() != 0 {
+			t.Fatalf("retry=%d sends=%d", retry, calls.Load())
+		}
+		due, err := time.Parse(time.RFC3339Nano, raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if i < 3 && due.After(after.Add(6*time.Millisecond)) {
+			t.Fatalf("snapshot retry unnecessarily delayed: %s", due.Sub(after))
+		}
+		if i == 3 && due.Before(before.Add(99*time.Millisecond)) {
+			t.Fatalf("unbounded fast retry: %s", due.Sub(before))
+		}
 	}
 }
 

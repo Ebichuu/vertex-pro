@@ -1,13 +1,13 @@
 # Vertex Pro V1 实施状态表
 
 文档状态：`ACTIVE / AUTHORITATIVE-TRACKER-BY-RC8`  
-最后修订：2026-10-24
+最后修订：2026-10-25
 对应施工手册：`docs/实施流程/VERTEX_PRO_V1_CODE_IMPLEMENTATION_PLAYBOOK.md`  
 对应主规范：`docs/产品方案设计/VERTEX_PRO_COMPLETE_REDESIGN_V1_RC8_FINAL.md`  
 对应产品合同：`docs/产品方案设计/VERTEX_PRO_V1_USER_RULES_CONTRACT.md`  
 仓库目标路径：`docs/实施流程/IMPLEMENTATION_STATUS_V1.md`
 
-当前后续整改：[第四阶段：隔离辅助故障与上游等待](../implementation/2026-10-24-dispatch-pipeline-phase4.md)已完成代码和本地验证：监控解耦、坏条目隔离、限流突发与等待观测、回执落库恢复、策略缓存提前刷新。106 个 Go 测试包及前端 173 项通过；默认 30/min、10 秒同步下，三台不同容量自动分配 30 条全部确认，末条 Add 约 60 秒。持续不可用目标上未发送任务的自动重选、逐条准备状态界面及真实多机复验仍待完成。本地服务尚未部署此轮改动。第三阶段提交已推送，f3ba5ae 的 Linux CI 与 G1 均通过；本轮 CI 按新 SHA 核对。既有 149 项记录保留原证据，不据此提升旧 Gate 结论。
+当前后续整改：[第五阶段：安全重选与逐条准备状态](../implementation/2026-10-25-dispatch-pipeline-phase5.md)已补齐持续不可用目标上未发送任务的事务内重选、逐条准备状态和快照冲突有界快速重试；完整 Go 回归、前端 175 项、构建和契约检查通过。第四阶段的监控解耦、坏条目隔离、限流突发、回执保存恢复和策略提前刷新继续保留。本轮 CI/G1、部署及真实双机复验按新 SHA 单独核对；旧批次保持关闭。既有 149 项记录保留原证据，不据此提升旧 Gate 结论。
 
 ---
 

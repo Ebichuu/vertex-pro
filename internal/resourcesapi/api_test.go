@@ -59,6 +59,7 @@ func TestResourceEndpointsReturnContractPayloads(t *testing.T) {
 	}{
 		{"/api/v1/sites", "HDSky"},
 		{"/api/v1/feeds", "feed-1"},
+		{"/api/v1/feeds/feed-1/preparations", "items"},
 		{"/api/v1/rules", "free-rule"},
 		{"/api/v1/jobs", "Ubuntu 24.04 LTS"},
 		{"/api/v1/instances", "qb-1"},

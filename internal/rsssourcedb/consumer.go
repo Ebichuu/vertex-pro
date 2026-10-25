@@ -110,7 +110,7 @@ func (store *Store) Claim(ctx context.Context, site, feed string, now time.Time)
 		if err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, `UPDATE rss_source_consumers SET attempts=attempts+1,next_attempt_at=?,rate_wait_started_at=NULL WHERE site_id=? AND feed_id=? AND source_key=?`, stamp(now.Add(rsssource.ConsumerLease)), site, feed, key); err != nil {
+		if _, err := tx.ExecContext(ctx, `UPDATE rss_source_consumers SET attempts=attempts+1,next_attempt_at=?,rate_wait_started_at=NULL,preparation_started_at=? WHERE site_id=? AND feed_id=? AND source_key=?`, stamp(now.Add(rsssource.ConsumerLease)), stamp(now), site, feed, key); err != nil {
 			return err
 		}
 		result = &rsssource.Consumer{Source: source, FeedID: feed, Attempts: attempts + 1, Deadline: at}
@@ -128,7 +128,7 @@ func (store *Store) Finish(ctx context.Context, work rsssource.Consumer, code st
 		}
 	}
 	return db.RunImmediate(ctx, store.database, func(ctx context.Context, tx *db.ImmediateTx) error {
-		if _, err := tx.ExecContext(ctx, `UPDATE rss_source_consumers SET state=?,last_error_code=?,next_attempt_at=?,matched=?,rate_wait_started_at=NULL WHERE site_id=? AND feed_id=? AND source_key=? AND state='PENDING' AND attempts=?`, state, code, stamp(now.Add(rsssource.ConsumerRetry(work.Attempts))), work.Matched && code == "", work.Source.SiteID, work.FeedID, work.Source.SourceKey, work.Attempts); err != nil {
+		if _, err := tx.ExecContext(ctx, `UPDATE rss_source_consumers SET state=?,last_error_code=?,next_attempt_at=?,matched=?,rate_wait_started_at=NULL,preparation_started_at=NULL WHERE site_id=? AND feed_id=? AND source_key=? AND state='PENDING' AND attempts=?`, state, code, stamp(now.Add(rsssource.ConsumerRetry(work.Attempts))), work.Matched && code == "", work.Source.SiteID, work.FeedID, work.Source.SourceKey, work.Attempts); err != nil {
 			return err
 		}
 		_, err := tx.ExecContext(ctx, `UPDATE feed_runtime_state SET last_matched=(SELECT count(*) FROM rss_source_consumers c WHERE c.feed_id=feed_runtime_state.feed_id AND c.matched=1 AND julianday(c.discovered_at)>=julianday(feed_runtime_state.last_polled_at)) WHERE feed_id=?`, work.FeedID)

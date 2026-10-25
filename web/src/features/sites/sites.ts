@@ -30,6 +30,23 @@ export type FeedPatch = {
   pollMinutes?: number
 }
 
+export type Preparation = {
+  id: string
+  title: string
+  size_bytes: number | null
+  state: 'QUEUED' | 'RATE_WAIT' | 'PREPARING' | 'RETRY_WAIT' | 'READY' | 'FILTERED' | 'BASELINE' | 'FAILED'
+  attempts: number
+  max_attempts: number
+  rate_wait_ms: number
+  discovered_at: string
+  next_attempt_at: string
+  deadline_at: string
+  last_error_code: string
+  job_id: string
+}
+export type PreparationPage = { items: Preparation[]; next_cursor: string }
+export type PreparationLoader = (feedId: string, cursor: string, signal: AbortSignal) => Promise<PreparationPage>
+
 export type SiteFormValues = {
   siteName: string
   siteUrl: string

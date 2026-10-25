@@ -23,3 +23,11 @@ jobs:
       - name: Run local preflight
         shell: pwsh
         run: ./tools/dev/preflight.ps1
+      - name: Preserve preflight evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: preflight-evidence
+          path: |
+            artifacts/preflight/
+            docs/evidence/boot-05/preflight-check.json
