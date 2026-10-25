@@ -141,6 +141,10 @@ func (store *Store) RecordRateWait(ctx context.Context, work rsssource.Consumer,
 	if waiting {
 		started = stamp(now)
 	}
-	_, err := store.database.ExecContext(ctx, `UPDATE rss_source_consumers SET rate_wait_started_at=?,rate_wait_ms=rate_wait_ms+? WHERE site_id=? AND feed_id=? AND source_key=? AND state='PENDING' AND attempts=?`, started, max(0, elapsed.Milliseconds()), work.Source.SiteID, work.FeedID, work.Source.SourceKey, work.Attempts)
+	// An asynchronous end may arrive after Finish. Preserve its elapsed time,
+	// but never revive a completed attempt's active wait (including retries that
+	// are PENDING without an active preparation). The generation still fences
+	// every delayed observation from a subsequently claimed attempt.
+	_, err := store.database.ExecContext(ctx, `UPDATE rss_source_consumers SET rate_wait_started_at=CASE WHEN state='PENDING' AND preparation_started_at IS NOT NULL THEN ? ELSE NULL END,rate_wait_ms=rate_wait_ms+? WHERE site_id=? AND feed_id=? AND source_key=? AND attempts=?`, started, max(0, elapsed.Milliseconds()), work.Source.SiteID, work.FeedID, work.Source.SourceKey, work.Attempts)
 	return err
 }

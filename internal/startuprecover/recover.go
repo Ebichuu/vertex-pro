@@ -137,8 +137,13 @@ func checkInvariants(ctx context.Context, database *sql.DB, chains []chain, resu
 			if !item.currentPtr.Valid || item.currentPtr.String != item.attemptID || item.jobState != item.attemptState {
 				result.Violations = append(result.Violations, "JOB_ATTEMPT_MISMATCH:"+item.attemptID+":"+item.jobState)
 			}
-		} else if item.currentPtr.Valid {
+		} else if item.currentPtr.Valid && item.currentPtr.String == item.attemptID {
+			// A historical terminal attempt may coexist with a later current
+			// attempt. Only a pointer still targeting this terminal row is stale.
 			result.Violations = append(result.Violations, "JOB_POINTER_NOT_CLEARED:"+item.jobID)
+		}
+		if item.attemptState == "ADD_FAILED" && item.sideEffect != "FAILED_NO_EFFECT" {
+			result.Violations = append(result.Violations, "FAILED_CHAIN_FACT_MISMATCH:"+item.attemptID)
 		}
 		if item.attemptState == "RESERVED" {
 			if !item.intentID.Valid {
@@ -156,7 +161,28 @@ func checkInvariants(ctx context.Context, database *sql.DB, chains []chain, resu
 			}
 		}
 	}
-	return nil
+	// Validate from the job side as well: loadChains cannot reveal a dangling
+	// pointer (or a job with no own attempt). Never accept a foreign job's chain,
+	// a terminal target or inconsistent mirrored state merely because the old
+	// attempt is allowed to have a successor.
+	rows, err := database.QueryContext(ctx, `SELECT j.job_id,j.job_state,COALESCE(j.identity_key,''),a.attempt_id,a.job_id,a.attempt_state,a.identity_key
+	 FROM race_jobs j LEFT JOIN placement_attempts a ON a.attempt_id=j.current_attempt_id
+	 WHERE j.current_attempt_id IS NOT NULL ORDER BY j.job_id`)
+	if err != nil {
+		return fmt.Errorf("check current attempt pointers: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var jobID, state, identity string
+		var attempt, attemptJob, attemptState, attemptIdentity sql.NullString
+		if err := rows.Scan(&jobID, &state, &identity, &attempt, &attemptJob, &attemptState, &attemptIdentity); err != nil {
+			return err
+		}
+		if !attempt.Valid || attemptJob.String != jobID || !pointerStates[attemptState.String] || state != attemptState.String || identity == "" || identity != attemptIdentity.String {
+			result.Violations = append(result.Violations, "JOB_CURRENT_ATTEMPT_INVALID:"+jobID)
+		}
+	}
+	return rows.Err()
 }
 
 func recoverChain(ctx context.Context, database *sql.DB, item chain, input Input, result *Result) error {

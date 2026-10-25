@@ -248,7 +248,7 @@ func New(ctx context.Context, config Config) (*Runtime, error) {
 		return nil, err
 	}
 	feedFetcher = feedFetcher.WithBoundary(boundary)
-	limits, err := rssfetch.NewLimitsWithBurst(activeSettings.RateLimitPerMinute, activeSettings.MaxConcurrentRSSFetches, activeSettings.RequestBurst)
+	limits, err := rssfetch.NewLimitsWithPreparationLimit(activeSettings.RateLimitPerMinute, activeSettings.MaxConcurrentRSSFetches, activeSettings.RequestBurst, activeSettings.MaxPreparationsPerHost)
 	if err != nil {
 		return nil, err
 	}
@@ -455,6 +455,9 @@ func (runtime *Runtime) stopWorkers() {
 		runtime.retentionCancel()
 	}
 	runtime.workers.Wait()
+	if runtime.scheduler != nil {
+		runtime.scheduler.Close()
+	}
 	if runtime.watcher != nil {
 		runtime.watcher.Close()
 	}

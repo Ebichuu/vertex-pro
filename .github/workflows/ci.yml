@@ -4,6 +4,18 @@ on:
   pull_request:
 
 jobs:
+  race:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.6'
+      - name: Check dispatch and preparation concurrency
+        # -short excludes latency benchmarks; race instrumentation must not
+        # weaken or be measured against the separate 100ms performance gate.
+        run: go test -race -short -count=1 ./internal/startuprecover ./internal/dispatchstage ./internal/rssfetch ./internal/schedulercycle ./internal/rsssourcedb ./internal/app
   preflight:
     runs-on: ubuntu-latest
     steps:

@@ -42,6 +42,7 @@ type Cycle struct {
 	maxFeedSize int64
 	now         func() time.Time
 	artifacts   artifactCache
+	progress    *rateProgressReporter
 }
 
 // New assembles a cycle. feedLimit bounds feed bodies; download limits are
@@ -61,7 +62,20 @@ func New(fetcher rssfetch.Fetcher, downloader *torrentdownload.Downloader, dedup
 	if now == nil {
 		now = time.Now
 	}
-	return &Cycle{fetcher: fetcher, downloader: downloader, consumers: consumers, pipeline: pipeline, maxFeedSize: maxFeedSize, now: now}, nil
+	cycle := &Cycle{fetcher: fetcher, downloader: downloader, consumers: consumers, pipeline: pipeline, maxFeedSize: maxFeedSize, now: now}
+	if observer, ok := consumers.(rsssource.RateWaitStore); ok {
+		cycle.progress = newRateProgressReporter(observer)
+	}
+	return cycle, nil
+}
+
+// Close cancels progress persistence and waits for its worker. Stop the callers
+// of Run and ConsumeOne first, and close their database only after this returns.
+// It is safe to call Close repeatedly or before any progress was reported.
+func (cycle *Cycle) Close() {
+	if cycle != nil && cycle.progress != nil {
+		cycle.progress.close()
+	}
 }
 
 // Result reports one cycle over one feed.
@@ -211,13 +225,15 @@ func (cycle *Cycle) attemptContext(ctx context.Context, work rsssource.Consumer)
 	// Bound total work by its durable lease; the transport separately starts
 	// the network deadline after a rate permit has been granted.
 	attemptCtx, cancel := context.WithTimeout(ctx, min(rsssource.ConsumerLease-5*time.Second, work.Deadline.Sub(cycle.now())))
-	if observer, ok := cycle.consumers.(rsssource.RateWaitStore); ok {
+	if cycle.progress != nil {
+		progress := cycle.progress.attempt(work)
 		attemptCtx = rssfetch.WithWaitObserver(attemptCtx, func(waiting bool, elapsed time.Duration) {
-			writeCtx, stop := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
-			defer stop()
-			// Observational failures must not prevent acquisition or processing.
-			_ = observer.RecordRateWait(writeCtx, work, waiting, elapsed, cycle.now())
+			progress.report(waiting, elapsed, cycle.now())
 		})
+		return attemptCtx, func() {
+			cancel()
+			progress.finish(cycle.now())
+		}
 	}
 	return attemptCtx, cancel
 }

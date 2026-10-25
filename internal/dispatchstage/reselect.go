@@ -85,6 +85,11 @@ func (c *Coordinator) reselect(ctx context.Context, origin *Stage, job jobRow) (
 				_, err = s.config.EnsurePolicy(ctx, frozen.Decision.Winner)
 			}
 		}
+		if err == nil {
+			// Use the sender's projection, which already includes this task's
+			// reservation. Do not require another task-size worth of free space.
+			_, err = s.prepareCapacity(ctx, e)
+		}
 		if release != nil {
 			release()
 		}
