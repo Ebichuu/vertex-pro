@@ -1,0 +1,85 @@
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  color-scheme: light;
+  --background: #fafafa;
+  --foreground: #171717;
+  --card: #ffffff;
+  --card-foreground: #171717;
+  --popover: #ffffff;
+  --popover-foreground: #171717;
+  --primary: #171717;
+  --primary-foreground: #ffffff;
+  --secondary: #f1f1f1;
+  --secondary-foreground: #262626;
+  --muted: #f5f5f5;
+  --muted-foreground: #626262;
+  --accent: #f3f3f3;
+  --accent-foreground: #171717;
+  --border: #e3e3e3;
+  --input: #d4d4d4;
+  --ring: #737373;
+  --destructive: #b42323;
+  --destructive-solid: #b42323;
+  --destructive-foreground: #ffffff;
+  --ok: #177245;
+  --warn: #875c06;
+  --bad: #b42323;
+  --info: #245ab2;
+  --radius: .625rem;
+  --surface: var(--background);
+  --panel: var(--card);
+  --text: var(--foreground);
+  --on-accent: var(--primary-foreground);
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --background: #111111;
+  --foreground: #f5f5f5;
+  --card: #191919;
+  --card-foreground: #f5f5f5;
+  --popover: #202020;
+  --popover-foreground: #f5f5f5;
+  --primary: #f5f5f5;
+  --primary-foreground: #171717;
+  --secondary: #272727;
+  --secondary-foreground: #f5f5f5;
+  --muted: #242424;
+  --muted-foreground: #ababab;
+  --accent: #2a2a2a;
+  --accent-foreground: #f5f5f5;
+  --border: #323232;
+  --input: #474747;
+  --ring: #a3a3a3;
+  --destructive: #ff9696;
+  --ok: #78d8a4;
+  --warn: #edc275;
+  --bad: #ff9696;
+  --info: #97bfff;
+}
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-solid: var(--destructive-solid);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 2px);
+}

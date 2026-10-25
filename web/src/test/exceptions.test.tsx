@@ -1,4 +1,5 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within, waitFor, act } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ExceptionsList } from '../components/exceptions/ExceptionsList'
 import { actionsForJob, type ExceptionItem } from '../features/exceptions/exceptions'
@@ -12,6 +13,35 @@ function item(id: string, status: string, label: string): ExceptionItem {
 }
 
 describe('UI-10 Exceptions', () => {
+  it('弹窗默认聚焦取消，Escape 关闭后回到原操作按钮', async () => {
+    const user = userEvent.setup()
+    const action = vi.fn()
+    render(<ExceptionsList items={[item('job-focus', 'UNKNOWN', '需确认')]} uncertainInstances={[]} onAction={action} />)
+    const trigger = screen.getByRole('button', { name: '人工确认已存在' })
+    await user.click(trigger)
+    expect(screen.getByRole('button', { name: '取消' })).toHaveFocus()
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(trigger).toHaveFocus())
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(action).not.toHaveBeenCalled()
+  })
+  it('执行中禁止关闭和重复提交，失败显示在弹窗内并可重试', async () => {
+    const user = userEvent.setup()
+    let reject!: (error: Error) => void
+    const action = vi.fn().mockImplementationOnce(() => new Promise((_resolve, fail) => { reject = fail })).mockResolvedValue(undefined)
+    render(<ExceptionsList items={[item('job-busy', 'UNKNOWN', '需确认')]} uncertainInstances={[]} onAction={action} />)
+    await user.click(screen.getByRole('button', { name: '人工确认已存在' }))
+    await user.click(screen.getByRole('button', { name: '确认执行' }))
+    expect(screen.getByRole('button', { name: '执行中…' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '关闭弹窗' })).toBeDisabled()
+    await user.keyboard('{Escape}')
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    await act(async () => reject(new Error('test failure')))
+    expect(within(screen.getByRole('dialog')).getByRole('alert')).toHaveTextContent('操作未完成')
+    await user.click(screen.getByRole('button', { name: '确认执行' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(action).toHaveBeenCalledTimes(2)
+  })
   it('UNKNOWN 任务展示完整受控操作矩阵', () => {
     const actions = actionsForJob('UNKNOWN')
     expect(actions.map((action) => action.action)).toEqual([

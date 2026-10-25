@@ -20,6 +20,7 @@ export function useTheme(): { theme: Theme; toggleTheme: () => void } {
   const [theme, setTheme] = useState<Theme>(() => (readStored(THEME_KEY) === 'dark' ? 'dark' : 'light'))
   useEffect(() => {
     document.documentElement.dataset.theme = theme
+    document.documentElement.classList.toggle('dark', theme === 'dark')
     try {
       window.localStorage.setItem(THEME_KEY, theme)
     } catch {

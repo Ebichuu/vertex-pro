@@ -1,3 +1,4 @@
+import { Button } from '../ui/button'
 import { useState } from 'react'
 import type { DryRunEvaluationState, DryRunExecutor, DryRunPreviewResult, RecentRssItem } from '../../features/rules/dry-run'
 import { formatCapacityGB } from '../../features/shared/units'
@@ -56,7 +57,7 @@ export function RuleDryRunPage({ items, runDryRun }: RuleDryRunPageProps) {
             <div><dt>大小</dt><dd>{formatSize(selectedItem.sizeBytes)}</dd></div>
             <div><dt>发布时间</dt><dd>{selectedItem.publishedAt.slice(0, 16).replace('T', ' ')}</dd></div>
           </dl>}
-          <button type="button" className="primary-button" disabled={running} onClick={() => { void run() }}>{running ? '正在预览…' : '运行 Dry-run'}</button>
+          <Button type="button" variant="default" className="primary-button" disabled={running} onClick={() => { void run() }}>{running ? '正在预览…' : '运行 Dry-run'}</Button>
         </> : <p className="empty-state">暂无可用于预览的近期 RSS 项。</p>}
         <p className="dry-run-safety">只读取预览输入，不下载、不创建 Reservation、不发送 Add。</p>
       </aside>

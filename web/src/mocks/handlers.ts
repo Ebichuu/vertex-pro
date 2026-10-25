@@ -17,6 +17,7 @@ export const handlers = [
     return HttpResponse.json(dashboardFixture)
   }),
   http.get('/api/v1/instances', () => HttpResponse.json(instancesFixture)),
+  http.get('/api/v1/jobs', () => HttpResponse.json({ items: [], next_cursor: '' })),
   http.get('/api/v1/sites', () => HttpResponse.json(sitesFixture)),
   http.post('/api/v1/sites', async ({ request }) => {
     const body = await request.json() as Record<string, unknown>

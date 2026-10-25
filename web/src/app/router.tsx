@@ -3,6 +3,9 @@ import { createRootRoute, createRoute, createRouter, Link, Outlet, useNavigate }
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { AppShell } from '../components/shell/AppShell'
 import { DashboardCards } from '../components/dashboard/DashboardCards'
+import { DashboardSummary } from '../components/dashboard/DashboardSummary'
+import { Button } from '../components/ui/button'
+import { ArrowUpRight, RefreshCw } from 'lucide-react'
 import { HistoryTable } from '../components/history/HistoryTable'
 import { ApiClient } from '../generated/api-client'
 import type { HistoryPageData } from '../features/history/history'
@@ -163,28 +166,37 @@ function Dashboard() {
     queryFn: () => apiClient.getDashboard<DashboardData>(),
     refetchInterval: 15_000,
   })
+  const recent = useQuery({ queryKey: ['history', 'recent'], queryFn: () => apiClient.listJobs<HistoryPageData>({ query: { limit: '5' } }), refetchInterval: 15_000 })
   if (query.isPending) {
     return (
       <section aria-labelledby="dashboard-title" className="panel">
         <h1 id="dashboard-title">下载器总览</h1>
         <p className="muted">正在加载实例卡片…</p>
+        <div className="dashboard-summary" aria-hidden="true">{[1, 2, 3, 4].map(key => <div className="loading-skeleton" key={key} />)}</div>
       </section>
     )
   }
-  if (query.isError) {
+  if (query.isError && !query.data) {
     return (
       <section aria-labelledby="dashboard-title" className="panel">
         <h1 id="dashboard-title">下载器总览</h1>
-        <p className="muted">仪表盘加载失败：{String(query.error)}</p>
+        <p className="muted" role="alert">仪表盘加载失败：{String(query.error)}</p>
+        <Button onClick={() => { void query.refetch() }} disabled={query.isFetching}>重新加载</Button>
       </section>
     )
   }
   return (
     <section aria-labelledby="dashboard-title" className="dashboard-page">
-      <p className="eyebrow">DASHBOARD</p>
-      <h1 id="dashboard-title">下载器总览</h1>
-      <p className="muted">查看下载器速率、可用容量和数据更新时间。状态变化时自动刷新，每 15 秒定期更新。</p>
-      <DashboardCards data={query.data} onOpen={(downloaderId) => { void navigate({ to: '/downloaders/$downloaderId', params: { downloaderId } }) }} />
+      <div className="page-heading"><div><h1 id="dashboard-title">下载器总览</h1>
+      <p className="muted">下载速度、容量与任务动态，每 15 秒自动更新。</p></div>
+      <Button onClick={() => { void query.refetch(); void recent.refetch() }} disabled={query.isFetching || recent.isFetching}><RefreshCw aria-hidden="true" className={query.isFetching || recent.isFetching ? 'animate-spin' : undefined} />{query.isFetching ? '刷新中…' : '刷新'}</Button></div>
+      {query.isError && <p role="alert" className="inline-warning">刷新失败，当前展示上次成功获取的数据。请稍后重试。</p>}
+      <DashboardSummary data={query.data!} />
+      <DashboardCards data={query.data!} onOpen={(downloaderId) => { void navigate({ to: '/downloaders/$downloaderId', params: { downloaderId } }) }} />
+      <section className="recent-history" aria-labelledby="recent-history-title">
+        <div className="section-heading"><h2 id="recent-history-title">最近投递</h2><Button asChild variant="ghost" size="sm"><Link to="/history">查看全部<ArrowUpRight aria-hidden="true" /></Link></Button></div>
+        {recent.isPending ? <p className="muted">正在加载最近记录…</p> : recent.isError ? <p role="alert" className="inline-warning">最近记录加载失败。<Button variant="link" size="sm" onClick={() => { void recent.refetch() }}>重试</Button></p> : <HistoryTable compact pages={[recent.data]} statusFilter="" onStatusFilterChange={() => {}} hasMore={false} loading={false} onLoadMore={() => {}} onOpen={jobId => { void navigate({ to: '/history/$jobId', params: { jobId } }) }} />}
+      </section>
     </section>
   )
 }

@@ -1,3 +1,5 @@
+import { Input } from '../ui/input'
+import { Button } from '../ui/button'
 import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import {
@@ -133,7 +135,7 @@ export function SettingsPage({ loadSettings, saveSettings, downloadDiagnostics, 
     const id = `settings-${key}`
     const error = errors[key] || (key === 'stats_hourly_retention_days' ? errors.retention : undefined)
     return <Field id={id} label={label} hint={hint} error={error}>
-      <input id={id} type={max ? 'number' : 'text'} min={max ? 1 : undefined} max={max} step={max ? 1 : undefined}
+      <Input id={id} type={max ? 'number' : 'text'} min={max ? 1 : undefined} max={max} step={max ? 1 : undefined}
         value={Number.isNaN(values![key]) ? '' : values![key]} onChange={(event) => update(key, max ? (event.target.value === '' ? NaN : Number(event.target.value)) : event.target.value)}
         aria-invalid={Boolean(error)} aria-describedby={`${id}-hint${error ? ` ${id}-error` : ''}`} />
     </Field>
@@ -148,8 +150,8 @@ export function SettingsPage({ loadSettings, saveSettings, downloadDiagnostics, 
       {notice && <p className={notice.error ? 'settings-permission' : 'settings-notice'} role={notice.error ? 'alert' : 'status'}>{notice.text}</p>}
       {offline && <p className="settings-permission" role="status">连接已断开，草稿保留在当前页面。恢复连接后会检查最新版本。</p>}
       {state.status === 'loading' && <p className="muted" role="status">{saved ? '正在检查最新设置…' : '正在加载设置…'}</p>}
-      {state.error && <div className="settings-permission" role="alert"><p>{state.error}{saved ? '当前显示上次加载的设置。' : ''}</p><button type="button" className="ghost-button" onClick={() => reload(false)} disabled={offline || saving}>重试加载</button></div>}
-      {state.conflict && <div className="settings-permission" role="alert"><p>服务器上有更新的设置。请先记录需要保留的修改，再载入最新版本。</p><button type="button" className="ghost-button" disabled={offline || saving} onClick={() => reload(true)}>放弃草稿并载入最新设置</button></div>}
+      {state.error && <div className="settings-permission" role="alert"><p>{state.error}{saved ? '当前显示上次加载的设置。' : ''}</p><Button type="button" className="ghost-button" onClick={() => reload(false)} disabled={offline || saving}>重试加载</Button></div>}
+      {state.conflict && <div className="settings-permission" role="alert"><p>服务器上有更新的设置。请先记录需要保留的修改，再载入最新版本。</p><Button type="button" className="ghost-button" disabled={offline || saving} onClick={() => reload(true)}>放弃草稿并载入最新设置</Button></div>}
       {!canSave && <p className="settings-permission" role="status">{canEdit ? '当前设置只能查看，保存暂不可用。' : '当前账号只有查看权限。'}</p>}
       {values && saved && <div className="settings-layout">
         <form className="panel settings-form" onSubmit={(event) => { void submit(event) }} aria-label="全局设置表单" noValidate>
@@ -191,14 +193,14 @@ export function SettingsPage({ loadSettings, saveSettings, downloadDiagnostics, 
             <p className="field-hint settings-security-note">安全防护保持启用。凭据不会传入设置页面。</p>
           </fieldset>
           <div className="settings-actions">
-            <button type="submit" className="primary-button" disabled={saving || !canSave || offline || state.status !== 'ready' || state.conflict}>{saving ? '保存中…' : '保存设置'}</button>
+            <Button type="submit" variant="default" className="primary-button" disabled={saving || !canSave || offline || state.status !== 'ready' || state.conflict}>{saving ? '保存中…' : '保存设置'}</Button>
             <span className="muted">{state.dirty ? '有未保存修改' : `上次更新：${new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'short', timeZone: saved.active.timezone, hour12: false }).format(new Date(saved.updated_at))}`}</span>
           </div>
         </form>
         <aside className="panel settings-diagnostics" aria-labelledby="settings-diagnostics-title">
           <p className="eyebrow">DIAGNOSTICS</p><h2 id="settings-diagnostics-title">诊断下载</h2>
           <p className="muted">导出当前服务版本、运行配置摘要和数据库检查结果，供排查问题时使用。</p>
-          <button type="button" className="ghost-button" onClick={() => { void download() }} disabled={downloading || !downloadDiagnostics || offline}>{downloading ? '准备中…' : '下载诊断包'}</button>
+          <Button type="button" className="ghost-button" onClick={() => { void download() }} disabled={downloading || !downloadDiagnostics || offline}>{downloading ? '准备中…' : '下载诊断包'}</Button>
           <p className="settings-diagnostics-note">服务端生成并脱敏，不包含凭据或本页未保存的修改。</p>
           <dl className="settings-active-summary"><dt>当前显示时区</dt><dd>{saved.active.timezone}</dd><dt>当前 RSS 轮询</dt><dd>{saved.active.rss_poll_interval_minutes} 分钟</dd><dt>当前请求上限</dt><dd>{saved.active.rate_limit_per_minute} 次/分钟</dd></dl>
         </aside>

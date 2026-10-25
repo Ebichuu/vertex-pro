@@ -1,3 +1,4 @@
+import { Button } from '../ui/button'
 import { useEffect, useMemo, useState } from 'react'
 import { useDisplayTimezone } from '../../features/settings/timezone'
 import {
@@ -55,7 +56,7 @@ export function DownloaderDetailPage({ downloaderId, loadDetail, onBack }: Downl
   if (state.status === 'loading' || state.downloaderId !== downloaderId) {
     return (
       <section className="downloader-detail-page" aria-labelledby="downloader-detail-loading-title">
-        <button type="button" className="history-back-button" onClick={onBack}>← 返回总览</button>
+        <Button type="button" className="history-back-button" onClick={onBack}>← 返回总览</Button>
         <div className="panel">
           <h1 id="downloader-detail-loading-title">下载器详情</h1>
           <p className="muted" role="status" aria-live="polite">正在加载下载器数据…</p>
@@ -67,11 +68,11 @@ export function DownloaderDetailPage({ downloaderId, loadDetail, onBack }: Downl
   if (state.status === 'error') {
     return (
       <section className="downloader-detail-page" aria-labelledby="downloader-detail-error-title">
-        <button type="button" className="history-back-button" onClick={onBack}>← 返回总览</button>
+        <Button type="button" className="history-back-button" onClick={onBack}>← 返回总览</Button>
         <div className="panel" role="alert">
           <h1 id="downloader-detail-error-title">下载器详情加载失败</h1>
           <p className="muted">未找到或暂时无法读取这个下载器。请返回总览或重新加载。</p>
-          <button type="button" className="ghost-button" onClick={() => setAttempt((value) => value + 1)}>重新加载</button>
+          <Button type="button" className="ghost-button" onClick={() => setAttempt((value) => value + 1)}>重新加载</Button>
         </div>
       </section>
     )
@@ -84,7 +85,7 @@ export function DownloaderDetailPage({ downloaderId, loadDetail, onBack }: Downl
     <article className="downloader-detail-page" aria-labelledby="downloader-detail-title">
       <div className="downloader-detail-heading">
         <div>
-          <button type="button" className="history-back-button" onClick={onBack}>← 返回总览</button>
+          <Button type="button" className="history-back-button" onClick={onBack}>← 返回总览</Button>
           <p className="eyebrow">DOWNLOADER DETAIL</p>
           <h1 id="downloader-detail-title">{detail.name}</h1>
           <p className="muted">查看下载器的最近观测值，以及按 UTC 日、周、月汇总的流量。</p>
@@ -92,7 +93,7 @@ export function DownloaderDetailPage({ downloaderId, loadDetail, onBack }: Downl
         <div className="downloader-detail-status">
           <span className={`status-chip tone-${tone}`}>{healthLabel(detail.health)}</span>
           <span className={`status-chip tone-${detail.freshness === 'FRESH' ? 'ok' : 'wait'}`}>{freshnessLabel(detail.freshness)}</span>
-          <button type="button" className="ghost-button" onClick={() => setAttempt((value) => value + 1)}>刷新数据</button>
+          <Button type="button" className="ghost-button" onClick={() => setAttempt((value) => value + 1)}>刷新数据</Button>
         </div>
       </div>
 
@@ -133,7 +134,7 @@ export function DownloaderDetailPage({ downloaderId, loadDetail, onBack }: Downl
           <div><p className="eyebrow">TRAFFIC HISTORY</p><h2 id="downloader-stats-title">流量统计</h2></div>
           <div className="downloader-period-tabs" role="tablist" aria-label="统计周期">
             {PERIODS.map((item) => (
-              <button key={item.key} type="button" role="tab" aria-selected={periodKey === item.key} className={periodKey === item.key ? 'active' : ''} onClick={() => setPeriodKey(item.key)}>{item.label}</button>
+              <Button key={item.key} type="button" role="tab" aria-selected={periodKey === item.key} className={periodKey === item.key ? 'active' : ''} onClick={() => setPeriodKey(item.key)}>{item.label}</Button>
             ))}
           </div>
         </div>
@@ -201,7 +202,7 @@ function TrafficChart({ period }: { period: DownloaderPeriodSummary }) {
   return (
     <div className="downloader-chart-wrap">
       <div className="downloader-chart-legend"><span><i className="legend-swatch download" />下载</span><span><i className="legend-swatch upload" />上传</span><span><i className="legend-swatch missing" />缺失小时</span></div>
-      <div className="downloader-chart" role="img" aria-label={`${period.label}下载与上传${bytes ? '流量' : '速度'}图`}>
+      <div className="downloader-chart" role="img" tabIndex={0} aria-label={`${period.label}下载与上传${bytes ? '流量' : '速度'}图`}>
         {period.points.map((point) => {
           const download = bytes ? point.downloadedBytes : point.downloadRate
           const upload = bytes ? point.uploadedBytes : point.uploadRate

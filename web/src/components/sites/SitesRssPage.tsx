@@ -1,3 +1,5 @@
+import { Input } from '../ui/input'
+import { Button } from '../ui/button'
 import { useEffect, useRef, useState } from 'react'
 import { ApiRequestError } from '../../generated/api-client'
 import { PreparationPanel } from './PreparationPanel'
@@ -46,7 +48,7 @@ function CredentialRefInput({ site, onSave }: { site: Site; onSave: (site: Site,
   const [focused, setFocused] = useState(false)
   const [saving, setSaving] = useState(false)
   useEffect(() => { if (!focused && !saving) setValue(site.credentialRef) }, [site.credentialRef, focused, saving])
-  return <label>凭据引用<input value={value} placeholder="env:VERTEX_SITE_ZMPT" disabled={saving} onFocus={() => setFocused(true)} onChange={event => setValue(event.target.value)} onBlur={() => {
+  return <label>凭据引用<Input value={value} placeholder="env:VERTEX_SITE_ZMPT" disabled={saving} onFocus={() => setFocused(true)} onChange={event => setValue(event.target.value)} onBlur={() => {
     setFocused(false)
     if (value === site.credentialRef) return
     setSaving(true)
@@ -199,20 +201,20 @@ export function SitesRssPage({ initialSites, onChange, onCreateSite, onUpdateFee
             <span className="muted">不会添加种子</span>
           </div>
           <div className="sites-rss-form-grid">
-            <label>站点名称<input value={form.siteName} onChange={(event) => updateForm('siteName', event.target.value)} aria-invalid={Boolean(errors.siteName)} aria-describedby={errors.siteName ? 'site-name-error' : undefined} /></label>
+            <label>站点名称<Input value={form.siteName} onChange={(event) => updateForm('siteName', event.target.value)} aria-invalid={Boolean(errors.siteName)} aria-describedby={errors.siteName ? 'site-name-error' : undefined} /></label>
             {errors.siteName && <p id="site-name-error" className="field-error" role="alert">{errors.siteName}</p>}
-            <label>站点地址<input type="url" value={form.siteUrl} onChange={(event) => updateForm('siteUrl', event.target.value)} placeholder="https://example.test" aria-invalid={Boolean(errors.siteUrl)} aria-describedby={errors.siteUrl ? 'site-url-error' : undefined} /></label>
+            <label>站点地址<Input type="url" value={form.siteUrl} onChange={(event) => updateForm('siteUrl', event.target.value)} placeholder="https://example.test" aria-invalid={Boolean(errors.siteUrl)} aria-describedby={errors.siteUrl ? 'site-url-error' : undefined} /></label>
             {errors.siteUrl && <p id="site-url-error" className="field-error" role="alert">{errors.siteUrl}</p>}
-            <label>RSS 名称<input value={form.feedName} onChange={(event) => updateForm('feedName', event.target.value)} aria-invalid={Boolean(errors.feedName)} /></label>
+            <label>RSS 名称<Input value={form.feedName} onChange={(event) => updateForm('feedName', event.target.value)} aria-invalid={Boolean(errors.feedName)} /></label>
             {errors.feedName && <p className="field-error" role="alert">{errors.feedName}</p>}
-            <label>RSS 地址<input type="url" value={form.feedUrl} onChange={(event) => updateForm('feedUrl', event.target.value)} placeholder="https://example.test/rss.xml" aria-invalid={Boolean(errors.feedUrl)} /></label>
+            <label>RSS 地址<Input type="url" value={form.feedUrl} onChange={(event) => updateForm('feedUrl', event.target.value)} placeholder="https://example.test/rss.xml" aria-invalid={Boolean(errors.feedUrl)} /></label>
             {errors.feedUrl && <p className="field-error" role="alert">{errors.feedUrl}</p>}
-            <label>凭据引用<span className="field-hint">引用专用环境变量；内容为 Cookie / Authorization 的 JSON 对象</span><input value={form.credentialRef} onChange={(event) => updateForm('credentialRef', event.target.value)} placeholder="env:VERTEX_SITE_ZMPT" /></label>
-            <label>轮询周期（分钟）<input type="number" min="1" max="1440" value={form.pollMinutes} onChange={(event) => updateForm('pollMinutes', event.target.value)} aria-invalid={Boolean(errors.pollMinutes)} /></label>
+            <label>凭据引用<span className="field-hint">引用专用环境变量；内容为 Cookie / Authorization 的 JSON 对象</span><Input value={form.credentialRef} onChange={(event) => updateForm('credentialRef', event.target.value)} placeholder="env:VERTEX_SITE_ZMPT" /></label>
+            <label>轮询周期（分钟）<Input type="number" min="1" max="1440" value={form.pollMinutes} onChange={(event) => updateForm('pollMinutes', event.target.value)} aria-invalid={Boolean(errors.pollMinutes)} /></label>
             {errors.pollMinutes && <p className="field-error" role="alert">{errors.pollMinutes}</p>}
           </div>
-          <label className="checkbox-field"><input type="checkbox" checked={form.enabled} onChange={(event) => updateForm('enabled', event.target.checked)} />创建后启用</label>
-          <button type="submit" className="primary-button" disabled={creating}>{creating ? '保存中…' : '添加 RSS'}</button>
+          <label className="checkbox-field"><Input type="checkbox" checked={form.enabled} onChange={(event) => updateForm('enabled', event.target.checked)} />创建后启用</label>
+          <Button type="submit" variant="default" className="primary-button" disabled={creating}>{creating ? '保存中…' : '添加 RSS'}</Button>
         </form>
 
         <section className="panel sites-rss-data" aria-labelledby="sites-rss-data-title">
@@ -232,7 +234,7 @@ export function SitesRssPage({ initialSites, onChange, onCreateSite, onUpdateFee
             <div className="site-meta">
               <div><span>站点地址</span><strong>{selectedSite.baseUrl}</strong></div>
               <CredentialRefInput key={selectedSite.id} site={selectedSite} onSave={saveCredential} />
-              <label className="checkbox-field"><input type="checkbox" checked={selectedSite.enabled} onChange={(event) => toggleSite(selectedSite.id, event.target.checked)} />站点启用</label>{onArchiveSite && <button type="button" onClick={() => { void archive(selectedSite) }}>删除站点</button>}
+              <label className="checkbox-field"><Input type="checkbox" checked={selectedSite.enabled} onChange={(event) => toggleSite(selectedSite.id, event.target.checked)} />站点启用</label>{onArchiveSite && <Button type="button" onClick={() => { void archive(selectedSite) }}>删除站点</Button>}
             </div>
             <div className="sites-rss-table-wrap">
               <table className="sites-rss-table" aria-label="站点与 RSS 列表">
@@ -241,11 +243,11 @@ export function SitesRssPage({ initialSites, onChange, onCreateSite, onUpdateFee
                   const health = formatFeedHealth(feed)
                   return <tr key={feed.id}>
                     <td data-label="RSS"><strong>{feed.name}</strong><span className="table-subline">{feed.url}</span></td>
-                    <td data-label="状态"><span className={`status-chip tone-${health.tone}`}>{health.label}</span><label className="table-toggle"><input type="checkbox" checked={feed.enabled} onChange={(event) => { void toggleFeed(feed.id, event.target.checked) }} disabled={updatingFeedId === feed.id} />启用</label>{feed.lastError && <span className="table-error">{feed.lastError}</span>}</td>
+                    <td data-label="状态"><span className={`status-chip tone-${health.tone}`}>{health.label}</span><label className="table-toggle"><Input type="checkbox" checked={feed.enabled} onChange={(event) => { void toggleFeed(feed.id, event.target.checked) }} disabled={updatingFeedId === feed.id} />启用</label>{feed.lastError && <span className="table-error">{feed.lastError}</span>}</td>
                     <td data-label="轮询">{formatPollInterval(feed.pollMinutes)}</td>
                     <td data-label="最近拉取">{feed.lastSuccess ? feed.lastSuccess.slice(0, 10) : '未运行'}{typeof feed.rateWaiting === 'number' && <small className="table-subline muted">限流等待 {feed.rateWaiting} 条 · 累计 {((feed.rateWaitMs ?? 0) / 1000).toFixed(1)} 秒</small>}</td>
-                    <td data-label="发现">{feed.discoveredCount}{onLoadPreparations && <button type="button" className="ghost-button" onClick={() => setPreparationFeedId(feed.id)}>准备状态</button>}</td>
-                    <td data-label="操作"><button type="button" className="ghost-button" onClick={() => { void testFeed(feed) }} disabled={testingFeedId === feed.id}>{testingFeedId === feed.id ? '测试中…' : '测试 RSS'}</button>{onArchiveFeed && <button type="button" className="ghost-button" onClick={() => { void archive(selectedSite, feed) }}>删除 RSS</button>}</td>
+                    <td data-label="发现">{feed.discoveredCount}{onLoadPreparations && <Button type="button" className="ghost-button" onClick={() => setPreparationFeedId(feed.id)}>准备状态</Button>}</td>
+                    <td data-label="操作"><Button type="button" className="ghost-button" onClick={() => { void testFeed(feed) }} disabled={testingFeedId === feed.id}>{testingFeedId === feed.id ? '测试中…' : '测试 RSS'}</Button>{onArchiveFeed && <Button type="button" className="ghost-button" onClick={() => { void archive(selectedSite, feed) }}>删除 RSS</Button>}</td>
                   </tr>
                 })}</tbody>
               </table>

@@ -1,3 +1,5 @@
+import { Input } from '../ui/input'
+import { Button } from '../ui/button'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { csrfHeaders } from '../../features/auth/auth'
@@ -70,12 +72,12 @@ export function LiveDryRunPage() {
     <header className="dry-run-page-heading"><div><p className="eyebrow">SAFE PREVIEW</p><h1 id="dry-run-page-title">Dry-run 与聚合预览</h1><p className="muted">使用服务器已保存的启用规则评估输入，留空字段按缺失处理。</p></div></header>
     <div className="dry-run-layout"><form className="panel dry-run-controls" onSubmit={(event) => { void run(event) }}>
       <h2>预览输入</h2>
-      <label>标题<input aria-label="预览标题" value={title} onChange={(event) => setTitle(event.target.value)} /></label>
-      <label>大小（GB）<input aria-label="预览大小（GB）" type="text" inputMode="decimal" value={size} onChange={(event) => setSize(event.target.value)} /><span className="field-hint">1 GB = 1,000,000,000 bytes；留空表示字段缺失</span></label>
+      <label>标题<Input aria-label="预览标题" value={title} onChange={(event) => setTitle(event.target.value)} /></label>
+      <label>大小（GB）<Input aria-label="预览大小（GB）" type="text" inputMode="decimal" value={size} onChange={(event) => setSize(event.target.value)} /><span className="field-hint">1 GB = 1,000,000,000 bytes；留空表示字段缺失</span></label>
       <label>站点<select aria-label="预览站点" value={site} onChange={(event) => setSite(event.target.value)}><option value="">未提供（只评估全局规则）</option>{sites.data?.map((row) => <option key={text(row.id)} value={text(row.id)}>{text(row.name) || text(row.id)}</option>)}</select></label>
-      {sites.isError && <p role="alert">站点加载失败。<button type="button" onClick={() => { void sites.refetch() }}>重试加载</button></p>}
-      <label>分类<input aria-label="预览分类" value={category} onChange={(event) => setCategory(event.target.value)} /></label>
-      <button type="submit" className="primary-button" disabled={busy}>{busy ? '正在预览…' : '运行 Dry-run'}</button>
+      {sites.isError && <p role="alert">站点加载失败。<Button type="button" onClick={() => { void sites.refetch() }}>重试加载</Button></p>}
+      <label>分类<Input aria-label="预览分类" value={category} onChange={(event) => setCategory(event.target.value)} /></label>
+      <Button type="submit" variant="default" className="primary-button" disabled={busy}>{busy ? '正在预览…' : '运行 Dry-run'}</Button>
       <p className="dry-run-safety">不下载、不创建 Reservation、不发送 Add。</p>
     </form><div className="dry-run-results" aria-live="polite" aria-busy={busy}>
       {error && <p role="alert" className="rule-list-error">{error}</p>}

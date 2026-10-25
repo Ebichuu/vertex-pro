@@ -10,7 +10,7 @@ import { toRuleVersionPayload } from '../features/rules/rule-editor'
 import type { RulePatch, RuleSummary } from '../features/rules/rule-list'
 
 export function RequestState({ loading, error, retry }: { loading?: boolean; error?: unknown; retry?: () => void }) {
-  return <section className="panel" aria-live="polite">{loading ? <p role="status">正在加载…</p> : <><p role="alert">{ruleError(error)}</p>{retry && <button type="button" className="ghost-button" onClick={retry}>重试加载</button>}</>}</section>
+  return <section className="panel" aria-live="polite">{loading ? <p role="status">正在加载…</p> : <><p role="alert">{ruleError(error)}</p>{retry && <Button type="button" onClick={retry}>重试加载</Button>}</>}</section>
 }
 
 export function RulesPage({ onEdit, onCreate }: { onEdit: (id: string) => void; onCreate: () => void }) {
@@ -41,7 +41,7 @@ export function RulesPage({ onEdit, onCreate }: { onEdit: (id: string) => void; 
     }
   }
   return <section className="rules-page" aria-labelledby="rules-title">
-    <div className="rules-page-heading"><div><p className="eyebrow">AUTOMATION RULES</p><h1 id="rules-title">规则配置</h1><p className="muted">管理已保存的规则，再通过 Dry-run 核对条件和聚合决策。</p></div><div className="rules-page-actions"><button type="button" className="primary-button" onClick={onCreate}>新建规则</button><Link to="/aggregation" className="ghost-button">Dry-run 预览</Link></div></div>
+    <div className="rules-page-heading"><div><p className="eyebrow">AUTOMATION RULES</p><h1 id="rules-title">规则配置</h1><p className="muted">管理已保存的规则，再通过 Dry-run 核对条件和聚合决策。</p></div><div className="rules-page-actions"><Button type="button" variant="default" onClick={onCreate}><Plus aria-hidden="true" />新建规则</Button><Button asChild><Link to="/aggregation"><FlaskConical aria-hidden="true" />Dry-run 预览</Link></Button></div></div>
     <RuleList rules={query.data} onChange={next => client.setQueryData(['rules'], next)} onUpdateRule={update} onDuplicateRule={duplicate} onArchiveRule={async rule => { try { await rulesClient.archiveRule(rule.id, { headers: { ...csrfHeaders(), 'If-Match': `"${rule.revision}"` } }) } finally { void query.refetch() } }} onEdit={(rule) => onEdit(rule.id)} />
   </section>
 }
@@ -66,3 +66,5 @@ export function SavedRuleEditor({ ruleId, onBack }: { ruleId?: string; onBack: (
     return saved
   }} /></>
 }
+import { Button } from '../components/ui/button'
+import { Plus, FlaskConical } from 'lucide-react'

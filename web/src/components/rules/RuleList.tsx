@@ -1,3 +1,5 @@
+import { Input } from '../ui/input'
+import { Button } from '../ui/button'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   sortRules,
@@ -87,9 +89,9 @@ export function RuleList({ rules: initialRules, onChange, onUpdateRule, onEdit, 
         <div className="rule-list-main"><strong>{rule.name}</strong><span>v{rule.revision} · 更新于 {rule.updatedAt.slice(0, 10)}{rule.policyStatus ? ` · qui 策略：${rule.policyStatus}` : ''}</span></div>
         <div className="rule-list-field"><span>命中</span><strong>{rule.matchCount}</strong></div>
         <div className="rule-list-field rule-list-target"><span>目标 qB</span><strong>{rule.target}</strong></div>
-        <label className="rule-list-priority"><span>优先级</span><input key={`${rule.id}-${rule.revision}`} aria-label={`${rule.name} 优先级`} type="number" min="0" defaultValue={rule.priority} disabled={busyRuleId !== null || !onUpdateRule} onBlur={(event) => changePriority(rule, event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur() }} /></label>
-        <label className="rule-list-enabled"><span>启用</span><input aria-label={`${rule.name} 启用`} type="checkbox" checked={rule.enabled} disabled={busyRuleId !== null || !onUpdateRule} onChange={() => { void applyPatch(rule, { enabled: !rule.enabled }) }} /></label>
-        <div className="rule-list-actions">{onEdit && <button type="button" className="ghost-button" onClick={() => onEdit(rule)}>编辑</button>}<button type="button" className="ghost-button" onClick={() => { void copy(rule) }} disabled={busyRuleId !== null || !onDuplicateRule}>复制</button>{onArchiveRule && <button type="button" className="ghost-button" disabled={busyRuleId !== null} onClick={() => { void archive(rule) }}>删除</button>}</div>
+        <label className="rule-list-priority"><span>优先级</span><Input key={`${rule.id}-${rule.revision}`} aria-label={`${rule.name} 优先级`} type="number" min="0" defaultValue={rule.priority} disabled={busyRuleId !== null || !onUpdateRule} onBlur={(event) => changePriority(rule, event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur() }} /></label>
+        <label className="rule-list-enabled"><span>启用</span><Input aria-label={`${rule.name} 启用`} type="checkbox" checked={rule.enabled} disabled={busyRuleId !== null || !onUpdateRule} onChange={() => { void applyPatch(rule, { enabled: !rule.enabled }) }} /></label>
+        <div className="rule-list-actions">{onEdit && <Button type="button" className="ghost-button" onClick={() => onEdit(rule)}>编辑</Button>}<Button type="button" className="ghost-button" onClick={() => { void copy(rule) }} disabled={busyRuleId !== null || !onDuplicateRule}>复制</Button>{onArchiveRule && <Button type="button" className="ghost-button" disabled={busyRuleId !== null} onClick={() => { void archive(rule) }}>删除</Button>}</div>
       </article>)}</div>
     </>}
   </section>

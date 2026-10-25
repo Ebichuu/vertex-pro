@@ -35,7 +35,7 @@ export const USER_STATUS_FILTERS: ReadonlyArray<{ value: string; label: string }
 ]
 
 // statusTone 决定状态徽章配色：成功/进行/需关注三类。
-export function statusTone(status: string): 'ok' | 'run' | 'wait' | 'bad' {
+export function statusTone(status: string): 'ok' | 'run' | 'wait' | 'bad' | 'neutral' {
   switch (status) {
     case 'COMPLETED':
     case 'SEEDING':
@@ -45,8 +45,11 @@ export function statusTone(status: string): 'ok' | 'run' | 'wait' | 'bad' {
     case 'PREPARING_SEED':
       return 'run'
     case 'NEEDS_CONFIRMATION':
-    case 'DELETED':
+    case 'WAITING_RULE':
+    case 'WAITING_DOWNLOADER':
       return 'wait'
+    case 'DELETED':
+      return 'neutral'
     default:
       return 'bad'
   }

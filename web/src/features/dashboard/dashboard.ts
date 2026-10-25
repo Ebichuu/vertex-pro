@@ -47,8 +47,20 @@ export function cardTone(card: InstanceCard): 'ok' | 'warn' | 'bad' {
   if (card.sync_state === 'OFFLINE') {
     return 'bad'
   }
-  if (card.freshness !== 'FRESH' || card.sync_state !== 'READY' || card.reason_codes.length > 0) {
+  if (card.freshness !== 'FRESH' || card.sync_state !== 'READY' || card.realtime_freshness !== 'FRESH' || card.capacity_state !== 'TRUSTED' || card.storage_state !== 'VERIFIED' || card.reason_codes.length > 0) {
     return 'warn'
   }
   return 'ok'
+}
+
+// 汇总只使用仍然有效的投影。未知或过期值不能成为看似正常的零值。
+export function summarizeInstances(instances: ReadonlyArray<InstanceCard>) {
+  const fresh = instances.filter(card => card.sync_state === 'READY' && card.freshness === 'FRESH')
+  const rates = fresh.filter(card => card.realtime_freshness === 'FRESH')
+  const capacities = fresh.filter(card => card.capacity_state === 'TRUSTED' && card.storage_state === 'VERIFIED')
+  const sum = (cards: ReadonlyArray<InstanceCard>, key: 'download_rate' | 'upload_rate' | 'effective_free_bytes') => {
+    const valid = cards.filter(card => Number.isFinite(card[key]) && card[key] >= 0)
+    return { value: valid.length ? valid.reduce((total, card) => total + card[key], 0) : -1, count: valid.length }
+  }
+  return { online: fresh.length, total: instances.length, download: sum(rates, 'download_rate'), upload: sum(rates, 'upload_rate'), capacity: sum(capacities, 'effective_free_bytes') }
 }

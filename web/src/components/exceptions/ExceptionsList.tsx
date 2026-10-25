@@ -1,5 +1,7 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { actionsForJob, type ExceptionItem } from '../../features/exceptions/exceptions'
+import { Button } from '../ui/button'
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '../ui/dialog'
 
 type ExceptionsListProps = {
   items: ReadonlyArray<ExceptionItem>
@@ -14,11 +16,13 @@ export function ExceptionsList({ items, uncertainInstances, onAction }: Exceptio
   const [executing, setExecuting] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
-  const confirm = (jobID: string, action: string, label: string) => setPending({ jobID, action, label })
+  const triggerRef = useRef<HTMLButtonElement | null>(null)
+  const cancelRef = useRef<HTMLButtonElement>(null)
+  const confirm = (jobID: string, action: string, label: string, trigger: HTMLButtonElement) => { triggerRef.current = trigger; setError(''); setPending({ jobID, action, label }) }
   return (
     <section aria-labelledby="exceptions-list-title">
       <h2 id="exceptions-list-title">待处理异常</h2>
-      {error && <p role="alert">{error}</p>}
+      {error && !pending && <p role="alert">{error}</p>}
       {notice && <p role="status">{notice}</p>}
       {uncertainInstances.length > 0 && (
         <div className="panel exceptions-banner" role="alert">
@@ -38,15 +42,15 @@ export function ExceptionsList({ items, uncertainInstances, onAction }: Exceptio
               {item.action_unavailable_reason && <p className="muted">{item.action_unavailable_reason}</p>}
               <div className="exception-actions" role="group" aria-label={`受控操作 ${item.id}`}>
                 {actions.map((action) => (
-                  <button
+                  <Button
                     key={action.action}
                     type="button"
                     className={action.danger ? 'ghost-button danger' : 'ghost-button'}
                     disabled={executing}
-                    onClick={() => confirm(item.id, action.action, action.label)}
+                    onClick={event => confirm(item.id, action.action, action.label, event.currentTarget)}
                   >
                     {action.label}
-                  </button>
+                  </Button>
                 ))}
               </div>
             </li>
@@ -56,20 +60,20 @@ export function ExceptionsList({ items, uncertainInstances, onAction }: Exceptio
           <li className="muted">当前没有需要人工处理的异常。</li>
         )}
       </ul>
-      {pending && (
-        <div className="confirm-backdrop" role="dialog" aria-modal="true" aria-label="确认受控操作">
-          <div className="panel confirm-dialog">
-            <h2>确认受控操作</h2>
-            <p>
+      <Dialog open={Boolean(pending)} onOpenChange={open => { if (!open && !executing) setPending(null) }}>
+        {pending && <DialogContent busy={executing} onOpenAutoFocus={event => { event.preventDefault(); cancelRef.current?.focus() }} onCloseAutoFocus={event => { event.preventDefault(); if (triggerRef.current?.isConnected) triggerRef.current.focus() }}>
+            <DialogTitle>确认受控操作</DialogTitle>
+            <DialogDescription>
               即将对 {pending.jobID} 执行「{pending.label}」。该操作会写入审计记录，请确认你已核对最后新鲜快照。
-            </p>
+            </DialogDescription>
+            {error && <p role="alert" className="auth-error">{error}</p>}
             <div className="confirm-actions">
-              <button type="button" className="ghost-button" disabled={executing} onClick={() => setPending(null)}>
+              <Button ref={cancelRef} type="button" disabled={executing} onClick={() => setPending(null)}>
                 取消
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
-                className="ghost-button danger"
+                variant="destructive"
                 disabled={executing}
                 onClick={async () => {
                   setExecuting(true)
@@ -86,11 +90,10 @@ export function ExceptionsList({ items, uncertainInstances, onAction }: Exceptio
                 }}
               >
                 {executing ? '执行中…' : '确认执行'}
-              </button>
+              </Button>
             </div>
-          </div>
-        </div>
-      )}
+        </DialogContent>}
+      </Dialog>
     </section>
   )
 }

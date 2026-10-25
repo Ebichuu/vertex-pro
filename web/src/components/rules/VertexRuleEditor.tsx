@@ -1,3 +1,5 @@
+import { Input } from '../ui/input'
+import { Button } from '../ui/button'
 ﻿import { createContext, useContext, useState } from 'react'
 import { parseSizeValueInput, sizeValueInput } from '../../features/rules/size-input'
 import {
@@ -36,7 +38,7 @@ function SizeValueEditor({ condition, valueType, onChange }: { condition: LeafCo
   const drafts = useContext(SizeInputDrafts)
   const input = condition.value && drafts.has(condition.value) ? drafts.get(condition.value)! : sizeValueInput(condition.value)
   const parsed = parseSizeValueInput(input, valueType)
-  return <input aria-label="值" aria-invalid={Boolean(parsed.error)} type="text" inputMode={valueType === 'number' ? 'decimal' : 'text'} value={input} placeholder={valueType === 'number' ? 'GB' : 'GB，以逗号分隔'} onChange={(event) => {
+  return <Input aria-label="值" aria-invalid={Boolean(parsed.error)} type="text" inputMode={valueType === 'number' ? 'decimal' : 'text'} value={input} placeholder={valueType === 'number' ? 'GB' : 'GB，以逗号分隔'} onChange={(event) => {
     const text = event.target.value
     // Keep incomplete input outside the AST; an invalid draft has no numeric value to submit.
     const value = parseSizeValueInput(text, valueType).value ?? { type: valueType }
@@ -70,7 +72,7 @@ function ValueEditor({ condition, spec, onChange }: { condition: LeafCondition; 
   const inputType = valueType === 'number' ? 'number' : valueType === 'time' ? 'datetime-local' : 'text'
   const currentValue = valueType === 'number' ? String(value.number ?? 0) : valueType === 'number_range' || valueType === 'number_set' ? (value.numbers ?? []).join(', ') : valueType === 'string_set' ? (value.strings ?? []).join(', ') : valueType === 'time' || valueType === 'time_range' || valueType === 'time_set' ? (value.time ?? value.times?.join(', ') ?? '') : String(value.string ?? '')
   const collectionValue = valueType === 'string_set' || valueType === 'number_range' || valueType === 'number_set' || valueType === 'time_range' || valueType === 'time_set'
-  return <input aria-label="值" type={inputType} value={currentValue} placeholder={collectionValue ? '以逗号分隔' : undefined} onChange={(event) => onChange(updateValue(condition, valueType, event.target.value))} />
+  return <Input aria-label="值" type={inputType} value={currentValue} placeholder={collectionValue ? '以逗号分隔' : undefined} onChange={(event) => onChange(updateValue(condition, valueType, event.target.value))} />
 }
 
 function LeafEditor({ condition, onChange, onRemove, onCopy, onMove, canMoveUp, canMoveDown }: LeafProps) {
@@ -86,10 +88,10 @@ function LeafEditor({ condition, onChange, onRemove, onCopy, onMove, canMoveUp, 
     <select aria-label="运算符" value={condition.operator} onChange={(event) => changeOperator(event.target.value as VertexOperator)}>{spec.operators.map((operator) => <option key={operator} value={operator}>{OPERATOR_LABELS[operator]}</option>)}</select>
     <ValueEditor condition={condition} spec={spec} onChange={onChange} />
     <div className="rule-node-actions">
-      <button type="button" aria-label="上移条件" title="上移条件" disabled={!canMoveUp} onClick={() => onMove(-1)}>↑</button>
-      <button type="button" aria-label="下移条件" title="下移条件" disabled={!canMoveDown} onClick={() => onMove(1)}>↓</button>
-      <button type="button" aria-label="复制条件" onClick={onCopy}>复制</button>
-      <button type="button" aria-label="删除条件" onClick={onRemove}>删除</button>
+      <Button type="button" aria-label="上移条件" title="上移条件" disabled={!canMoveUp} onClick={() => onMove(-1)}>↑</Button>
+      <Button type="button" aria-label="下移条件" title="下移条件" disabled={!canMoveDown} onClick={() => onMove(1)}>↓</Button>
+      <Button type="button" aria-label="复制条件" onClick={onCopy}>复制</Button>
+      <Button type="button" aria-label="删除条件" onClick={onRemove}>删除</Button>
     </div>
   </div>
 }
@@ -110,12 +112,12 @@ function GroupEditor({ condition, onChange, onRemove, onCopy, onMove, canMoveUp 
     <div className="rule-group-header">
       {simple ? <span className="rule-simple-combinator">全部满足（AND）</span> : <select aria-label="组合运算符" value={condition.operator} onChange={(event) => onChange({ ...condition, operator: event.target.value as 'and' | 'or' })}><option value="and">全部满足（AND）</option><option value="or">任一满足（OR）</option></select>}
       <div className="rule-group-actions">
-        <button type="button" onClick={() => onChange({ ...condition, children: [...condition.children, defaultLeaf()] })}>添加条件</button>
-        {!simple && <button type="button" onClick={() => onChange({ ...condition, children: [...condition.children, { kind: 'group', operator: 'and', children: [defaultLeaf()] }] })}>添加条件组</button>}
-        {onMove && <button type="button" aria-label="上移条件组" title="上移条件组" disabled={!canMoveUp} onClick={() => onMove(-1)}>↑</button>}
-        {onMove && <button type="button" aria-label="下移条件组" title="下移条件组" disabled={!canMoveDown} onClick={() => onMove(1)}>↓</button>}
-        {onCopy && <button type="button" aria-label="复制条件组" onClick={onCopy}>复制组</button>}
-        {onRemove && <button type="button" aria-label="删除条件组" onClick={onRemove}>删除组</button>}
+        <Button type="button" onClick={() => onChange({ ...condition, children: [...condition.children, defaultLeaf()] })}>添加条件</Button>
+        {!simple && <Button type="button" onClick={() => onChange({ ...condition, children: [...condition.children, { kind: 'group', operator: 'and', children: [defaultLeaf()] }] })}>添加条件组</Button>}
+        {onMove && <Button type="button" aria-label="上移条件组" title="上移条件组" disabled={!canMoveUp} onClick={() => onMove(-1)}>↑</Button>}
+        {onMove && <Button type="button" aria-label="下移条件组" title="下移条件组" disabled={!canMoveDown} onClick={() => onMove(1)}>↓</Button>}
+        {onCopy && <Button type="button" aria-label="复制条件组" onClick={onCopy}>复制组</Button>}
+        {onRemove && <Button type="button" aria-label="删除条件组" onClick={onRemove}>删除组</Button>}
       </div>
     </div>
     {condition.children.map((child, index) => child.kind === 'leaf'
@@ -135,8 +137,8 @@ export function VertexRuleEditor({ value = defaultTree(), onChange }: RuleEditor
   return <section className="vertex-rule-editor" aria-label="Vertex 规则编辑器">
     <div className="rule-editor-caption"><span>Vertex 条件树</span><span>v{tree.version}</span></div>
     <div className="rule-mode-switcher" role="tablist" aria-label="规则编辑模式">
-      <button type="button" role="tab" aria-selected={mode === 'simple'} className={mode === 'simple' ? 'active' : ''} onClick={() => setMode('simple')}>简单模式</button>
-      <button type="button" role="tab" aria-selected={mode === 'advanced'} className={mode === 'advanced' ? 'active' : ''} onClick={() => setMode('advanced')}>高级模式</button>
+      <Button type="button" role="tab" aria-selected={mode === 'simple'} className={mode === 'simple' ? 'active' : ''} onClick={() => setMode('simple')}>简单模式</Button>
+      <Button type="button" role="tab" aria-selected={mode === 'advanced'} className={mode === 'advanced' ? 'active' : ''} onClick={() => setMode('advanced')}>高级模式</Button>
     </div>
     {mode === 'simple' && !simpleCompatible && <div className="rule-mode-warning" role="status">当前条件包含简单模式无法表达的高级语义，已保留原 AST；请切换到高级模式编辑。</div>}
     <p className="field-hint">大小按 GB 输入，1 GB = 1,000,000,000 bytes；区间和集合使用逗号分隔。</p>

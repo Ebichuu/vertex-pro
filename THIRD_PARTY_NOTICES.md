@@ -1,9 +1,17 @@
 # Vertex Pro 第三方软件通知
 
-最后修订：2026-08-25  
+最后修订：2026-10-26
 项目许可证：`GPL-2.0-or-later`
 
 本文件用于发布和源码分发场景，记录 Vertex Pro 直接包含、修改或派生使用的第三方源代码。任何新增或升级必须在合并代码前更新本文件。
+
+## shadcn/ui
+
+- 上游项目：[shadcn/ui](https://github.com/shadcn-ui/ui)
+- 上游许可证：MIT，完整版权及许可文本保留于 `web/SHADCN-LICENSE.md`。
+- 导入日期：2026-10-26；来源为官方 registry 的 new-york 组件。
+- `web/src/components/ui/card.tsx`、`badge.tsx`、`button.tsx`、`input.tsx`、`dialog.tsx` 与 `web/src/lib/utils.ts` 包含导入或适配代码；按 React 18、键盘交互与现有业务表单调整。
+- Tailwind、Radix、Lucide 等依赖版本由 `pnpm-lock.yaml` 锁定。参考站点仅用于视觉设计，没有复制其应用源码。
 
 ## autobrr/qui Query Builder
 

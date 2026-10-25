@@ -1,3 +1,4 @@
+import { Button } from '../ui/button'
 import { useEffect, useRef, useState } from 'react'
 import type { PreparationLoader, PreparationPage } from '../../features/sites/sites'
 import { formatCapacityGB } from '../../features/shared/units'
@@ -35,9 +36,9 @@ export function PreparationPanel({ feedId, name, load, onClose }: { feedId: stri
     return () => { controller.abort(); clearTimeout(timer) }
   }, [feedId, cursor, refresh])
   return <aside className="rss-preview" aria-label={`${name} 准备状态`}>
-    <div className="sites-rss-section-heading"><h3>{name} · 逐条准备状态</h3><button type="button" onClick={onClose}>关闭准备状态</button></div>
+    <div className="sites-rss-section-heading"><h3>{name} · 逐条准备状态</h3><Button type="button" onClick={onClose}>关闭准备状态</Button></div>
     <p className="muted">每 5 秒刷新。已进入投递流程的任务可在历史页面查看发送和确认结果。</p>
-    {failed && <p role="alert">准备状态读取失败，当前数据可能已过期。<button type="button" onClick={() => setRefresh(value => value + 1)}>重新读取</button></p>}
+    {failed && <p role="alert">准备状态读取失败，当前数据可能已过期。<Button type="button" onClick={() => setRefresh(value => value + 1)}>重新读取</Button></p>}
     {!page && !failed && <p role="status">正在加载准备状态…</p>}
     {page && <>
       {page.items.length === 0 ? <p>暂无准备记录。</p> : <div className="sites-rss-table-wrap"><table className="sites-rss-table" aria-label="种子准备记录">
@@ -48,7 +49,7 @@ export function PreparationPanel({ feedId, name, load, onClose }: { feedId: stri
           <td>{(item.rate_wait_ms / 1000).toFixed(1)} 秒</td><td>{item.attempts} / {item.max_attempts}</td>
         </tr>)}</tbody>
       </table></div>}
-      <div className="sites-rss-section-heading"><button type="button" disabled={cursors.length === 1} onClick={() => setCursors(value => value.slice(0, -1))}>上一页</button><span>第 {cursors.length} 页</span><button type="button" disabled={!page.next_cursor || failed} onClick={() => setCursors(value => [...value, page.next_cursor])}>下一页</button></div>
+      <div className="sites-rss-section-heading"><Button type="button" disabled={cursors.length === 1} onClick={() => setCursors(value => value.slice(0, -1))}>上一页</Button><span>第 {cursors.length} 页</span><Button type="button" disabled={!page.next_cursor || failed} onClick={() => setCursors(value => [...value, page.next_cursor])}>下一页</Button></div>
     </>}
   </aside>
 }
