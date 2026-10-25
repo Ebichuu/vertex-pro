@@ -1,0 +1,10 @@
+=== RUN   TestDeferredPreparationSurvivesRuntimeRestart
+=== RUN   TestDeferredPreparationSurvivesRuntimeRestart/redirect_false
+    preparation_restart_test.go:187: RUNTIME_RESTART redirect=false starts=3 artifacts=1 jobs=1 downloads=1 entry_requests=0 RSS_requests=1 disabled_continuation_preserved=true
+=== RUN   TestDeferredPreparationSurvivesRuntimeRestart/redirect_true
+    preparation_restart_test.go:187: RUNTIME_RESTART redirect=true starts=3 artifacts=1 jobs=1 downloads=1 entry_requests=1 RSS_requests=1 disabled_continuation_preserved=true
+--- PASS: TestDeferredPreparationSurvivesRuntimeRestart (4.14s)
+    --- PASS: TestDeferredPreparationSurvivesRuntimeRestart/redirect_false (2.08s)
+    --- PASS: TestDeferredPreparationSurvivesRuntimeRestart/redirect_true (2.07s)
+PASS
+ok  	github.com/vertex-pro/vertex-pro/internal/app	4.159s
