@@ -15,7 +15,7 @@ jobs:
       - name: Check dispatch and preparation concurrency
         # -short excludes latency benchmarks; race instrumentation must not
         # weaken or be measured against the separate 100ms performance gate.
-        run: go test -race -short -p 2 -count=1 ./internal/startuprecover ./internal/dispatchstage ./internal/rssfetch ./internal/torrentdownload ./internal/schedulercycle ./internal/rsssourcedb ./internal/app
+        run: go test -race -short -p 2 -count=1 ./internal/db ./internal/startuprecover ./internal/dispatchstage ./internal/rssfetch ./internal/torrentdownload ./internal/schedulercycle ./internal/rsssourcedb ./internal/app
   preflight:
     runs-on: ubuntu-latest
     steps:
