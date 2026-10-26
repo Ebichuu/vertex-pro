@@ -23,6 +23,9 @@ export const dashboardFixture: JsonObject = {
   generated_at: '2026-08-24T00:00:00Z',
   jobs_total: 3,
   user_status_counts: { DOWNLOADING: 2, WAITING: 1 },
+  today_date: '2026-08-24',
+  today_timezone: 'UTC',
+  today_sites: [{ id: 'site-hdsky', name: 'HDSky', enabled: true, feeds: 1, discovered: 12, jobs: 3, confirmed: 2, attention: 1 }],
   instances: [{
     id: 'qb-local',
     sync_state: 'READY',

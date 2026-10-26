@@ -4,6 +4,12 @@ import { server } from '../../mocks/server'
 import { loadHistoryDetail, parseHistoryDetail } from './api'
 
 describe('真实历史详情适配', () => {
+  it.each([
+    ['WAITING_RULE', '等待规则'], ['PREPARING_SEED', '准备种子'], ['WAITING_DOWNLOADER', '等待下载器'],
+    ['ADDING', '正在添加'], ['COMPLETED', '已完成'], ['DELETED', '已删除'], ['FAILED', '失败'],
+  ])('筛选合并后详情仍保留 %s 的精确阶段', (status, label) => {
+    expect(parseHistoryDetail({ id: 'precise', user_status: status }, 'precise').userStatus).toEqual({ user_status: status, user_status_label: label })
+  })
   it('请求真实 job ID，保留已删除事实和最后观测数据，内部状态仅进入诊断', async () => {
     let requestedId: unknown
     server.use(http.get('/api/v1/jobs/:id', ({ params }) => {

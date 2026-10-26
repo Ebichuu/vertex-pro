@@ -305,7 +305,7 @@ func (d Deps) listJobs(response http.ResponseWriter, request *http.Request) {
 	downloaderFilter := query.Get("downloader")
 	filtered := make([]historyproject.Entry, 0, len(entries))
 	for _, entry := range entries {
-		if statusFilter != "" && string(entry.UserStatus.ID) != statusFilter {
+		if statusFilter != "" && !statusMatches(statusFilter, string(entry.UserStatus.ID)) {
 			continue
 		}
 		if downloaderFilter != "" && entry.InstanceID != downloaderFilter {
@@ -514,8 +514,15 @@ func (d Deps) dashboard(response http.ResponseWriter, request *http.Request) {
 		httpapi.WriteError(response, request, "INTERNAL_ERROR", "query instance cards failed")
 		return
 	}
+	now := d.currentTime().UTC()
+	todaySites, err := d.todaySites(request, now)
+	if err != nil {
+		httpapi.WriteError(response, request, "INTERNAL_ERROR", "query daily sites failed")
+		return
+	}
 	d.writeData(response, request, map[string]any{
 		"jobs_total": len(entries), "user_status_counts": counts, "instances": cards,
+		"today_sites": todaySites, "today_date": now.Format("2006-01-02"), "today_timezone": "UTC",
 	})
 }
 

@@ -122,8 +122,8 @@ export function DownloaderDetailPage({ downloaderId, loadDetail, onBack }: Downl
         </div>
         <dl className="downloader-capacity-grid">
           <Metric label="总容量" value={formatDownloaderBytes(detail.capacity.totalBytes)} />
-          <Metric label="物理可用" value={formatDownloaderBytes(detail.capacity.freeBytes)} />
-          <Metric label="Vertex 可用" value={formatDownloaderBytes(detail.capacity.effectiveFreeBytes)} />
+          <Metric label="磁盘剩余" value={formatDownloaderBytes(detail.capacity.freeBytes)} />
+          <Metric label="可接新种空间" value={formatDownloaderBytes(detail.capacity.effectiveFreeBytes)} />
         </dl>
         <CapacityBar capacity={detail.capacity} />
         <p className="downloader-source-note">容量观测于 {formatDownloaderTime(detail.capacity.observedAt)}；未知值保持未知，不按 0 计算。</p>
@@ -179,7 +179,7 @@ function CapacityBar({ capacity }: { capacity: DownloaderDetail['capacity'] }) {
   const effective = capacity.effectiveFreeBytes
   const ratio = total && effective !== undefined && total > 0 ? Math.max(0, Math.min(100, effective / total * 100)) : undefined
   return (
-    <div className="downloader-capacity-bar" aria-label={ratio === undefined ? '容量比例暂无数据' : `Vertex 可用容量 ${ratio.toFixed(0)}%`}>
+    <div className="downloader-capacity-bar" aria-label={ratio === undefined ? '容量比例暂无数据' : `可接新种空间容量 ${ratio.toFixed(0)}%`}>
       <div className="downloader-capacity-track"><span style={{ width: `${ratio ?? 0}%` }} /></div>
       <span>{ratio === undefined ? '容量比例暂无数据' : `${ratio.toFixed(0)}% 可用`}</span>
     </div>

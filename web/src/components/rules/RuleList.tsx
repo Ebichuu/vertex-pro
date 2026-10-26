@@ -77,7 +77,7 @@ export function RuleList({ rules: initialRules, onChange, onUpdateRule, onEdit, 
 
   return <section className="rule-list" aria-label="规则列表">
     <div className="rule-list-header">
-      <div><p className="eyebrow">AUTOMATION RULES</p><h2>投递规则</h2></div>
+      <div><p className="eyebrow">AUTOMATION RULES</p><h2>进种规则</h2></div>
       <div className="rule-list-summary"><strong>{enabledCount}/{rules.length}</strong> 已启用 · <strong>{totalMatches}</strong> 次命中<span>优先级高 → 低</span></div>
     </div>
     {conflict && <div className="rule-mode-warning" role="alert">“{conflict.ruleName}”已被其他编辑者修改，已加载当前 v{conflict.currentRevision}，请重新操作。</div>}

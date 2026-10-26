@@ -1,5 +1,6 @@
 import { ApiClient } from '../../generated/api-client'
-import { USER_STATUS_FILTERS } from './history'
+import { USER_STATUS_IDS } from '../../generated/contracts'
+import { USER_STATUS_LABELS } from './history'
 import type { HistoryDetail, HistoryDetailLoader, HistoryRuleMatch, HistoryTimelineItem } from './history-detail'
 
 const client = new ApiClient(window.location.origin)
@@ -25,8 +26,8 @@ function time(value: unknown): string | undefined {
 export function parseHistoryDetail(raw: unknown, jobId: string): HistoryDetail {
   const data = object(raw)
   if (!data || data.id !== jobId) throw new Error('HISTORY_DETAIL_INVALID_RESPONSE')
-  const status = USER_STATUS_FILTERS.find((item) => item.value && item.value === data.user_status)
-  const userStatus = { user_status: status?.value ?? 'NEEDS_CONFIRMATION', user_status_label: status?.label ?? '需确认' }
+  const status = USER_STATUS_IDS.find(value => value === data.user_status) ?? 'NEEDS_CONFIRMATION'
+  const userStatus = { user_status: status, user_status_label: USER_STATUS_LABELS[status] }
   const decision = object(data.final_decision) ?? {}
   const transfer = object(data.last_transfer) ?? {}
   const rules: HistoryRuleMatch[] = Array.isArray(data.rules) ? data.rules.flatMap((value) => {

@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react'
-import { createRootRoute, createRoute, createRouter, Link, Outlet, useNavigate } from '@tanstack/react-router'
+import { createRootRoute, createRoute, createRouter, Outlet, useNavigate } from '@tanstack/react-router'
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { AppShell } from '../components/shell/AppShell'
 import { DashboardCards } from '../components/dashboard/DashboardCards'
 import { DashboardSummary } from '../components/dashboard/DashboardSummary'
+import { TodaySites } from '../components/dashboard/TodaySites'
 import { Button } from '../components/ui/button'
-import { ArrowUpRight, RefreshCw } from 'lucide-react'
+import { RefreshCw } from 'lucide-react'
 import { HistoryTable } from '../components/history/HistoryTable'
 import { ApiClient } from '../generated/api-client'
 import type { HistoryPageData } from '../features/history/history'
@@ -19,7 +20,7 @@ import { ExceptionsPage } from '../components/exceptions/ExceptionsPage'
 import { HistoryDetailPage } from '../components/history/HistoryDetailPage'
 import { loadHistoryDetail } from '../features/history/api'
 import { DownloaderDetailPage } from '../components/downloaders/DownloaderDetailPage'
-import { loadDownloaderDetail } from '../features/downloaders/api'
+import { loadDownloaderDetail, parseDownloaderPeriod } from '../features/downloaders/api'
 import { csrfHeaders } from '../features/auth/auth'
 import { SettingsPage } from '../components/settings/SettingsPage'
 import { downloadDiagnostics, loadSettings, saveSettings } from '../features/settings/settings'
@@ -166,7 +167,7 @@ function Dashboard() {
     queryFn: () => apiClient.getDashboard<DashboardData>(),
     refetchInterval: 15_000,
   })
-  const recent = useQuery({ queryKey: ['history', 'recent'], queryFn: () => apiClient.listJobs<HistoryPageData>({ query: { limit: '5' } }), refetchInterval: 15_000 })
+  const upload = useQuery({ queryKey: ['dashboard', 'today-upload'], queryFn: async () => parseDownloaderPeriod(await apiClient.getDownloaderSummary({ query: { range: 'DAY' } }), '', 'day'), refetchInterval: 15_000 })
   if (query.isPending) {
     return (
       <section aria-labelledby="dashboard-title" className="panel">
@@ -189,14 +190,11 @@ function Dashboard() {
     <section aria-labelledby="dashboard-title" className="dashboard-page">
       <div className="page-heading"><div><h1 id="dashboard-title">下载器总览</h1>
       <p className="muted">下载速度、容量与任务动态，每 15 秒自动更新。</p></div>
-      <Button onClick={() => { void query.refetch(); void recent.refetch() }} disabled={query.isFetching || recent.isFetching}><RefreshCw aria-hidden="true" className={query.isFetching || recent.isFetching ? 'animate-spin' : undefined} />{query.isFetching ? '刷新中…' : '刷新'}</Button></div>
+      <Button onClick={() => { void query.refetch(); void upload.refetch() }} disabled={query.isFetching || upload.isFetching}><RefreshCw aria-hidden="true" className={query.isFetching || upload.isFetching ? 'animate-spin' : undefined} />{query.isFetching ? '刷新中…' : '刷新'}</Button></div>
       {query.isError && <p role="alert" className="inline-warning">刷新失败，当前展示上次成功获取的数据。请稍后重试。</p>}
-      <DashboardSummary data={query.data!} />
+      <DashboardSummary data={query.data!} todayUpload={upload.data?.uploadedBytes} uploadLoading={upload.isPending} uploadError={upload.isError} />
       <DashboardCards data={query.data!} onOpen={(downloaderId) => { void navigate({ to: '/downloaders/$downloaderId', params: { downloaderId } }) }} />
-      <section className="recent-history" aria-labelledby="recent-history-title">
-        <div className="section-heading"><h2 id="recent-history-title">最近投递</h2><Button asChild variant="ghost" size="sm"><Link to="/history">查看全部<ArrowUpRight aria-hidden="true" /></Link></Button></div>
-        {recent.isPending ? <p className="muted">正在加载最近记录…</p> : recent.isError ? <p role="alert" className="inline-warning">最近记录加载失败。<Button variant="link" size="sm" onClick={() => { void recent.refetch() }}>重试</Button></p> : <HistoryTable compact pages={[recent.data]} statusFilter="" onStatusFilterChange={() => {}} hasMore={false} loading={false} onLoadMore={() => {}} onOpen={jobId => { void navigate({ to: '/history/$jobId', params: { jobId } }) }} />}
-      </section>
+      <TodaySites data={query.data!} />
     </section>
   )
 }
@@ -242,6 +240,7 @@ function Sites() {
   }
   return <SitesRssPage
     initialSites={siteRows}
+    onRefresh={async () => { const result = await query.refetch(); if (result.isError) throw result.error }}
     onCreateSite={(form) => refreshAfter(() => createSiteOnAPI(form, siteRows.length))}
     onUpdateSite={(site, enabled, credentialRef) => refreshAfter(async () => {
       const saved = await apiClient.updateSite<{updated_at: string}>(site.id, { body: { enabled, credential_ref: credentialRef }, headers: { ...csrfHeaders(), 'If-Match': `"${site.updatedAt}"` } })
@@ -277,7 +276,7 @@ function History() {
     <section aria-labelledby="history-title" className="history-page">
       <p className="eyebrow">HISTORY</p>
       <h1 id="history-title">历史</h1>
-      <p className="muted">投递历史在种子被删除后仍然保留；状态使用用户语言，删除行带删除时间与证据来源。</p>
+      <p className="muted">查看进种、下载和做种记录，已删除任务仍保留历史。准备阶段统一筛选，具体状态见记录。</p>
       <HistoryTable
         pages={query.data?.pages ?? []}
         statusFilter={statusFilter}

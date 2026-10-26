@@ -1,6 +1,7 @@
 // Dashboard 卡片的展示模型与格式化辅助（UI-02）。
 // 卡片字段对应 GET /api/v1/dashboard 的实例汇总投影（§18.2 最低字段）。
 import { formatRateMBps, formatTerabytes } from '../shared/units'
+import type { DailySiteStats } from '../../generated/models'
 
 export interface InstanceCard {
   id: string
@@ -24,6 +25,9 @@ export interface DashboardData {
   jobs_total: number
   user_status_counts: Record<string, number>
   instances: ReadonlyArray<InstanceCard>
+  today_date?: string
+  today_timezone?: string
+  today_sites?: ReadonlyArray<DailySiteStats>
 }
 
 export function formatRate(bytesPerSecond: number): string {

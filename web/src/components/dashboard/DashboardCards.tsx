@@ -32,10 +32,11 @@ export function DashboardCards({ data, onOpen }: DashboardCardsProps) {
               <div><dt>上传</dt><dd>{formatRate(card.upload_rate)}</dd></div>
               <div><dt>下载中</dt><dd>{Number.isFinite(card.downloading_count) && card.downloading_count >= 0 ? card.downloading_count : '未知'}</dd></div>
               <div><dt>做种</dt><dd>{Number.isFinite(card.seeding_count) && card.seeding_count >= 0 ? card.seeding_count : '未知'}</dd></div>
-              <div><dt>物理可用</dt><dd>{formatBytes(card.physical_free_bytes)}</dd></div>
-              <div><dt>Vertex 可用</dt><dd>{formatBytes(card.effective_free_bytes)}</dd></div>
+              <div><dt title="下载目录所在磁盘实际剩余的空间">磁盘剩余</dt><dd>{formatBytes(card.physical_free_bytes)}</dd></div>
+              <div><dt title="扣除任务预留、待下载占用和安全余量后，可以分配给新进种任务的空间">可接新种空间</dt><dd>{formatBytes(card.effective_free_bytes)}</dd></div>
             </dl>
             <footer className="dashboard-card-footer">
+              <details className="capacity-help"><summary className="muted">空间怎么算？</summary><p className="muted">磁盘剩余是实际空闲空间；可接新种空间扣除了任务预留、待下载占用和安全余量，用于判断还能接多少新任务。</p></details>
               <span className="muted">{freshnessLabel(card)}{card.realtime_freshness !== 'FRESH' && ' · 速率已过期'}</span>
               {onOpen && <Button type="button" variant="ghost" size="sm" onClick={() => onOpen(card.id)} aria-label={`查看实例 ${card.id} 详情`}>查看详情<ArrowUpRight aria-hidden="true" /></Button>}
               {card.reason_codes.length > 0 && (

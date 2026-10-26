@@ -30,22 +30,31 @@ function card(overrides: Partial<DashboardData['instances'][number]> = {}): Dash
 }
 
 describe('UI-02 Dashboard', () => {
-  it('汇总排除过期、未知和不可信容量，显示实际覆盖范围', () => {
+  it('速度排除过期和未知数据，今日上传独立按 TB 展示', () => {
     const data: DashboardData = { jobs_total: 1, user_status_counts: {}, instances: [
       card({ id: 'live', download_rate: 100_000_000, upload_rate: 200_000_000, effective_free_bytes: 2_000_000_000_000 }),
       card({ id: 'old', freshness: 'STALE', download_rate: 900_000_000, effective_free_bytes: 8_000_000_000_000 }),
       card({ id: 'untrusted', realtime_freshness: 'STALE', capacity_state: 'UNCERTAIN', download_rate: 900_000_000, effective_free_bytes: 8_000_000_000_000 }),
     ] }
-    render(<DashboardSummary data={data} />)
+    render(<DashboardSummary data={data} todayUpload={2_000_000_000_000} />)
     expect(screen.getByText('100.00 MB/s')).toBeInTheDocument()
     expect(screen.getByText('200.00 MB/s')).toBeInTheDocument()
     expect(screen.getByText('2.00 TB')).toBeInTheDocument()
-    expect(screen.getAllByText('仅 1/3 个实例有有效数据')).toHaveLength(3)
+    expect(screen.getAllByText('仅 1/3 个实例有有效数据')).toHaveLength(2)
   })
   it('没有有效监控值时显示未知而不是零速度或零容量', () => {
     render(<DashboardSummary data={{ jobs_total: 0, user_status_counts: {}, instances: [card({ download_rate: -1, upload_rate: Number.NaN, effective_free_bytes: -1 })] }} />)
-    expect(screen.getAllByText('未知')).toHaveLength(3)
-    expect(screen.getAllByText('暂无有效数据')).toHaveLength(3)
+    expect(screen.getAllByText('未知')).toHaveLength(2)
+    expect(screen.getAllByText('暂无有效数据')).toHaveLength(2)
+    expect(screen.getByText('暂无数据')).toBeInTheDocument()
+  })
+  it('区分今日真实零上传、缺失数据和请求失败', () => {
+    const data: DashboardData = { jobs_total: 0, user_status_counts: {}, instances: [] }
+    const { rerender } = render(<DashboardSummary data={data} todayUpload={0} />)
+    expect(screen.getByText('0.00 TB')).toBeInTheDocument()
+    rerender(<DashboardSummary data={data} todayUpload={123} uploadError />)
+    expect(screen.getByText('暂不可用')).toBeInTheDocument()
+    expect(screen.queryByText('0.00 TB')).not.toBeInTheDocument()
   })
   it('优先显示在线实例，支持筛选且不丢失异常原因', () => {
     render(<DashboardCards data={{ jobs_total: 0, user_status_counts: {}, instances: [card({ id: 'off', sync_state: 'OFFLINE', reason_codes: ['SNAPSHOT_STALE'] }), card({ id: 'live' })] }} />)

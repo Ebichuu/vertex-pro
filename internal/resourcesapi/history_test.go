@@ -79,6 +79,21 @@ func TestHistoryListCursorFiltersAndDeletionRetention(t *testing.T) {
 	}
 
 	// 删除后仍保留：已删除任务仍在列表且状态为已删除、带删除时间与来源。
+	// OR groups apply before pagination; intervening WAITING_RULE rows cannot
+	// truncate a page or hide a matching later record.
+	group1, groupNext := fetch("/api/v1/jobs?limit=1&user_status=DELETED,NEEDS_CONFIRMATION")
+	if len(group1) != 1 || groupNext == "" {
+		t.Fatalf("group page1=%v cursor=%q", group1, groupNext)
+	}
+	group2, groupEnd := fetch("/api/v1/jobs?limit=1&user_status=DELETED,NEEDS_CONFIRMATION&cursor=" + groupNext)
+	if len(group2) != 1 || groupEnd != "" || group1[0]["id"] == group2[0]["id"] {
+		t.Fatalf("group page2=%v cursor=%q", group2, groupEnd)
+	}
+	groupIDs := map[any]bool{group1[0]["id"]: true, group2[0]["id"]: true}
+	if !groupIDs["job-1"] || !groupIDs["history-job-1"] {
+		t.Fatalf("wrong grouped jobs=%v", groupIDs)
+	}
+
 	var deletedEntry map[string]any
 	for _, item := range append(page1, page2...) {
 		if item["id"] == "history-job-1" {

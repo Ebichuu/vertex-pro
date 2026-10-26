@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { describe, expect, it, afterEach, beforeEach, vi } from 'vitest'
 import userEvent from '@testing-library/user-event'
@@ -29,6 +29,19 @@ function renderApp() {
 }
 
 describe('UI-01 App Shell', () => {
+  it('总览读取 UTC 今日上传和站点统计，移除重复的最近历史表', async () => {
+    server.use(http.get('/api/v1/stats/downloaders/summary', ({ request }) => {
+      expect(new URL(request.url).searchParams.get('range')).toBe('DAY')
+      return HttpResponse.json({ instance_id: '', range: 'DAY', upload_bytes: 2_000_000_000_000, download_bytes: 100, next_cursor: '', series: [{ bucket_start: '2026-08-24T00:00:00Z', missing: false, upload_bytes: 2_000_000_000_000, download_bytes: 100 }] })
+    }))
+    void router.navigate({ to: '/' })
+    renderApp()
+    expect(await screen.findByText('2.00 TB')).toBeInTheDocument()
+    const table = await screen.findByRole('table', { name: '今日站点数据' })
+    expect(within(table).getByText('HDSky')).toBeInTheDocument()
+    expect(within(table).getByText('12')).toBeInTheDocument()
+    expect(screen.queryByText('最近投递')).not.toBeInTheDocument()
+  })
   it('左侧导航包含六个主入口且可键盘聚焦', async () => {
     renderApp()
     const nav = await screen.findByRole('navigation', { name: '主导航' })
@@ -75,10 +88,10 @@ describe('UI-01 App Shell', () => {
     void router.navigate({ to: '/sites' })
     renderApp()
     await screen.findByRole('heading', { name: '站点与 RSS' })
-    const toggle = screen.getByRole('checkbox', { name: '启用' })
+    const toggle = screen.getByRole('button', { name: '暂停 RSS' })
     fireEvent.click(toggle)
     expect(await screen.findByText('RSS 已更新。')).toBeInTheDocument()
-    expect(toggle).not.toBeChecked()
+    expect(screen.getByRole('button', { name: '启用 RSS' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '测试 RSS' }))
     expect(await screen.findByText('Remote RSS item')).toBeInTheDocument()
     expect(screen.getByText('已读取')).toBeInTheDocument()
@@ -89,16 +102,17 @@ describe('UI-01 App Shell', () => {
     void router.navigate({ to: '/sites' })
     renderApp()
     await screen.findByRole('heading', { name: '站点与 RSS' })
-    const toggle = screen.getByRole('checkbox', { name: '启用' })
+    const toggle = screen.getByRole('button', { name: '暂停 RSS' })
     fireEvent.click(toggle)
     expect(await screen.findByText(/RSS 更新失败/)).toBeInTheDocument()
-    expect(toggle).toBeChecked()
+    expect(screen.getByRole('button', { name: '暂停 RSS' })).toBeInTheDocument()
   })
 
   it('persists a site and then its first feed through the route adapter', async () => {
     void router.navigate({ to: '/sites' })
     renderApp()
     await screen.findByRole('heading', { name: '站点与 RSS' })
+    fireEvent.click(screen.getByRole('button', { name: '添加站点 RSS' }))
     fireEvent.change(screen.getByLabelText('站点名称'), { target: { value: 'New Site' } })
     fireEvent.change(screen.getByLabelText('站点地址'), { target: { value: 'https://new.example' } })
     fireEvent.change(screen.getByLabelText('RSS 名称'), { target: { value: 'New RSS' } })
@@ -113,6 +127,7 @@ describe('UI-01 App Shell', () => {
     void router.navigate({ to: '/sites' })
     renderApp()
     await screen.findByRole('heading', { name: '站点与 RSS' })
+    fireEvent.click(screen.getByRole('button', { name: '添加站点 RSS' }))
     fireEvent.change(screen.getByLabelText('站点名称'), { target: { value: 'Partial Site' } })
     fireEvent.change(screen.getByLabelText('站点地址'), { target: { value: 'https://partial.example' } })
     fireEvent.change(screen.getByLabelText('RSS 名称'), { target: { value: 'Partial RSS' } })

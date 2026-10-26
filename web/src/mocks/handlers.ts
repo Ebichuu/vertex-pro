@@ -17,6 +17,7 @@ export const handlers = [
     return HttpResponse.json(dashboardFixture)
   }),
   http.get('/api/v1/instances', () => HttpResponse.json(instancesFixture)),
+  http.get('/api/v1/stats/downloaders/summary', () => HttpResponse.json({ instance_id: '', range: 'DAY', upload_bytes: 0, download_bytes: 0, series: [], next_cursor: '' })),
   http.get('/api/v1/jobs', () => HttpResponse.json({ items: [], next_cursor: '' })),
   http.get('/api/v1/sites', () => HttpResponse.json(sitesFixture)),
   http.post('/api/v1/sites', async ({ request }) => {

@@ -1,5 +1,6 @@
 // History 列表的展示模型（UI-07）：种子、来源、目标下载器、用户状态，
 // 以及删除后仍保留的删除时间与证据来源（HIS-02 合同）。
+import type { USER_STATUS_IDS } from '../../generated/contracts'
 
 export interface HistoryEntry {
   id: string
@@ -20,18 +21,19 @@ export interface HistoryPageData {
   next_cursor: string
 }
 
+// A filter group is not a task state. Detail views must retain every precise label.
+export const USER_STATUS_LABELS: Record<(typeof USER_STATUS_IDS)[number], string> = {
+  WAITING_RULE: '等待规则', PREPARING_SEED: '准备种子', WAITING_DOWNLOADER: '等待下载器', ADDING: '正在添加',
+  DOWNLOADING: '下载中', SEEDING: '做种中', COMPLETED: '已完成', DELETED: '已删除', FAILED: '失败', NEEDS_CONFIRMATION: '需确认',
+}
+
 export const USER_STATUS_FILTERS: ReadonlyArray<{ value: string; label: string }> = [
   { value: '', label: '全部状态' },
-  { value: 'WAITING_RULE', label: '等待规则' },
-  { value: 'PREPARING_SEED', label: '准备种子' },
-  { value: 'WAITING_DOWNLOADER', label: '等待下载器' },
-  { value: 'ADDING', label: '正在添加' },
+  { value: 'WAITING_RULE,PREPARING_SEED,WAITING_DOWNLOADER,ADDING', label: '准备中' },
   { value: 'DOWNLOADING', label: '下载中' },
   { value: 'SEEDING', label: '做种中' },
-  { value: 'COMPLETED', label: '已完成' },
-  { value: 'DELETED', label: '已删除' },
-  { value: 'FAILED', label: '失败' },
-  { value: 'NEEDS_CONFIRMATION', label: '需确认' },
+  { value: 'COMPLETED,DELETED', label: '已结束' },
+  { value: 'FAILED,NEEDS_CONFIRMATION', label: '需关注' },
 ]
 
 // statusTone 决定状态徽章配色：成功/进行/需关注三类。

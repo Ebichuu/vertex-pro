@@ -125,6 +125,44 @@
   .history-more { padding: 16px 20px; border-top: 1px solid var(--border); }
   .history-table .empty-cell { text-align: center; padding: 36px 20px; }
   .recent-history { min-width: 0; }
+  .today-sites { min-width: 0; }
+  .today-sites .section-heading > div { display: grid; gap: 5px; }
+  .today-site-state { display: flex; gap: 8px; margin-top: 5px; align-items: center; }
+  .today-sites-note { font-size: 11px; margin: 0; padding: 12px 20px; border-top: 1px solid var(--border); }
+  .capacity-help p { margin: 8px 0 0; }
+  .rss-queue { padding: 24px; }
+  .rss-queue-toolbar, .rss-queue-filters { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .rss-queue-toolbar { justify-content: space-between; margin-bottom: 24px; }
+  .rss-queue-toolbar h2 { margin: 0; font-size: 14px; white-space: nowrap; }
+  .rss-queue-toolbar h2 span { margin-left: 6px; font-size: 12px; font-weight: 400; }
+  .rss-queue-filters input { max-width: 230px; }
+  .rss-queue-filters { flex-wrap: nowrap; }
+  .rss-queue-filters select { width: auto; flex: none; }
+  .rss-site-list { display: grid; gap: 24px; }
+  .rss-site-heading { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+  .rss-site-heading h3 { margin: 0; }
+  .site-config { margin-left: auto; font-size: 12px; }
+  .site-config[open] { flex-basis: 100%; margin: 0; }
+  .site-config summary { color: var(--muted-foreground); }
+  .site-config-fields { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; border: 1px solid var(--border); border-radius: 10px; margin-top: 12px; padding: 16px; }
+  .site-config-fields > label:not(.checkbox-field) { display: grid; gap: 6px; }
+  .site-config-fields p { flex-basis: 100%; margin: 0; overflow-wrap: anywhere; }
+  .rss-queue-items { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
+  .rss-queue-item { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; border: 1px solid var(--border); border-radius: 14px; padding: 20px; background: var(--background); }
+  .rss-queue-icon { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 10px; background: var(--card); border: 1px solid var(--border); }
+  .rss-queue-icon svg { width: 18px; height: 18px; color: var(--muted-foreground); }
+  .rss-queue-copy { flex: 1 1 280px; min-width: 0; }
+  .rss-queue-title { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .rss-queue-title strong { font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+  .rss-queue-meta { display: flex; gap: 8px 14px; flex-wrap: wrap; color: var(--muted-foreground); font-size: 11px; margin-top: 8px; }
+  .rss-queue-meta span { display: inline-flex; align-items: center; gap: 5px; }
+  .rss-queue-meta svg { width: 12px; height: 12px; }
+  .rss-queue-actions { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-left: auto; }
+  .rss-queue-error { font-size: 11px; color: var(--bad); margin: 6px 0 0; overflow-wrap: anywhere; }
+  .dialog-content.rss-create-dialog { width: min(680px, calc(100vw - 32px)); }
+  .rss-edit-form { display: grid; gap: 16px; }
+  .rss-edit-form label { display: grid; gap: 6px; font-size: 13px; }
+  .rss-preview { padding-top: 20px; }
   .downloader-chart { min-width: 0; max-width: 100%; }
   .downloader-chart-point { position: relative; }
   .loading-skeleton { border-radius: 8px; background: var(--muted); min-height: 100px; animation: skeleton-pulse 1.8s ease-in-out infinite; }
@@ -163,6 +201,12 @@
     .breadcrumb > span, .breadcrumb > svg { display: none; }
     .page-content { padding: 22px 16px 32px; }
     .panel { padding: 18px; }
+    .rss-queue-filters, .rss-queue-filters input { max-width: none; width: 100%; }
+    .rss-queue-filters { flex-wrap: wrap; }
+    .rss-queue-filters select { width: 100%; }
+    .rss-queue-item { gap: 12px; padding: 16px; }
+    .rss-queue-copy { flex-basis: calc(100% - 52px); }
+    .rss-queue-actions { margin: 0; width: 100%; border-top: 1px solid var(--border); padding-top: 10px; }
     .rule-list-item { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     h1 { font-size: 23px; }
     .page-heading { align-items: flex-start; flex-wrap: wrap; gap: 12px; }

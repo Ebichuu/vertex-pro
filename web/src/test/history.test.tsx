@@ -76,6 +76,10 @@ describe('UI-07 History', () => {
     expect(screen.getAllByText('种子 job-1')).toHaveLength(1)
     fireEvent.change(screen.getByLabelText('状态筛选'), { target: { value: 'SEEDING' } })
     expect(onStatusFilterChange).toHaveBeenCalledWith('SEEDING')
+    const filter = screen.getByLabelText('状态筛选')
+    expect(within(filter).getAllByRole('option').map(option => option.textContent)).toEqual(['全部状态', '准备中', '下载中', '做种中', '已结束', '需关注'])
+    fireEvent.change(filter, { target: { value: 'COMPLETED,DELETED' } })
+    expect(onStatusFilterChange).toHaveBeenLastCalledWith('COMPLETED,DELETED')
   })
 
   it('hasMore 时渲染加载更多并触发回调', () => {
