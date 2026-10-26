@@ -31,7 +31,7 @@ type SitesRssPageProps = {
   initialSites: ReadonlyArray<Site>
   onChange?: (sites: ReadonlyArray<Site>) => void
   onRefresh?: () => Promise<unknown>
-  onCreateSite?: (form: SiteFormValues) => Promise<SiteCreationResult>
+  onCreateSite?: (form: SiteFormValues, existingSite?: Site) => Promise<SiteCreationResult>
   onUpdateFeed?: (feed: Feed, patch: FeedPatch) => Promise<Feed>
   onTestFeed?: (feed: Feed) => Promise<FeedPreview>
   onLoadPreparations?: PreparationLoader
@@ -48,16 +48,17 @@ function configurationError(error: unknown, fallback: string): string {
   return error instanceof ApiRequestError && error.body.message ? error.body.message : fallback
 }
 
-function CredentialRefInput({ site, onSave }: { site: Site; onSave: (site: Site, value: string) => Promise<void> }) {
+function CredentialRefInput({ site, onSave }: { site: Site; onSave: (site: Site, value: string) => Promise<boolean> }) {
   const [value, setValue] = useState(site.credentialRef)
   const [focused, setFocused] = useState(false)
   const [saving, setSaving] = useState(false)
-  useEffect(() => { if (!focused && !saving) setValue(site.credentialRef) }, [site.credentialRef, focused, saving])
-  return <label>凭据引用<Input value={value} placeholder="env:VERTEX_SITE_ZMPT" disabled={saving} onFocus={() => setFocused(true)} onChange={event => setValue(event.target.value)} onBlur={() => {
+  const [dirty, setDirty] = useState(false)
+  useEffect(() => { if (!focused && !saving && !dirty) setValue(site.credentialRef) }, [site.credentialRef, focused, saving, dirty])
+  return <label>凭据引用<Input value={value} placeholder="env:VERTEX_SITE_ZMPT" disabled={saving} onFocus={() => setFocused(true)} onChange={event => { setValue(event.target.value); setDirty(true) }} onBlur={() => {
     setFocused(false)
-    if (value === site.credentialRef) return
+    if (value === site.credentialRef) { setDirty(false); return }
     setSaving(true)
-    void onSave(site, value).finally(() => setSaving(false))
+    void onSave(site, value).then(saved => { if (saved) setDirty(false) }).finally(() => setSaving(false))
   }} /></label>
 }
 
@@ -80,6 +81,7 @@ export function SitesRssPage({ initialSites, onChange, onRefresh, onCreateSite, 
   const [testingFeedId, setTestingFeedId] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
+  const [pendingSite, setPendingSite] = useState<Site | null>(null)
   const [updatingFeedId, setUpdatingFeedId] = useState<string | null>(null)
 
   const editingFeed = sites.flatMap(site => site.feeds).find(feed => feed.id === editingFeedId)
@@ -100,6 +102,12 @@ export function SitesRssPage({ initialSites, onChange, onRefresh, onCreateSite, 
   const createSite = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (creating) return
+    const existingSite = pendingSite ? sitesRef.current.find(site => site.id === pendingSite.id) : undefined
+    if (pendingSite && !existingSite) {
+      setPendingSite(null)
+      setCreateError('已创建的站点已被删除，草稿已保留，请重新添加。')
+      return
+    }
     const nextErrors = validateSiteForm(form)
     if (Object.keys(nextErrors).length > 0) {
       setErrors(nextErrors)
@@ -122,7 +130,7 @@ export function SitesRssPage({ initialSites, onChange, onRefresh, onCreateSite, 
         lastError: null,
         discoveredCount: 0,
       }
-      const result = onCreateSite ? await onCreateSite(form) : { site: {
+      const result = onCreateSite ? await onCreateSite(form, existingSite) : { site: {
         id: siteId,
         name: form.siteName.trim(),
         baseUrl: form.siteUrl.trim(),
@@ -132,6 +140,12 @@ export function SitesRssPage({ initialSites, onChange, onRefresh, onCreateSite, 
       } }
       commit([...sitesRef.current.filter(site => site.id !== result.site.id), result.site])
       setSelectedSiteId(result.site.id)
+      if (result.warning) {
+        setPendingSite(result.site)
+        setCreateError(result.warning)
+        return
+      }
+      setPendingSite(null)
       setForm(EMPTY_SITE_FORM)
       setErrors({})
       setPreview(null)
@@ -162,9 +176,9 @@ export function SitesRssPage({ initialSites, onChange, onRefresh, onCreateSite, 
     } catch (error) { setNotice(configurationError(error, '删除失败，配置可能已更新，请刷新后重试。')) }
   }
   const saveCredential = async (site: Site, credentialRef: string) => {
-    if (!onUpdateSite) return
-    try { const saved = await onUpdateSite(site, site.enabled, credentialRef); commit(sitesRef.current.map(item => item.id === site.id ? saved : item)); setNotice('凭据引用已保存。') }
-    catch (error) { setNotice(configurationError(error, '凭据引用保存失败，请检查格式或刷新后重试。')) }
+    if (!onUpdateSite) return false
+    try { const saved = await onUpdateSite(site, site.enabled, credentialRef); commit(sitesRef.current.map(item => item.id === site.id ? saved : item)); setNotice('凭据引用已保存。'); return true }
+    catch (error) { setNotice(configurationError(error, '凭据引用保存失败，请检查格式或刷新后重试。')); return false }
   }
   const toggleFeed = async (feedId: string, enabled: boolean) => {
     const feed = sites.flatMap((site) => site.feeds).find((candidate) => candidate.id === feedId)
@@ -219,20 +233,20 @@ export function SitesRssPage({ initialSites, onChange, onRefresh, onCreateSite, 
         <form className="sites-rss-form" onSubmit={createSite} aria-labelledby="sites-rss-form-title">
           {createError && <p className="field-error" role="alert">{createError}</p>}
           <div className="sites-rss-form-grid">
-            <label>站点名称<Input value={form.siteName} onChange={(event) => updateForm('siteName', event.target.value)} aria-invalid={Boolean(errors.siteName)} aria-describedby={errors.siteName ? 'site-name-error' : undefined} /></label>
+            <label>站点名称<Input disabled={creating || Boolean(pendingSite)} value={form.siteName} onChange={(event) => updateForm('siteName', event.target.value)} aria-invalid={Boolean(errors.siteName)} aria-describedby={errors.siteName ? 'site-name-error' : undefined} /></label>
             {errors.siteName && <p id="site-name-error" className="field-error" role="alert">{errors.siteName}</p>}
-            <label>站点地址<Input type="url" value={form.siteUrl} onChange={(event) => updateForm('siteUrl', event.target.value)} placeholder="https://example.test" aria-invalid={Boolean(errors.siteUrl)} aria-describedby={errors.siteUrl ? 'site-url-error' : undefined} /></label>
+            <label>站点地址<Input disabled={creating || Boolean(pendingSite)} type="url" value={form.siteUrl} onChange={(event) => updateForm('siteUrl', event.target.value)} placeholder="https://example.test" aria-invalid={Boolean(errors.siteUrl)} aria-describedby={errors.siteUrl ? 'site-url-error' : undefined} /></label>
             {errors.siteUrl && <p id="site-url-error" className="field-error" role="alert">{errors.siteUrl}</p>}
-            <label>RSS 名称<Input value={form.feedName} onChange={(event) => updateForm('feedName', event.target.value)} aria-invalid={Boolean(errors.feedName)} /></label>
+            <label>RSS 名称<Input disabled={creating} value={form.feedName} onChange={(event) => updateForm('feedName', event.target.value)} aria-invalid={Boolean(errors.feedName)} /></label>
             {errors.feedName && <p className="field-error" role="alert">{errors.feedName}</p>}
-            <label>RSS 地址<Input type="url" value={form.feedUrl} onChange={(event) => updateForm('feedUrl', event.target.value)} placeholder="https://example.test/rss.xml" aria-invalid={Boolean(errors.feedUrl)} /></label>
+            <label>RSS 地址<Input disabled={creating} type="url" value={form.feedUrl} onChange={(event) => updateForm('feedUrl', event.target.value)} placeholder="https://example.test/rss.xml" aria-invalid={Boolean(errors.feedUrl)} /></label>
             {errors.feedUrl && <p className="field-error" role="alert">{errors.feedUrl}</p>}
-            <label>凭据引用<span className="field-hint">引用专用环境变量；内容为 Cookie / Authorization 的 JSON 对象</span><Input value={form.credentialRef} onChange={(event) => updateForm('credentialRef', event.target.value)} placeholder="env:VERTEX_SITE_ZMPT" /></label>
-            <label>轮询周期（分钟）<Input type="number" min="1" max="1440" value={form.pollMinutes} onChange={(event) => updateForm('pollMinutes', event.target.value)} aria-invalid={Boolean(errors.pollMinutes)} /></label>
+            <label>凭据引用<span className="field-hint">引用专用环境变量；内容为 Cookie / Authorization 的 JSON 对象</span><Input disabled={creating || Boolean(pendingSite)} value={form.credentialRef} onChange={(event) => updateForm('credentialRef', event.target.value)} placeholder="env:VERTEX_SITE_ZMPT" /></label>
+            <label>轮询周期（分钟）<Input disabled={creating} type="number" min="1" max="1440" value={form.pollMinutes} onChange={(event) => updateForm('pollMinutes', event.target.value)} aria-invalid={Boolean(errors.pollMinutes)} /></label>
             {errors.pollMinutes && <p className="field-error" role="alert">{errors.pollMinutes}</p>}
           </div>
-          <label className="checkbox-field"><Input type="checkbox" checked={form.enabled} onChange={(event) => updateForm('enabled', event.target.checked)} />创建后启用</label>
-          <Button type="submit" variant="default" className="primary-button" disabled={creating}>{creating ? '保存中…' : '添加 RSS'}</Button>
+          <label className="checkbox-field"><Input disabled={creating || Boolean(pendingSite)} type="checkbox" checked={form.enabled} onChange={(event) => updateForm('enabled', event.target.checked)} />创建后启用</label>
+          <Button type="submit" variant="default" className="primary-button" disabled={creating}>{creating ? '保存中…' : pendingSite ? '重试添加 RSS' : '添加 RSS'}</Button>
         </form>
       </DialogContent></Dialog>
       {editingFeed && <FeedEditor key={editingFeed.id} feed={editingFeed} close={() => setEditingFeedId(null)} restoreFocus={() => editTriggerRef.current?.focus()} save={async patch => { const current = sitesRef.current.flatMap(site => site.feeds).find(feed => feed.id === editingFeed.id); if (!current) throw new Error('RSS 已被删除'); const updated = onUpdateFeed ? await onUpdateFeed(current, patch) : { ...current, ...patch }; commit(sitesRef.current.map(site => ({...site, feeds: site.feeds.map(feed => feed.id === current.id ? updated : feed)}))); setNotice('RSS 已更新。') }} />}

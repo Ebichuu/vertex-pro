@@ -141,13 +141,13 @@ async function testFeedOnAPI(feed: Feed): Promise<FeedPreview> {
   return parseFeedPreview(raw.result, feed.id)
 }
 
-async function createSiteOnAPI(form: CreateSiteForm, existingSiteCount: number): Promise<CreateSiteResult> {
+async function createSiteOnAPI(form: CreateSiteForm, existingSiteCount: number, existingSite?: Site): Promise<CreateSiteResult> {
   const siteId = siteIdForName(form.siteName, existingSiteCount)
-  const sitePayload = await apiClient.createSite<unknown>({
+  const sitePayload = existingSite ?? await apiClient.createSite<unknown>({
     body: { id: siteId, name: form.siteName.trim(), base_url: form.siteUrl.trim(), enabled: form.enabled, credential_ref: form.credentialRef.trim() },
     headers: csrfHeaders(),
   })
-  const site = parseCreatedSite(form, sitePayload)
+  const site = existingSite ?? parseCreatedSite(form, sitePayload)
   let feedPayload: unknown
   try {
     feedPayload = await apiClient.createFeed<unknown>({
@@ -157,7 +157,8 @@ async function createSiteOnAPI(form: CreateSiteForm, existingSiteCount: number):
   } catch (error) {
     return { site, warning: `站点已保存，但 RSS 保存失败：${String(error)}` }
   }
-  return { site: { ...site, feeds: [{ ...parseFeed(feedPayload, site.id), pollMinutes: Number(form.pollMinutes) }] } }
+  const feed = { ...parseFeed(feedPayload, site.id), pollMinutes: Number(form.pollMinutes) }
+  return { site: { ...site, feeds: [...site.feeds.filter(existing => existing.id !== feed.id), feed] } }
 }
 
 function Dashboard() {
@@ -230,7 +231,7 @@ function Sites() {
       </section>
     )
   }
-  if (query.isError) {
+  if (query.isError && !query.data) {
     return (
       <section aria-labelledby="sites-title" className="panel">
         <h1 id="sites-title">站点与 RSS</h1>
@@ -238,10 +239,12 @@ function Sites() {
       </section>
     )
   }
-  return <SitesRssPage
+  return <>
+    {query.isError && <p role="alert" className="inline-warning">刷新失败，当前展示上次成功获取的数据，编辑内容已保留。请稍后重试。</p>}
+    <SitesRssPage
     initialSites={siteRows}
     onRefresh={async () => { const result = await query.refetch(); if (result.isError) throw result.error }}
-    onCreateSite={(form) => refreshAfter(() => createSiteOnAPI(form, siteRows.length))}
+    onCreateSite={(form, existingSite) => refreshAfter(() => createSiteOnAPI(form, siteRows.length, existingSite))}
     onUpdateSite={(site, enabled, credentialRef) => refreshAfter(async () => {
       const saved = await apiClient.updateSite<{updated_at: string}>(site.id, { body: { enabled, credential_ref: credentialRef }, headers: { ...csrfHeaders(), 'If-Match': `"${site.updatedAt}"` } })
       return { ...site, enabled, credentialRef: credentialRef ?? site.credentialRef, updatedAt: saved.updated_at }
@@ -251,7 +254,7 @@ function Sites() {
     onUpdateFeed={(feed, patch) => refreshAfter(() => updateFeedOnAPI(feed, patch))}
     onTestFeed={testFeedOnAPI}
     onLoadPreparations={(id, cursor, signal) => apiClient.listFeedPreparations<PreparationPage>(id, { query: { cursor: cursor || undefined, limit: '50' }, signal })}
-  />
+  /></>
 }
 
 function History() {

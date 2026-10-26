@@ -74,6 +74,21 @@ func TestDailySitesUTCAttributionAndHistoricalConfirmation(t *testing.T) {
 	if site.ID != "site-1" || site.Feeds != 2 || site.Discovered != 2 || site.Jobs != 2 || site.Confirmed != 1 || site.Attention != 1 {
 		t.Fatalf("site=%+v", site)
 	}
+	// Finding an existing torrent never sent an Add and must not inflate today's
+	// confirmed additions; a reconciled successful Add still counts.
+	for _, test := range []struct {
+		state string
+		count int
+	}{{"ALREADY_PRESENT", 0}, {"RECONCILED_CONFIRMED", 1}} {
+		exec(`UPDATE placement_attempts SET attempt_state=? WHERE attempt_id='attempt-1'`, test.state)
+		rows, err := deps.todaySites(request, now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if rows[1]["confirmed"] != test.count {
+			t.Fatalf("state=%s confirmed=%v want=%d", test.state, rows[1]["confirmed"], test.count)
+		}
+	}
 	now = now.Add(24 * time.Hour)
 	rows, err := deps.todaySites(request, now)
 	if err != nil {

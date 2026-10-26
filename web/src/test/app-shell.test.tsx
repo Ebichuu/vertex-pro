@@ -84,6 +84,19 @@ describe('UI-01 App Shell', () => {
     expect(screen.queryByText('secret/hdsky')).not.toBeInTheDocument()
   })
 
+  it('preserves the open RSS draft when a background refresh fails', async () => {
+    void router.navigate({ to: '/sites' })
+    renderApp()
+    fireEvent.click(await screen.findByRole('button', { name: '编辑' }))
+    fireEvent.change(screen.getByLabelText('RSS 名称'), { target: { value: 'Unsaved draft' } })
+    server.use(http.get('/api/v1/sites', () => HttpResponse.json({ error: { code: 'INTERNAL_ERROR', message: 'offline' } }, { status: 503 })))
+    const query = queryClient.getQueryCache().find({ queryKey: ['sites'] })!
+    await act(async () => { await query.fetch({ ...query.options, retry: false }).catch(() => undefined) })
+    expect(await screen.findByText('刷新失败，当前展示上次成功获取的数据，编辑内容已保留。请稍后重试。')).toBeInTheDocument()
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    expect(screen.getByLabelText('RSS 名称')).toHaveValue('Unsaved draft')
+  })
+
   it('persists Feed toggle and runs a read-only test through the API', async () => {
     void router.navigate({ to: '/sites' })
     renderApp()
@@ -122,8 +135,29 @@ describe('UI-01 App Shell', () => {
     expect(screen.getByText('New RSS')).toBeInTheDocument()
   })
 
-  it('keeps the created site visible when the feed request fails', async () => {
-    server.use(http.post('/api/v1/feeds', () => HttpResponse.json({ error: { code: 'QUI_UNREACHABLE', message: 'feed unavailable' } }, { status: 502 })))
+  it('preserves a partial creation and retries only its feed request', async () => {
+    let siteRequests = 0
+    let feedRequests = 0
+    const feedBodies: Record<string, unknown>[] = []
+    let createdSite: Record<string, unknown> | undefined
+    const savedFeeds: Record<string, unknown>[] = []
+    server.use(
+      http.get('/api/v1/sites', () => HttpResponse.json({ items: createdSite ? [{ ...createdSite, feeds: savedFeeds }] : [] })),
+      http.post('/api/v1/sites', async ({ request }) => {
+        siteRequests++
+        createdSite = await request.json() as Record<string, unknown>
+        return HttpResponse.json({ ...createdSite, feeds: [] }, { status: 201 })
+      }),
+      http.post('/api/v1/feeds', async ({ request }) => {
+        feedRequests++
+        const body = await request.json() as Record<string, unknown>
+        feedBodies.push(body)
+        if (feedRequests > 1) savedFeeds.push({ ...body, updated_at: '2026-08-29T08:00:00Z' })
+        return feedRequests === 1
+          ? HttpResponse.json({ error: { code: 'QUI_UNREACHABLE', message: 'feed unavailable' } }, { status: 502 })
+          : HttpResponse.json({ ...body, updated_at: '2026-08-29T08:00:00Z' }, { status: 201 })
+      }),
+    )
     void router.navigate({ to: '/sites' })
     renderApp()
     await screen.findByRole('heading', { name: '站点与 RSS' })
@@ -134,7 +168,15 @@ describe('UI-01 App Shell', () => {
     fireEvent.change(screen.getByLabelText('RSS 地址'), { target: { value: 'https://partial.example/rss' } })
     fireEvent.click(screen.getByRole('button', { name: '添加 RSS' }))
     expect(await screen.findByText(/站点已保存，但 RSS 保存失败/)).toBeInTheDocument()
-    expect(screen.getByRole('option', { name: 'Partial Site' })).toBeInTheDocument()
+    expect(screen.getByLabelText('RSS 名称')).toHaveValue('Partial RSS')
+    expect(screen.getByLabelText('RSS 地址')).toHaveValue('https://partial.example/rss')
+    expect(screen.getByLabelText('站点名称')).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: '重试添加 RSS' }))
+    expect(await screen.findByText('站点和 RSS 已保存。')).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(siteRequests).toBe(1)
+    expect(feedRequests).toBe(2)
+    expect(feedBodies[1]).toEqual(feedBodies[0])
   })
 
   it('loads Rules from the resource API', async () => {

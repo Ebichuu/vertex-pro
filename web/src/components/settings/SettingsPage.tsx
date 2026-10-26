@@ -36,6 +36,7 @@ export function SettingsPage({ loadSettings, saveSettings, downloadDiagnostics, 
   const writeController = useRef<AbortController>()
   const downloadController = useRef<AbortController>()
   const canSave = canEdit && Boolean(saveSettings)
+  const replacingDraft = state.status === 'loading' && attempt.discard
 
   useEffect(() => {
     mounted.current = true
@@ -156,14 +157,14 @@ export function SettingsPage({ loadSettings, saveSettings, downloadDiagnostics, 
       {values && saved && <div className="settings-layout">
         <form className="panel settings-form" onSubmit={(event) => { void submit(event) }} aria-label="全局设置表单" noValidate>
           <p className="settings-apply-note">保存后重启服务生效。缩短保留期会在重启后的清理中删除超期统计；已有登录会话保持原到期时间。</p>
-          <fieldset disabled={saving || !canSave}>
+          <fieldset disabled={saving || !canSave || replacingDraft}>
             <legend className="settings-section-title">运行策略</legend>
             <div className="settings-form-grid">
               {input('timezone', '时区', '用于历史和详情时间显示，统计仍按 UTC 分桶')}
               {input('rss_poll_interval_minutes', 'RSS 轮询间隔（分钟）', '启用 RSS 调度后的全局轮询周期', 1440)}
             </div>
           </fieldset>
-          <fieldset disabled={saving || !canSave}>
+          <fieldset disabled={saving || !canSave || replacingDraft}>
             <legend className="settings-section-title">限流</legend>
             <div className="settings-form-grid">
           {input('rate_limit_per_minute', '站点请求上限（次/分钟）', 'RSS、种子获取及重定向共享滚动一分钟预算；大于 1 时为 RSS 保留 1 次', 600)}
@@ -173,14 +174,14 @@ export function SettingsPage({ loadSettings, saveSettings, downloadDiagnostics, 
               {input('max_concurrent_rss_fetches', '并发 RSS 请求数', '所有站点共享上限，达到上限后等待空位', 32)}
             </div>
           </fieldset>
-          <fieldset disabled={saving || !canSave}>
+          <fieldset disabled={saving || !canSave || replacingDraft}>
             <legend className="settings-section-title">数据保留</legend>
             <div className="settings-form-grid">
               {input('stats_raw_retention_days', '原始统计保留（天）', '原始采样数据的保留时间', 3650)}
               {input('stats_hourly_retention_days', '小时统计保留（天）', '不可短于原始统计保留期', 3650)}
             </div>
           </fieldset>
-          <fieldset disabled={saving || !canSave}>
+          <fieldset disabled={saving || !canSave || replacingDraft}>
             <legend className="settings-section-title">安全</legend>
             <div className="settings-form-grid">
               {input('session_ttl_hours', '管理员会话有效期（小时）', '重启后新登录的会话采用此期限', 720)}

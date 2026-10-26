@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { HistoryTable } from '../components/history/HistoryTable'
 import { mergePages, type HistoryPageData } from '../features/history/history'
+import { DisplayTimezoneContext } from '../features/settings/timezone'
 
 afterEach(() => {
   cleanup()
@@ -21,6 +22,12 @@ function entry(id: string, overrides: Partial<HistoryPageData['items'][number]> 
 }
 
 describe('UI-07 History', () => {
+  it('发现和删除日期使用配置时区，跨 UTC 午夜仍与详情一致', () => {
+    render(<DisplayTimezoneContext.Provider value="Asia/Hong_Kong"><HistoryTable pages={[{ items: [entry('tz', { discovered_at: '2026-10-25T18:30:00Z', deleted_at: '2026-10-25T19:30:00Z', user_status: 'DELETED', user_status_label: '已删除' })], next_cursor: '' }]} statusFilter="" onStatusFilterChange={() => {}} hasMore={false} loading={false} onLoadMore={() => {}} onOpen={() => {}} /></DisplayTimezoneContext.Provider>)
+    expect(screen.getByText('2026-10-26')).toBeInTheDocument()
+    expect(screen.getByText(/删除于 2026-10-26/)).toBeInTheDocument()
+    expect(screen.queryByText('2026-10-25')).not.toBeInTheDocument()
+  })
   it('表格呈现种子、来源、目标下载器、用户状态', () => {
     render(
       <HistoryTable

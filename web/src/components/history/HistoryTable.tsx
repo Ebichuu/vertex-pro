@@ -1,6 +1,13 @@
 import { mergePages, statusTone, USER_STATUS_FILTERS, type HistoryEntry, type HistoryPageData } from '../../features/history/history'
 import { Button } from '../ui/button'
 import { Badge } from '../ui/badge'
+import { useDisplayTimezone } from '../../features/settings/timezone'
+
+function displayDate(value: string | undefined, timezone: string): string {
+  if (!value || !Number.isFinite(Date.parse(value))) return '暂无数据'
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(value))
+  return ['year', 'month', 'day'].map(type => parts.find(part => part.type === type)?.value).join('-')
+}
 
 type HistoryTableProps = {
   pages: ReadonlyArray<HistoryPageData>
@@ -59,6 +66,7 @@ export function HistoryTable({ pages, statusFilter, onStatusFilterChange, hasMor
 }
 
 function HistoryRow({ entry, onOpen }: { entry: HistoryEntry; onOpen: (jobId: string) => void }) {
+  const timezone = useDisplayTimezone()
   const deleted = Boolean(entry.deleted_at)
   const title = entry.title || entry.id
   return (
@@ -70,11 +78,11 @@ function HistoryRow({ entry, onOpen }: { entry: HistoryEntry; onOpen: (jobId: st
         <Badge variant="ghost" className={`status-chip tone-${statusTone(entry.user_status)}`}>{entry.user_status_label}</Badge>
         {deleted && (
           <span className="muted deletion-note">
-            {' '}删除于 {entry.deleted_at?.slice(0, 10)}（{entry.deletion_source === 'QB_USER_REMOVED' ? '手动删除' : entry.deletion_source === 'QUI_LIFECYCLE' ? '生命周期策略' : '来源待确认'}）
+            {' '}删除于 {displayDate(entry.deleted_at, timezone)}（{entry.deletion_source === 'QB_USER_REMOVED' ? '手动删除' : entry.deletion_source === 'QUI_LIFECYCLE' ? '生命周期策略' : '来源待确认'}）
           </span>
         )}
       </td>
-      <td className="muted">{entry.discovered_at.slice(0, 10)}</td>
+      <td className="muted">{displayDate(entry.discovered_at, timezone)}</td>
     </tr>
   )
 }

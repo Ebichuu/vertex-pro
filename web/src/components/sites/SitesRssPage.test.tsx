@@ -103,6 +103,25 @@ describe('UI-03 Sites & RSS', () => {
     await waitFor(() => expect(onUpdateSite).toHaveBeenCalledWith(refreshed[0], true, 'env:VERTEX_SITE_NEW'))
   })
 
+  it('retains a rejected credential draft through refresh and retries it', async () => {
+    const onUpdateSite = vi.fn().mockRejectedValueOnce(new Error('offline')).mockImplementation(async (site: Site, enabled: boolean, credentialRef: string) => ({ ...site, enabled, credentialRef }))
+    const { rerender } = render(<SitesRssPage initialSites={sites} onUpdateSite={onUpdateSite} />)
+    const input = screen.getByDisplayValue('secret/hdsky')
+    fireEvent.focus(input)
+    fireEvent.change(input, { target: { value: 'env:VERTEX_SITE_NEW' } })
+    fireEvent.blur(input)
+    expect(await screen.findByRole('status')).toHaveTextContent('凭据引用保存失败')
+    await waitFor(() => expect(input).toBeEnabled())
+    const refreshed = [{ ...sites[0], updatedAt: 'new-revision' }]
+    rerender(<SitesRssPage initialSites={refreshed} onUpdateSite={onUpdateSite} />)
+    expect(input).toHaveValue('env:VERTEX_SITE_NEW')
+    fireEvent.focus(input)
+    fireEvent.blur(input)
+    await waitFor(() => expect(onUpdateSite).toHaveBeenLastCalledWith(refreshed[0], true, 'env:VERTEX_SITE_NEW'))
+    expect(await screen.findByText('凭据引用已保存。')).toBeInTheDocument()
+    expect(onUpdateSite).toHaveBeenCalledTimes(2)
+  })
+
   it('selects the next site after archiving the current one', async () => {
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
     const next = { ...sites[0], id: 'site-next', name: 'Next', feeds: [] }
@@ -148,12 +167,65 @@ describe('UI-03 Sites & RSS', () => {
     const refreshed = structuredClone(sites)
     refreshed[0].feeds[0].updatedAt = '2026-08-29T09:00:00Z'
     refreshed[0].feeds[0].enabled = false
+    refreshed[0].feeds[0].url = 'https://hdsky.me/new-rss'
+    refreshed[0].feeds[0].pollMinutes = 30
     rerender(<SitesRssPage initialSites={refreshed} onUpdateFeed={onUpdateFeed} />)
     expect(screen.getByLabelText('RSS 名称')).toHaveValue('Edited RSS')
     fireEvent.click(screen.getByRole('button', { name: '保存修改' }))
-    await waitFor(() => expect(onUpdateFeed).toHaveBeenCalledWith(refreshed[0].feeds[0], { name: 'Edited RSS', url: sites[0].feeds[0].url, pollMinutes: 15 }))
+    await waitFor(() => expect(onUpdateFeed).toHaveBeenCalledWith(refreshed[0].feeds[0], { name: 'Edited RSS' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
     expect(screen.getByRole('button', { name: '启用 RSS' })).toBeInTheDocument()
     await waitFor(() => expect(screen.getByRole('button', { name: '编辑' })).toHaveFocus())
+  })
+
+  it('retries partial creation against the refreshed site and detects its removal', async () => {
+    const partial = { ...sites[0], feeds: [] }
+    const onCreateSite = vi.fn().mockResolvedValue({ site: partial, warning: '站点已保存，但 RSS 保存失败' })
+    const { rerender } = render(<SitesRssPage initialSites={[]} onCreateSite={onCreateSite} />)
+    fireEvent.click(screen.getByRole('button', { name: '添加站点 RSS' }))
+    fireEvent.change(screen.getByLabelText('站点名称'), { target: { value: 'HDSky' } })
+    fireEvent.change(screen.getByLabelText('站点地址'), { target: { value: 'https://hdsky.me' } })
+    fireEvent.change(screen.getByLabelText('RSS 名称'), { target: { value: 'Draft RSS' } })
+    fireEvent.change(screen.getByLabelText('RSS 地址'), { target: { value: 'https://hdsky.me/rss' } })
+    fireEvent.click(screen.getByRole('button', { name: '添加 RSS' }))
+    await screen.findByText('站点已保存，但 RSS 保存失败')
+    const refreshed = { ...sites[0], updatedAt: 'new-revision' }
+    rerender(<SitesRssPage initialSites={[refreshed]} onCreateSite={onCreateSite} />)
+    onCreateSite.mockResolvedValue({ site: refreshed, warning: '站点已保存，但 RSS 保存失败' })
+    fireEvent.click(screen.getByRole('button', { name: '重试添加 RSS' }))
+    await waitFor(() => expect(onCreateSite).toHaveBeenLastCalledWith(expect.anything(), refreshed))
+    await waitFor(() => expect(screen.getByRole('button', { name: '重试添加 RSS' })).toBeEnabled())
+    rerender(<SitesRssPage initialSites={[]} onCreateSite={onCreateSite} />)
+    fireEvent.click(screen.getByRole('button', { name: '重试添加 RSS' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('已创建的站点已被删除')
+    expect(screen.getByLabelText('站点名称')).toBeEnabled()
+    expect(screen.getByLabelText('RSS 名称')).toHaveValue('Draft RSS')
+    expect(onCreateSite).toHaveBeenCalledTimes(2)
+    expect(screen.getByRole('button', { name: '添加 RSS' })).toBeEnabled()
+  })
+
+  it('keeps the RSS draft and blocks a refreshed conflict on the edited field', async () => {
+    const onUpdateFeed = vi.fn()
+    const { rerender } = render(<SitesRssPage initialSites={sites} onUpdateFeed={onUpdateFeed} />)
+    fireEvent.click(screen.getByRole('button', { name: '编辑' }))
+    fireEvent.change(screen.getByLabelText('RSS 名称'), { target: { value: 'My draft' } })
+    const refreshed = structuredClone(sites)
+    refreshed[0].feeds[0].name = 'Other editor'
+    refreshed[0].feeds[0].updatedAt = 'new-revision'
+    rerender(<SitesRssPage initialSites={refreshed} onUpdateFeed={onUpdateFeed} />)
+    fireEvent.click(screen.getByRole('button', { name: '保存修改' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('字段已被其他操作更新')
+    expect(screen.getByLabelText('RSS 名称')).toHaveValue('My draft')
+    expect(onUpdateFeed).not.toHaveBeenCalled()
+  })
+
+  it('keeps the RSS draft when the save reports a revision conflict', async () => {
+    const onUpdateFeed = vi.fn().mockRejectedValue(new ApiRequestError(409, { code: 'REVISION_CONFLICT', message: 'changed', request_id: 'test', retryable: false }))
+    render(<SitesRssPage initialSites={sites} onUpdateFeed={onUpdateFeed} />)
+    fireEvent.click(screen.getByRole('button', { name: '编辑' }))
+    fireEvent.change(screen.getByLabelText('RSS 名称'), { target: { value: 'My draft' } })
+    fireEvent.click(screen.getByRole('button', { name: '保存修改' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('草稿已保留')
+    expect(screen.getByLabelText('RSS 名称')).toHaveValue('My draft')
   })
 })

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SettingsPage } from './SettingsPage'
 import { ApiRequestError } from '../../generated/api-client'
@@ -90,7 +90,9 @@ describe('UI-11 Settings', () => {
 
   it('版本冲突保留草稿并禁止覆盖，主动载入后使用新版本', async () => {
     const latest = { ...settingsFixture({ timezone: 'Europe/London' }), revision: 2 }
-    const loader = vi.fn().mockResolvedValueOnce(settingsFixture()).mockResolvedValue(latest)
+    let resolveReload!: (settings: AppSettings) => void
+    const pendingReload = new Promise<AppSettings>(resolve => { resolveReload = resolve })
+    const loader = vi.fn().mockResolvedValueOnce(settingsFixture()).mockReturnValue(pendingReload)
     const saver = vi.fn().mockRejectedValue(apiError(409, 'REVISION_CONFLICT'))
     render(<SettingsPage loadSettings={loader} saveSettings={saver} />)
     fireEvent.change(await screen.findByLabelText('时区'), { target: { value: 'Asia/Shanghai' } })
@@ -99,7 +101,12 @@ describe('UI-11 Settings', () => {
     expect(screen.getByLabelText('时区')).toHaveValue('Asia/Shanghai')
     expect(screen.getByRole('button', { name: '保存设置' })).toBeDisabled()
     fireEvent.click(reload)
+    expect(screen.getByLabelText('时区')).toBeDisabled()
+    expect(screen.getByLabelText('站点请求上限（次/分钟）')).toBeDisabled()
+    expect(screen.getByRole('button', { name: '保存设置' })).toBeDisabled()
+    await act(async () => { resolveReload(latest) })
     await waitFor(() => expect(screen.getByLabelText('时区')).toHaveValue('Europe/London'))
+    expect(screen.getByLabelText('时区')).toBeEnabled()
     expect(screen.getByRole('button', { name: '保存设置' })).toBeEnabled()
   })
 
