@@ -109,9 +109,9 @@ func (acceptingSender) Send(context.Context, *http.Request) (qbresponse.RawRespo
 }
 
 func eventWithIdentity(generation, revision uint64, present bool) Event {
-	snapshot := syncmerge.Snapshot{Torrents: map[string]syncmerge.Torrent{}}
+	snapshot := syncmerge.Snapshot{Torrents: map[string]*syncmerge.Torrent{}}
 	if present {
-		snapshot.Torrents[identityKey] = syncmerge.Torrent{Fields: map[string]any{"state": "stoppedDL"}}
+		snapshot.Torrents[identityKey] = &syncmerge.Torrent{State: "stoppedDL", Known: syncmerge.FieldState}
 	}
 	return Event{InstanceID: "instance-1", Generation: generation, Revision: revision, Snapshot: snapshot}
 }

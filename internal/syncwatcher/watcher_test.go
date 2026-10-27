@@ -3,6 +3,7 @@ package syncwatcher
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/vertex-pro/vertex-pro/internal/db"
 	"github.com/vertex-pro/vertex-pro/internal/snapshot"
+	"github.com/vertex-pro/vertex-pro/internal/syncfixture"
 	"github.com/vertex-pro/vertex-pro/internal/syncmerge"
 )
 
@@ -49,9 +51,9 @@ func TestWatcherBuildsBaselineMergesDeltaAndBroadcastsWaiter(t *testing.T) {
 	defer database.Close()
 	insertState(t, database, "qb-1")
 	fetcher := &fakeFetcher{deltas: []syncmerge.Delta{
-		{RID: 0, FullUpdate: true, Torrents: map[string]map[string]any{"hash-1": {"name": "one"}}},
-		{RID: 2, Torrents: map[string]map[string]any{"hash-1": {"state": "downloading"}}},
-		{RID: 0, FullUpdate: true, Torrents: map[string]map[string]any{"hash-2": {"name": "reset"}}},
+		{RID: 0, FullUpdate: true, Torrents: syncfixture.Deltas(map[string]map[string]any{"hash-1": {"name": "one"}})},
+		{RID: 2, Torrents: syncfixture.Deltas(map[string]map[string]any{"hash-1": {"state": "downloading"}})},
+		{RID: 0, FullUpdate: true, Torrents: syncfixture.Deltas(map[string]map[string]any{"hash-2": {"name": "reset"}})},
 	}}
 	watcher, err := New("qb-1", fetcher, store)
 	if err != nil {
@@ -72,12 +74,12 @@ func TestWatcherBuildsBaselineMergesDeltaAndBroadcastsWaiter(t *testing.T) {
 	if err != nil {
 		t.Fatalf("delta error = %v", err)
 	}
-	if second.Generation != 1 || second.Revision != 2 || second.Snapshot.Torrents["hash-1"].Fields["name"] != "one" {
+	if second.Generation != 1 || second.Revision != 2 || second.Snapshot.Torrents["hash-1"].Name != "one" {
 		t.Fatalf("delta event = %+v", second)
 	}
 	select {
 	case event := <-waiter.Events:
-		if event.Revision != 2 || event.Snapshot.Torrents["hash-1"].Fields["state"] != "downloading" {
+		if event.Revision != 2 || event.Snapshot.Torrents["hash-1"].State != "downloading" {
 			t.Fatalf("waiter event = %+v", event)
 		}
 	case <-time.After(time.Second):
@@ -106,7 +108,7 @@ func TestWatcherRejectsConcurrentRunAndClosesWaiters(t *testing.T) {
 	defer database.Close()
 	insertState(t, database, "qb-1")
 	started := make(chan struct{})
-	fetcher := &fakeFetcher{started: started, release: make(chan struct{}), deltas: []syncmerge.Delta{{RID: 0, FullUpdate: true, Torrents: map[string]map[string]any{}}}}
+	fetcher := &fakeFetcher{started: started, release: make(chan struct{}), deltas: []syncmerge.Delta{{RID: 0, FullUpdate: true, Torrents: map[string]syncmerge.TorrentDelta{}}}}
 	watcher, err := New("qb-1", fetcher, store)
 	if err != nil {
 		t.Fatal(err)
@@ -141,7 +143,7 @@ func TestWatcherRestoresPersistedRevisionAfterRestart(t *testing.T) {
 	store, database := newWatcherStore(t)
 	defer database.Close()
 	insertState(t, database, "qb-1")
-	firstFetcher := &fakeFetcher{deltas: []syncmerge.Delta{{RID: 0, FullUpdate: true, Torrents: map[string]map[string]any{}}}}
+	firstFetcher := &fakeFetcher{deltas: []syncmerge.Delta{{RID: 0, FullUpdate: true, Torrents: map[string]syncmerge.TorrentDelta{}}}}
 	firstWatcher, err := New("qb-1", firstFetcher, store)
 	if err != nil {
 		t.Fatal(err)
@@ -149,7 +151,9 @@ func TestWatcherRestoresPersistedRevisionAfterRestart(t *testing.T) {
 	if _, err := firstWatcher.RunOnce(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	restartedFetcher := &fakeFetcher{deltas: []syncmerge.Delta{{RID: 1, Torrents: map[string]map[string]any{}}}}
+	// Snapshots are memory-only: a restart keeps the committed coordinates
+	// monotonic and re-baselines from rid=0 as a new generation.
+	restartedFetcher := &fakeFetcher{deltas: []syncmerge.Delta{{RID: 1, FullUpdate: true, Torrents: map[string]syncmerge.TorrentDelta{}}}}
 	restarted, err := New("qb-1", restartedFetcher, store)
 	if err != nil {
 		t.Fatal(err)
@@ -158,15 +162,24 @@ func TestWatcherRestoresPersistedRevisionAfterRestart(t *testing.T) {
 	if err != nil {
 		t.Fatalf("restart run error = %v", err)
 	}
-	if event.Generation != 1 || event.Revision != 2 {
+	if event.Generation != 2 || event.Revision != 2 || event.Digest == "" {
 		t.Fatalf("restart event = %+v", event)
+	}
+	if len(restartedFetcher.calls) != 1 || restartedFetcher.calls[0] != 0 {
+		t.Fatalf("restart fetch RIDs = %v", restartedFetcher.calls)
+	}
+	if _, record, ok := restarted.Current(); !ok || record.Generation != 2 || record.Revision != 2 || record.Digest != event.Digest || record.Path != "" {
+		t.Fatalf("current record = %+v ok=%v", record, ok)
+	}
+	if _, _, err := store.LoadLatest(context.Background(), "qb-1"); !errors.Is(err, snapshot.ErrNotPersisted) {
+		t.Fatalf("LoadLatest of memory-only revision error = %v", err)
 	}
 }
 func TestWatcherIgnoresDuplicateRIDWithoutWritingRevision(t *testing.T) {
 	store, database := newWatcherStore(t)
 	defer database.Close()
 	insertState(t, database, "qb-1")
-	fetcher := &fakeFetcher{deltas: []syncmerge.Delta{{RID: 0, FullUpdate: true, Torrents: map[string]map[string]any{}}, {RID: 1, Torrents: map[string]map[string]any{}}, {RID: 1, Torrents: map[string]map[string]any{}}}}
+	fetcher := &fakeFetcher{deltas: []syncmerge.Delta{{RID: 0, FullUpdate: true, Torrents: map[string]syncmerge.TorrentDelta{}}, {RID: 1, Torrents: map[string]syncmerge.TorrentDelta{}}, {RID: 1, Torrents: map[string]syncmerge.TorrentDelta{}}}}
 	watcher, err := New("qb-1", fetcher, store)
 	if err != nil {
 		t.Fatal(err)
@@ -186,7 +199,7 @@ func TestWatcherIgnoresDuplicateRIDWithoutWritingRevision(t *testing.T) {
 	}
 }
 
-func newWatcherStore(t *testing.T) (snapshot.Store, *sql.DB) {
+func newWatcherStore(t testing.TB) (snapshot.Store, *sql.DB) {
 	t.Helper()
 	database, err := db.Open(context.Background(), db.Config{Path: filepath.Join(t.TempDir(), "vertex-pro.db")})
 	if err != nil {
@@ -209,7 +222,7 @@ func newWatcherStore(t *testing.T) (snapshot.Store, *sql.DB) {
 	return store, database
 }
 
-func insertState(t *testing.T, database *sql.DB, instanceID string) {
+func insertState(t testing.TB, database *sql.DB, instanceID string) {
 	t.Helper()
 	if _, err := database.Exec(`INSERT INTO sync_instance_state(instance_id, sync_state, sync_generation, rid, snapshot_revision, snapshot_digest, updated_at) VALUES (?, 'RECONCILING', 0, 0, 0, '', '2026-08-25T00:00:00Z')`, instanceID); err != nil {
 		t.Fatal(err)

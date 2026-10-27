@@ -1,0 +1,81 @@
+[
+  {
+    "role": "stalled",
+    "automation": {
+      "name": "vertex-del-stalled-stalled",
+      "trackerPattern": "*",
+      "enabled": false,
+      "dryRun": true,
+      "notify": false,
+      "sortOrder": 0,
+      "intervalSeconds": 300,
+      "conditions": {
+        "delete": {
+          "condition": {
+            "conditions": [
+              {
+                "field": "TAGS",
+                "operator": "EQUAL",
+                "value": "vertex-managed"
+              },
+              {
+                "field": "TAGS",
+                "operator": "STARTS_WITH",
+                "value": "vertex-site-"
+              },
+              {
+                "field": "TAGS",
+                "operator": "NOT_EQUAL",
+                "value": "vertex-keep"
+              },
+              {
+                "field": "CATEGORY",
+                "operator": "NOT_EQUAL",
+                "value": "archive"
+              },
+              {
+                "field": "CATEGORY",
+                "operator": "NOT_EQUAL",
+                "value": "keep"
+              },
+              {
+                "field": "TAGS",
+                "operator": "NOT_EQUAL",
+                "value": "vertex-site-siteC"
+              },
+              {
+                "field": "AMOUNT_LEFT",
+                "operator": "GREATER_THAN",
+                "value": "0"
+              },
+              {
+                "field": "TAGS",
+                "operator": "NOT_EQUAL",
+                "value": "vertex-site-siteA"
+              },
+              {
+                "field": "TAGS",
+                "operator": "NOT_EQUAL",
+                "value": "vertex-site-siteB"
+              },
+              {
+                "field": "ADDED_ON_AGE",
+                "operator": "GREATER_THAN_OR_EQUAL",
+                "value": "7200"
+              },
+              {
+                "field": "LAST_ACTIVITY_AGE",
+                "operator": "GREATER_THAN_OR_EQUAL",
+                "value": "3600"
+              }
+            ],
+            "operator": "AND"
+          },
+          "enabled": true,
+          "mode": "delete"
+        },
+        "schemaVersion": "1"
+      }
+    }
+  }
+]

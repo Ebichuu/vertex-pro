@@ -359,6 +359,10 @@ func removeExpiredSnapshots(ctx context.Context, database *sql.DB, root, cutoff 
 		}
 	}
 	for _, relative := range removedPaths {
+		// Memory-only revisions (snapshot.Store.Commit) have no file.
+		if relative == "" {
+			continue
+		}
 		absolute, ok := safeJoin(root, relative)
 		if !ok {
 			failures = append(failures, relative)

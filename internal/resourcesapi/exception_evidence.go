@@ -7,6 +7,7 @@ import (
 
 	"github.com/vertex-pro/vertex-pro/internal/expiredunknown"
 	"github.com/vertex-pro/vertex-pro/internal/snapshot"
+	"github.com/vertex-pro/vertex-pro/internal/syncmerge"
 )
 
 // serverEvidence loads the current complete snapshot and checks its digest.
@@ -20,13 +21,18 @@ func (d Deps) serverEvidence(request *http.Request, chain chainFacts) (expiredun
 	if err != nil || state != "READY" || d.currentTime().Sub(stamp) > 30*time.Second || stamp.After(d.currentTime().Add(time.Second)) {
 		return expiredunknown.Evidence{}, fmt.Errorf("snapshot is not fresh")
 	}
-	store, err := snapshot.New(d.Database, d.SnapshotRoot)
-	if err != nil {
+	current, record, ok := d.currentSnapshot(request, chain.instanceID)
+	if !ok || !record.Complete {
+		return expiredunknown.Evidence{}, fmt.Errorf("complete snapshot unavailable")
+	}
+	// The in-memory snapshot must still be the revision the database names.
+	var generation, revision int64
+	var digest string
+	if err := d.Database.QueryRowContext(request.Context(), `SELECT sync_generation,snapshot_revision,snapshot_digest FROM sync_instance_state WHERE instance_id=?`, chain.instanceID).Scan(&generation, &revision, &digest); err != nil {
 		return expiredunknown.Evidence{}, err
 	}
-	current, record, err := store.LoadLatest(request.Context(), chain.instanceID)
-	if err != nil || !record.Complete {
-		return expiredunknown.Evidence{}, fmt.Errorf("complete snapshot unavailable")
+	if uint64(generation) != record.Generation || uint64(revision) != record.Revision || digest != record.Digest {
+		return expiredunknown.Evidence{}, fmt.Errorf("snapshot changed during evidence read")
 	}
 	var preGeneration, preRevision int64
 	var preDigest string
@@ -45,6 +51,18 @@ func (d Deps) serverEvidence(request *http.Request, chain chainFacts) (expiredun
 		}
 	}
 	return expiredunknown.Evidence{SyncGeneration: int64(record.Generation), SnapshotRevision: int64(record.Revision), SnapshotDigest: record.Digest, IdentityPresent: present, QBTorrentID: qbID}, nil
+}
+
+func (d Deps) currentSnapshot(request *http.Request, instanceID string) (syncmerge.Snapshot, snapshot.Record, bool) {
+	if d.CurrentSnapshot != nil {
+		return d.CurrentSnapshot(instanceID)
+	}
+	store, err := snapshot.New(d.Database, d.SnapshotRoot)
+	if err != nil {
+		return syncmerge.Snapshot{}, snapshot.Record{}, false
+	}
+	current, record, err := store.LoadLatest(request.Context(), instanceID)
+	return current, record, err == nil
 }
 
 func exceptionActions(chain chainFacts, evidence expiredunknown.Evidence, fresh bool, now time.Time) []string {

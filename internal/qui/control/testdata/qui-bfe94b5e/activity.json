@@ -1,0 +1,51 @@
+[
+  {
+    "id": 5240,
+    "instanceId": 2,
+    "hash": "0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c",
+    "torrentName": "Some.Movie.2026.2160p.WEB-DL.DDP5.1.H.265-GRP",
+    "trackerDomain": "tracker.pt.example",
+    "action": "deleted_condition",
+    "ruleId": 31,
+    "ruleName": "vertex-policy-1f2e",
+    "outcome": "success",
+    "reason": "Delete condition matched",
+    "details": {"filesKept": false, "deleteMode": "deleteWithFilesPreserveCrossSeeds", "isTrigger": true},
+    "createdAt": "2026-10-26T14:05:00Z"
+  },
+  {
+    "id": 5239,
+    "instanceId": 2,
+    "hash": "b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5",
+    "torrentName": "Other.Release.1080p-GRP",
+    "trackerDomain": "tracker.pt.example",
+    "action": "delete_failed",
+    "ruleId": 31,
+    "ruleName": "vertex-policy-1f2e",
+    "outcome": "failed",
+    "reason": "qBittorrent rejected the delete request",
+    "createdAt": "2026-10-26T14:04:59Z"
+  },
+  {
+    "id": 5102,
+    "instanceId": 2,
+    "hash": "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4",
+    "torrentName": "Show.S01E05.1080p.WEB-DL.H264-GRP",
+    "action": "deleted_unregistered",
+    "ruleId": 1000000002,
+    "ruleName": "vertex-deletion-probe",
+    "outcome": "dry-run",
+    "reason": "Torrent unregistered on tracker",
+    "createdAt": "2026-10-26T13:00:00Z"
+  },
+  {
+    "id": 5090,
+    "instanceId": 2,
+    "hash": "",
+    "action": "tags_changed",
+    "ruleName": "user-tag-rule",
+    "outcome": "success",
+    "details": {"added": {"seeding": 12}},
+    "createdAt": "2026-10-26T12:00:00Z"
+  }
+]

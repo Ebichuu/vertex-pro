@@ -18,7 +18,7 @@ func TestStoreSavesAndLoadsAtomicSnapshotReference(t *testing.T) {
 	insertSyncState(t, database, "qb-1")
 
 	value := int64(42)
-	want := syncmerge.Snapshot{RID: 7, Torrents: map[string]syncmerge.Torrent{"hash-1": {ID: "hash-1", Fields: map[string]any{"name": "one"}, AmountLeftState: "KNOWN", AmountLeft: &value}}}
+	want := syncmerge.Snapshot{RID: 7, Torrents: map[string]*syncmerge.Torrent{"hash-1": {ID: "hash-1", Name: "one", Known: syncmerge.FieldName | syncmerge.FieldAmountLeft, AmountLeftState: "KNOWN", AmountLeft: &value}}}
 	record, err := store.Save(context.Background(), "qb-1", 1, 1, want, true)
 	if err != nil {
 		t.Fatalf("Save() error = %v", err)
@@ -33,7 +33,7 @@ func TestStoreSavesAndLoadsAtomicSnapshotReference(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
-	if loaded.Digest != record.Digest || got.RID != want.RID || got.Torrents["hash-1"].Fields["name"] != "one" {
+	if loaded.Digest != record.Digest || got.RID != want.RID || got.Torrents["hash-1"].Name != "one" || !got.Torrents["hash-1"].Has(syncmerge.FieldName) {
 		t.Fatalf("loaded = %+v/%+v, want %+v/%+v", got, loaded, want, record)
 	}
 }
@@ -41,11 +41,11 @@ func TestStoreSavesAndLoadsAtomicSnapshotReference(t *testing.T) {
 func TestStoreRejectsStaleCoordinatesAndMissingBaseline(t *testing.T) {
 	store, database, _ := newTestStore(t)
 	defer database.Close()
-	if _, err := store.Save(context.Background(), "qb-1", 1, 1, syncmerge.Snapshot{Torrents: map[string]syncmerge.Torrent{}}, true); err == nil || !strings.Contains(err.Error(), "read sync instance state") {
+	if _, err := store.Save(context.Background(), "qb-1", 1, 1, syncmerge.Snapshot{Torrents: map[string]*syncmerge.Torrent{}}, true); err == nil || !strings.Contains(err.Error(), "read sync instance state") {
 		t.Fatalf("missing state error = %v", err)
 	}
 	insertSyncState(t, database, "qb-1")
-	snapshot := syncmerge.Snapshot{RID: 1, Torrents: map[string]syncmerge.Torrent{}}
+	snapshot := syncmerge.Snapshot{RID: 1, Torrents: map[string]*syncmerge.Torrent{}}
 	if _, err := store.Save(context.Background(), "qb-1", 1, 1, snapshot, true); err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +58,7 @@ func TestStoreRejectsCorruptedFileAndMissingReference(t *testing.T) {
 	store, database, root := newTestStore(t)
 	defer database.Close()
 	insertSyncState(t, database, "qb-1")
-	record, err := store.Save(context.Background(), "qb-1", 1, 1, syncmerge.Snapshot{RID: 3, Torrents: map[string]syncmerge.Torrent{}}, true)
+	record, err := store.Save(context.Background(), "qb-1", 1, 1, syncmerge.Snapshot{RID: 3, Torrents: map[string]*syncmerge.Torrent{}}, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,7 +78,7 @@ func TestStoreRejectsPathTraversalAndInvalidSnapshot(t *testing.T) {
 	store, database, _ := newTestStore(t)
 	defer database.Close()
 	for _, instanceID := range []string{"", "../escape", "qb/1", "qb 1"} {
-		if _, err := store.Save(context.Background(), instanceID, 1, 1, syncmerge.Snapshot{Torrents: map[string]syncmerge.Torrent{}}, true); err == nil {
+		if _, err := store.Save(context.Background(), instanceID, 1, 1, syncmerge.Snapshot{Torrents: map[string]*syncmerge.Torrent{}}, true); err == nil {
 			t.Fatalf("instance ID %q accepted", instanceID)
 		}
 	}
@@ -117,7 +117,7 @@ func TestStoreRejectsUnsafeDatabasePathAndIncompleteSnapshot(t *testing.T) {
 	store, database, _ := newTestStore(t)
 	defer database.Close()
 	insertSyncState(t, database, "qb-1")
-	snapshot := syncmerge.Snapshot{RID: 1, Torrents: map[string]syncmerge.Torrent{}}
+	snapshot := syncmerge.Snapshot{RID: 1, Torrents: map[string]*syncmerge.Torrent{}}
 	if _, err := store.Save(context.Background(), "qb-1", 1, 1, snapshot, false); err == nil || !strings.Contains(err.Error(), "complete") {
 		t.Fatalf("incomplete save error = %v", err)
 	}

@@ -11,6 +11,7 @@ import (
 
 	"github.com/vertex-pro/vertex-pro/internal/adminauth"
 	"github.com/vertex-pro/vertex-pro/internal/apipaging"
+	"github.com/vertex-pro/vertex-pro/internal/deletionsync"
 	"github.com/vertex-pro/vertex-pro/internal/historyproject"
 	"github.com/vertex-pro/vertex-pro/internal/historytimeline"
 	"github.com/vertex-pro/vertex-pro/internal/httpapi"
@@ -19,7 +20,9 @@ import (
 	"github.com/vertex-pro/vertex-pro/internal/rssservice"
 	"github.com/vertex-pro/vertex-pro/internal/ruleservice"
 	"github.com/vertex-pro/vertex-pro/internal/settings"
+	"github.com/vertex-pro/vertex-pro/internal/snapshot"
 	"github.com/vertex-pro/vertex-pro/internal/statssummary"
+	"github.com/vertex-pro/vertex-pro/internal/syncmerge"
 )
 
 // Deps 聚合资源 API 依赖；handler 不开事务、不碰 Repository 细节，
@@ -41,8 +44,14 @@ type Deps struct {
 	Version        string
 	// SnapshotRoot enables server-verified evidence for manual exception actions.
 	SnapshotRoot string
+	// CurrentSnapshot serves the sync watcher's in-memory snapshot. When nil,
+	// evidence falls back to the persisted snapshot file under SnapshotRoot.
+	CurrentSnapshot func(instanceID string) (syncmerge.Snapshot, snapshot.Record, bool)
 	// SyncPolicies confirms that managed qui deletion policies are disabled.
 	SyncPolicies func(context.Context) error
+	// Deletion returns the deletion policy service once qui instances are
+	// connected; false means it is not available in this process.
+	Deletion func() (deletionsync.Service, bool)
 }
 
 // Router 返回资源端点与 acknowledge-unknown 命令端点的处理器。
@@ -96,6 +105,7 @@ func Router(deps Deps) http.Handler {
 	mux.Handle("GET /api/v1/dashboard", guard(deps.dashboard))
 	mux.Handle("GET /api/v1/stats/downloaders/realtime", guard(deps.statsRealtime))
 	mux.Handle("POST /api/v1/jobs/{id}/acknowledge-unknown", guard(deps.acknowledgeUnknown))
+	registerDeletionRoutes(mux, deps, guard)
 	if deps.Events != nil {
 		mux.Handle("GET /api/v1/events/stream", guardHandler(deps.Events))
 	}
@@ -395,6 +405,9 @@ func (d Deps) getJob(response http.ResponseWriter, request *http.Request) {
 		payload[key] = value
 	}
 	d.addJobFacts(request, jobID, payload)
+	if deletions := d.jobDeletions(request.Context(), jobID); len(deletions) > 0 {
+		payload["deletions"] = deletions
+	}
 	d.writeData(response, request, payload)
 }
 

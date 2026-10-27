@@ -131,7 +131,7 @@ func runProtocolSuite(ctx context.Context, client *proxy.Client, profile qbprofi
 		return errors.New("protocol: amount_left is not the one-byte fixture liability")
 	}
 	for _, field := range []string{"dlspeed", "upspeed", "completed", "progress"} {
-		if _, ok := task.Fields[field]; !ok {
+		if _, ok := task.Value(field); !ok {
 			return fmt.Errorf("protocol: transfer field missing: %s", field)
 		}
 	}

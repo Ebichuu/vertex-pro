@@ -1,32 +1,28 @@
 package syncmerge
 
 import (
-	"encoding/json"
 	"errors"
-	"fmt"
-	"math"
-	"strconv"
+	"maps"
 )
 
-type Torrent struct {
-	ID              string
-	Fields          map[string]any
-	AmountLeftState string
-	AmountLeft      *int64
-}
-
+// Snapshot is immutable once returned by Merge: successive snapshots share
+// unchanged *Torrent values, so callers must never mutate them. Pointers keep
+// the copy-on-write index clone to one word per torrent; Torrent exceeds the
+// map's inline value size, so storing it by value costs a heap object per entry.
 type Snapshot struct {
 	RID         uint64
-	Torrents    map[string]Torrent
+	Torrents    map[string]*Torrent
 	ServerState map[string]any `json:",omitempty"`
 }
 
 type Delta struct {
 	RID         uint64
 	FullUpdate  bool
-	Torrents    map[string]map[string]any
+	Torrents    map[string]TorrentDelta
 	Removed     []string
 	ServerState map[string]any
+	// BodyDigest is the hex sha256 of the raw response, when the fetcher saw one.
+	BodyDigest string
 }
 
 type MergeResult struct {
@@ -38,7 +34,7 @@ type MergeResult struct {
 
 func Merge(previous Snapshot, delta Delta) (MergeResult, error) {
 	if delta.RID == 0 || delta.FullUpdate {
-		next := Snapshot{RID: delta.RID, Torrents: map[string]Torrent{}, ServerState: cloneFields(delta.ServerState)}
+		next := Snapshot{RID: delta.RID, Torrents: make(map[string]*Torrent, len(delta.Torrents)), ServerState: maps.Clone(delta.ServerState)}
 		if err := applyTorrents(&next, delta.Torrents, false); err != nil {
 			return MergeResult{}, err
 		}
@@ -51,112 +47,35 @@ func Merge(previous Snapshot, delta Delta) (MergeResult, error) {
 		return MergeResult{}, errors.New("incremental delta requires a baseline")
 	}
 	if delta.RID <= previous.RID {
-		return MergeResult{Ignored: true, Snapshot: cloneSnapshot(previous)}, nil
+		return MergeResult{Ignored: true, Snapshot: previous}, nil
 	}
-	next := cloneSnapshot(previous)
+	// Copy-on-write: only the index is cloned; changed torrents are replaced by
+	// new objects and the AmountLeft pointer is replaced, never written through.
+	next := Snapshot{RID: delta.RID, Torrents: maps.Clone(previous.Torrents), ServerState: maps.Clone(previous.ServerState)}
 	if next.ServerState == nil {
-		next.ServerState = make(map[string]any)
+		next.ServerState = make(map[string]any, len(delta.ServerState))
 	}
-	for key, value := range delta.ServerState {
-		next.ServerState[key] = value
-	}
+	maps.Copy(next.ServerState, delta.ServerState)
 	if err := applyTorrents(&next, delta.Torrents, true); err != nil {
 		return MergeResult{}, err
 	}
 	for _, id := range delta.Removed {
 		delete(next.Torrents, id)
 	}
-	next.RID = delta.RID
 	return MergeResult{Applied: true, Snapshot: next}, nil
 }
 
-func applyTorrents(snapshot *Snapshot, raw map[string]map[string]any, inherit bool) error {
+func applyTorrents(snapshot *Snapshot, raw map[string]TorrentDelta, inherit bool) error {
 	for id, fields := range raw {
 		if id == "" {
 			return errors.New("torrent ID is required")
 		}
-		current, exists := snapshot.Torrents[id]
-		if !exists || !inherit {
-			current = Torrent{ID: id, Fields: map[string]any{}}
+		current := Torrent{ID: id, AmountLeftState: "UNKNOWN"}
+		if previous, exists := snapshot.Torrents[id]; exists && inherit {
+			current = *previous
 		}
-		if current.Fields == nil {
-			current.Fields = map[string]any{}
-		}
-		for key, value := range fields {
-			current.Fields[key] = value
-		}
-		if err := normalizeAmountLeft(&current); err != nil {
-			return fmt.Errorf("torrent %s: %w", id, err)
-		}
-		snapshot.Torrents[id] = current
+		current.apply(fields)
+		snapshot.Torrents[id] = &current
 	}
 	return nil
-}
-
-func normalizeAmountLeft(torrent *Torrent) error {
-	value, exists := torrent.Fields["amount_left"]
-	if !exists || value == nil {
-		torrent.AmountLeftState = "UNKNOWN"
-		torrent.AmountLeft = nil
-		return nil
-	}
-	parsed, ok := parseInteger(value)
-	if !ok || parsed < 0 {
-		torrent.AmountLeftState = "UNKNOWN"
-		torrent.AmountLeft = nil
-		return nil
-	}
-	torrent.AmountLeftState = "KNOWN"
-	torrent.AmountLeft = &parsed
-	return nil
-}
-
-func parseInteger(value any) (int64, bool) {
-	switch typed := value.(type) {
-	case int:
-		return int64(typed), true
-	case int64:
-		return typed, true
-	case float64:
-		if typed != math.Trunc(typed) || typed > math.MaxInt64 || typed < math.MinInt64 {
-			return 0, false
-		}
-		return int64(typed), true
-	case json.Number:
-		parsed, err := typed.Int64()
-		return parsed, err == nil
-	case string:
-		parsed, err := strconv.ParseInt(typed, 10, 64)
-		return parsed, err == nil
-	default:
-		return 0, false
-	}
-}
-
-func cloneFields(source map[string]any) map[string]any {
-	if source == nil {
-		return nil
-	}
-	result := make(map[string]any, len(source))
-	for key, value := range source {
-		result[key] = value
-	}
-	return result
-}
-
-func cloneSnapshot(source Snapshot) Snapshot {
-	clone := Snapshot{RID: source.RID, Torrents: make(map[string]Torrent, len(source.Torrents)), ServerState: cloneFields(source.ServerState)}
-	for id, torrent := range source.Torrents {
-		fields := make(map[string]any, len(torrent.Fields))
-		for key, value := range torrent.Fields {
-			fields[key] = value
-		}
-		torrent.Fields = fields
-		if torrent.AmountLeft != nil {
-			value := *torrent.AmountLeft
-			torrent.AmountLeft = &value
-		}
-		clone.Torrents[id] = torrent
-	}
-	return clone
 }

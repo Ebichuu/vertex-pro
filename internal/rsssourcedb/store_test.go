@@ -10,7 +10,7 @@ import (
 	"github.com/vertex-pro/vertex-pro/internal/rsssource"
 )
 
-func storeDatabase(t *testing.T) *sql.DB {
+func storeDatabase(t testing.TB) *sql.DB {
 	t.Helper()
 	database, err := db.Open(context.Background(), db.Config{Path: filepath.Join(t.TempDir(), "rsssourcedb.db"), MaxOpenConns: 1, MaxIdleConns: 1})
 	if err != nil {

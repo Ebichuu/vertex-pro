@@ -35,7 +35,7 @@ func TestCompletedBindingRemovedOnlyAfterDeletionAndCurrentAbsence(t *testing.T)
 	stage := Stage{database: database, config: Config{Storage: StorageConfig{InstanceID: "2", StorageTargetID: "target"}}}
 	now := time.Date(2026, 10, 23, 0, 0, 0, 0, time.UTC)
 	left := int64(0)
-	evidence := Evidence{Record: snapshot.Record{InstanceID: "2", Generation: 2, Revision: 3, Digest: "digest", Complete: true}, Snapshot: syncmerge.Snapshot{Torrents: map[string]syncmerge.Torrent{"hash": {ID: "hash", AmountLeftState: "KNOWN", AmountLeft: &left}}}}
+	evidence := Evidence{Record: snapshot.Record{InstanceID: "2", Generation: 2, Revision: 3, Digest: "digest", Complete: true}, Snapshot: syncmerge.Snapshot{Torrents: map[string]*syncmerge.Torrent{"hash": {ID: "hash", AmountLeftState: "KNOWN", AmountLeft: &left}}}}
 	reconcile := func() {
 		t.Helper()
 		if err := db.RunImmediate(ctx, database, func(ctx context.Context, tx *db.ImmediateTx) error {
@@ -49,7 +49,7 @@ func TestCompletedBindingRemovedOnlyAfterDeletionAndCurrentAbsence(t *testing.T)
 	if err := database.QueryRow(`SELECT COUNT(*) FROM capacity_task_bindings`).Scan(&count); err != nil || count != 1 {
 		t.Fatalf("present torrent binding count=%d err=%v", count, err)
 	}
-	evidence.Snapshot.Torrents = map[string]syncmerge.Torrent{}
+	evidence.Snapshot.Torrents = map[string]*syncmerge.Torrent{}
 	reconcile()
 	if err := database.QueryRow(`SELECT COUNT(*) FROM capacity_task_bindings`).Scan(&count); err != nil || count != 0 {
 		t.Fatalf("deleted torrent binding count=%d err=%v", count, err)

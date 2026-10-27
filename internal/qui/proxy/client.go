@@ -10,6 +10,8 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -20,7 +22,10 @@ import (
 
 const (
 	maxAddResponseBytes = 1 << 20
-	proxyRouteContract  = "qui-client-proxy-v1|GET:/proxy/{key}/api/v2/{allowlisted-endpoint}|POST:/proxy/{key}/api/v2/torrents/add|no-direct-qb-origin"
+	// A full maindata response is ~1.5 KiB per torrent; 512 MiB covers well
+	// over 100k torrents while still bounding a misbehaving proxy.
+	maxSyncResponseBytes = 512 << 20
+	proxyRouteContract   = "qui-client-proxy-v1|GET:/proxy/{key}/api/v2/{allowlisted-endpoint}|POST:/proxy/{key}/api/v2/torrents/add|no-direct-qb-origin"
 )
 
 // RouteFingerprint identifies the local qui Client Proxy routing contract used
@@ -125,26 +130,50 @@ func (client *Client) SyncMainData(ctx context.Context, rid uint64) (map[string]
 }
 
 // Fetch adapts qB's Sync API response to the SyncWatcher transport contract.
+// The body is decoded in one streaming pass and hashed while it is read.
 func (client *Client) Fetch(ctx context.Context, rid uint64) (syncmerge.Delta, error) {
-	response, err := client.SyncMainData(ctx, rid)
+	response, err := client.get(ctx, "sync/maindata?rid="+strconv.FormatUint(rid, 10))
 	if err != nil {
 		return syncmerge.Delta{}, err
 	}
-	payload, err := json.Marshal(response)
-	if err != nil {
-		return syncmerge.Delta{}, fmt.Errorf("marshal qB sync response: %w", err)
-	}
+	defer response.Body.Close()
+	hasher := sha256.New()
+	body := &cappedReader{reader: response.Body, remaining: maxSyncResponseBytes}
 	var delta struct {
-		RID         uint64                    `json:"rid"`
-		FullUpdate  bool                      `json:"full_update"`
-		Torrents    map[string]map[string]any `json:"torrents"`
-		Removed     []string                  `json:"torrents_removed"`
-		ServerState map[string]any            `json:"server_state"`
+		RID         uint64                            `json:"rid"`
+		FullUpdate  bool                              `json:"full_update"`
+		Torrents    map[string]syncmerge.TorrentDelta `json:"torrents"`
+		Removed     []string                          `json:"torrents_removed"`
+		ServerState map[string]any                    `json:"server_state"`
 	}
-	if err := json.Unmarshal(payload, &delta); err != nil {
+	if err := json.NewDecoder(io.TeeReader(body, hasher)).Decode(&delta); err != nil {
+		if errors.Is(err, errResponseTooLarge) {
+			return syncmerge.Delta{}, err
+		}
 		return syncmerge.Delta{}, fmt.Errorf("decode qB sync response: %w", err)
 	}
-	return syncmerge.Delta{RID: delta.RID, FullUpdate: delta.FullUpdate, Torrents: delta.Torrents, Removed: delta.Removed, ServerState: delta.ServerState}, nil
+	return syncmerge.Delta{RID: delta.RID, FullUpdate: delta.FullUpdate, Torrents: delta.Torrents, Removed: delta.Removed, ServerState: delta.ServerState, BodyDigest: hex.EncodeToString(hasher.Sum(nil))}, nil
+}
+
+var errResponseTooLarge = errors.New("qB proxy response exceeds limit")
+
+// cappedReader fails a read that would go past the limit instead of silently
+// truncating, so an oversized body never decodes as a partial snapshot.
+type cappedReader struct {
+	reader    io.Reader
+	remaining int64
+}
+
+func (capped *cappedReader) Read(buffer []byte) (int, error) {
+	if capped.remaining <= 0 {
+		return 0, errResponseTooLarge
+	}
+	if int64(len(buffer)) > capped.remaining {
+		buffer = buffer[:capped.remaining]
+	}
+	read, err := capped.reader.Read(buffer)
+	capped.remaining -= int64(read)
+	return read, err
 }
 
 func (client *Client) Trackers(ctx context.Context, torrentHash string) ([]map[string]any, error) {
@@ -159,6 +188,62 @@ func (client *Client) Trackers(ctx context.Context, torrentHash string) ([]map[s
 		return nil, errors.New("qB trackers response is missing")
 	}
 	return response, nil
+}
+
+// tagRouteContract documents Vertex's only qB metadata write besides Add. It
+// is deliberately separate from proxyRouteContract: RouteFingerprint binds
+// profile verification to the Add protocol, which this endpoint does not touch.
+const tagRouteContract = "qui-client-proxy-v1|POST:/proxy/{key}/api/v2/torrents/addTags|vertex-owned-tags-only"
+
+var (
+	vertexTagPattern   = regexp.MustCompile(`^vertex-[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`)
+	torrentHashPattern = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
+)
+
+// MaxTagHashes bounds one addTags request.
+const MaxTagHashes = 200
+
+// AddTags adds Vertex-owned tags ("vertex-…") to torrents by lowercase info
+// hash. It cannot remove tags, touch user tags or reach any other qB action.
+func (client *Client) AddTags(ctx context.Context, hashes []string, tags []string) error {
+	if client == nil || client.baseURL == nil || client.httpClient == nil {
+		return errors.New("qB proxy client is not initialized")
+	}
+	if len(hashes) == 0 || len(hashes) > MaxTagHashes {
+		return fmt.Errorf("addTags needs 1 to %d hashes", MaxTagHashes)
+	}
+	for _, hash := range hashes {
+		if !torrentHashPattern.MatchString(hash) {
+			return errors.New("addTags hash is invalid")
+		}
+	}
+	if len(tags) == 0 {
+		return errors.New("addTags needs at least one tag")
+	}
+	for _, tag := range tags {
+		if !vertexTagPattern.MatchString(tag) {
+			return fmt.Errorf("addTags only accepts Vertex-owned tags, got %q", tag)
+		}
+	}
+	form := url.Values{"hashes": {strings.Join(hashes, "|")}, "tags": {strings.Join(tags, ",")}}
+	requestURL := *client.baseURL
+	requestURL.Path = strings.TrimRight(requestURL.Path, "/") + "/proxy/" + url.PathEscape(client.proxyKey) + "/api/v2/torrents/addTags"
+	requestURL.RawQuery = ""
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, requestURL.String(), strings.NewReader(form.Encode()))
+	if err != nil {
+		return fmt.Errorf("build qB proxy addTags request: %w", err)
+	}
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	response, err := client.httpClient.Do(request)
+	if err != nil {
+		return &transportError{cause: err}
+	}
+	defer response.Body.Close()
+	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxAddResponseBytes))
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return &HTTPError{StatusCode: response.StatusCode, Status: response.Status}
+	}
+	return nil
 }
 
 // Send forwards exactly one validated Add request through this instance's qui
@@ -221,9 +306,11 @@ func (client *Client) object(ctx context.Context, endpoint string, optional bool
 	return response, nil
 }
 
-func (client *Client) getJSON(ctx context.Context, endpoint string, target any) error {
+// get issues an allowlisted GET and returns a 2xx response with content; the
+// caller closes the body.
+func (client *Client) get(ctx context.Context, endpoint string) (*http.Response, error) {
 	if !allowedEndpoint(endpoint) {
-		return fmt.Errorf("qB proxy endpoint is not allowlisted: %s", endpoint)
+		return nil, fmt.Errorf("qB proxy endpoint is not allowlisted: %s", endpoint)
 	}
 	requestURL := *client.baseURL
 	requestURL.Path = strings.TrimRight(requestURL.Path, "/") + "/proxy/" + url.PathEscape(client.proxyKey) + "/api/v2/" + strings.SplitN(endpoint, "?", 2)[0]
@@ -232,26 +319,40 @@ func (client *Client) getJSON(ctx context.Context, endpoint string, target any) 
 	}
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL.String(), nil)
 	if err != nil {
-		return fmt.Errorf("build qB proxy request: %w", err)
+		return nil, fmt.Errorf("build qB proxy request: %w", err)
 	}
 	request.Header.Set("Accept", "application/json")
 	response, err := client.httpClient.Do(request)
 	if err != nil {
-		return &transportError{cause: err}
+		return nil, &transportError{cause: err}
 	}
-	defer response.Body.Close()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return &HTTPError{StatusCode: response.StatusCode, Status: response.Status}
+		response.Body.Close()
+		return nil, &HTTPError{StatusCode: response.StatusCode, Status: response.Status}
 	}
 	if response.StatusCode == http.StatusNoContent {
-		return errors.New("qB proxy response has no content")
+		response.Body.Close()
+		return nil, errors.New("qB proxy response has no content")
 	}
-	body, err := io.ReadAll(io.LimitReader(response.Body, maxAddResponseBytes+1))
+	return response, nil
+}
+
+func (client *Client) getJSON(ctx context.Context, endpoint string, target any) error {
+	response, err := client.get(ctx, endpoint)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+	limit := int64(maxAddResponseBytes)
+	if strings.HasPrefix(endpoint, "sync/maindata?") {
+		limit = maxSyncResponseBytes
+	}
+	body, err := io.ReadAll(io.LimitReader(response.Body, limit+1))
 	if err != nil {
 		return fmt.Errorf("read qB proxy response: %w", err)
 	}
-	if len(body) > maxAddResponseBytes {
-		return errors.New("qB proxy response exceeds limit")
+	if int64(len(body)) > limit {
+		return errResponseTooLarge
 	}
 	if textTarget, ok := target.(*string); ok {
 		if err := json.Unmarshal(body, textTarget); err == nil {

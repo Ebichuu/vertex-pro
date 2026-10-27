@@ -37,6 +37,7 @@ func (RealClock) Now() time.Time { return time.Now().UTC() }
 type Service struct {
 	database *sql.DB
 	clock    Clock
+	compiled *compileCache
 }
 
 type Rule struct {
@@ -75,7 +76,7 @@ func New(database *sql.DB, clock Clock) (Service, error) {
 	if clock == nil {
 		clock = RealClock{}
 	}
-	return Service{database: database, clock: clock}, nil
+	return Service{database: database, clock: clock, compiled: newCompileCache()}, nil
 }
 
 func (service Service) Create(ctx context.Context, input CreateInput) (Rule, error) {
@@ -260,6 +261,9 @@ func normalizeDefinition(value json.RawMessage) (json.RawMessage, error) {
 		if _, err := MatchFor(Rule{ID: "validate", Revision: 1, Definition: value}, "validate"); err != nil {
 			return nil, fmt.Errorf("invalid rule actions: %w", err)
 		}
+	}
+	if err := rejectUnavailableFields(value); err != nil {
+		return nil, err
 	}
 	return append(json.RawMessage(nil), value...), nil
 }

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/vertex-pro/vertex-pro/internal/db"
+	"github.com/vertex-pro/vertex-pro/internal/rsssourcedb"
 	"github.com/vertex-pro/vertex-pro/internal/schedulercycle"
 )
 
@@ -27,7 +28,7 @@ func (runtime *Runtime) recordFeedPoll(ctx context.Context, feed schedulercycle.
 		}
 		if pollErr == nil {
 			if len(result.Outcomes) == 0 && !result.PolledAt.IsZero() {
-				if _, err := tx.ExecContext(ctx, `UPDATE feed_runtime_state SET last_matched=(SELECT count(*) FROM rss_source_consumers c WHERE c.feed_id=feed_runtime_state.feed_id AND c.matched=1 AND julianday(c.discovered_at)>=julianday(feed_runtime_state.last_polled_at)) WHERE feed_id=?`, feed.FeedID); err != nil {
+				if err := rsssourcedb.RefreshLastMatched(ctx, tx, feed.FeedID); err != nil {
 					return err
 				}
 			}

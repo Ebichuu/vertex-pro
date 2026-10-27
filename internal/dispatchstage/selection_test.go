@@ -45,7 +45,7 @@ func TestGroupSelectionExistingHashWithUnknownCapacityNeverReroutes(t *testing.T
 			live := f.evidence("qb-1", 2, 1024)
 			for _, evidence := range []*Evidence{&cached, &live} {
 				left := int64(42)
-				torrent := syncmerge.Torrent{ID: f.hash, AmountLeftState: "KNOWN", AmountLeft: &left}
+				torrent := &syncmerge.Torrent{ID: f.hash, AmountLeftState: "KNOWN", AmountLeft: &left}
 				if unknown == "torrent liability" {
 					torrent.AmountLeftState, torrent.AmountLeft = "UNKNOWN", nil
 				} else {
@@ -85,7 +85,7 @@ func TestGroupSelectionFinalHashRecheckPreventsAdd(t *testing.T) {
 	f := newSelectionFixture(t)
 	live := f.evidence("qb-1", 2, 1024)
 	left := int64(42)
-	live.Snapshot.Torrents[f.hash] = syncmerge.Torrent{ID: f.hash, AmountLeftState: "KNOWN", AmountLeft: &left}
+	live.Snapshot.Torrents[f.hash] = &syncmerge.Torrent{ID: f.hash, AmountLeftState: "KNOWN", AmountLeft: &left}
 	first, firstCalls := f.stage(t, "qb-1", f.evidence("qb-1", 1, 1024), live)
 	second, secondCalls := f.stage(t, "qb-2", f.evidence("qb-2", 1, 0), f.evidence("qb-2", 2, 1024))
 	Connect(first, second)
@@ -132,7 +132,7 @@ func newSelectionFixture(t *testing.T) selectionFixture {
 func (f selectionFixture) evidence(instance string, revision uint64, free int64) Evidence {
 	return Evidence{
 		Record:      snapshot.Record{InstanceID: instance, Generation: 1, Revision: revision, RID: revision, Digest: fmt.Sprintf("%s-digest-%d", instance, revision), Complete: true},
-		Snapshot:    syncmerge.Snapshot{RID: revision, Torrents: map[string]syncmerge.Torrent{}, ServerState: map[string]any{"free_space_on_disk": free}},
+		Snapshot:    syncmerge.Snapshot{RID: revision, Torrents: map[string]*syncmerge.Torrent{}, ServerState: map[string]any{"free_space_on_disk": free}},
 		Preferences: map[string]any{"save_path": "/data", "temp_path_enabled": false},
 		CollectedAt: f.now,
 	}

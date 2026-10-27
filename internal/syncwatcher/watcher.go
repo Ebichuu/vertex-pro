@@ -2,10 +2,11 @@ package syncwatcher
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
-	"strings"
 	"sync"
 
 	"github.com/vertex-pro/vertex-pro/internal/snapshot"
@@ -23,7 +24,9 @@ type Event struct {
 	InstanceID string
 	Generation uint64
 	Revision   uint64
-	Snapshot   syncmerge.Snapshot
+	// Digest is the committed snapshot_digest of this revision.
+	Digest   string
+	Snapshot syncmerge.Snapshot
 }
 
 type Waiter struct {
@@ -41,7 +44,10 @@ type Watcher struct {
 	store      snapshot.Store
 	generation uint64
 	revision   uint64
+	digest     string
+	resumed    bool
 	current    syncmerge.Snapshot
+	record     snapshot.Record
 	hasCurrent bool
 	inFlight   bool
 	closed     bool
@@ -78,7 +84,7 @@ func (watcher *Watcher) RunOnce(ctx context.Context) (Event, error) {
 	watcher.inFlight = true
 	current := watcher.current
 	hasCurrent := watcher.hasCurrent
-	generation := watcher.generation
+	resumed := watcher.resumed
 	watcher.mu.Unlock()
 	defer func() {
 		watcher.mu.Lock()
@@ -86,15 +92,16 @@ func (watcher *Watcher) RunOnce(ctx context.Context) (Event, error) {
 		watcher.mu.Unlock()
 	}()
 
-	if !hasCurrent {
-		loaded, record, err := watcher.store.LoadLatest(ctx, watcher.instanceID)
-		if err == nil {
-			current, generation = loaded, record.Generation
-			watcher.revision = record.Revision
-			hasCurrent = true
-		} else if !errors.Is(err, sql.ErrNoRows) && !containsNoReference(err) {
-			return Event{}, fmt.Errorf("load current snapshot: %w", err)
+	// Snapshots are not reloaded after a restart: resume the committed
+	// coordinates and re-baseline from rid=0, which always starts a new generation.
+	if !resumed {
+		generation, revision, digest, err := watcher.store.Coordinates(ctx, watcher.instanceID)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return Event{}, fmt.Errorf("load sync coordinates: %w", err)
 		}
+		watcher.mu.Lock()
+		watcher.generation, watcher.revision, watcher.digest, watcher.resumed = generation, revision, digest, true
+		watcher.mu.Unlock()
 	}
 	rid := uint64(0)
 	if hasCurrent {
@@ -108,25 +115,46 @@ func (watcher *Watcher) RunOnce(ctx context.Context) (Event, error) {
 	if err != nil {
 		return Event{}, fmt.Errorf("merge sync delta: %w", err)
 	}
+	watcher.mu.Lock()
+	generation, revision, previousDigest := watcher.generation, watcher.revision, watcher.digest
+	watcher.mu.Unlock()
 	if result.Ignored {
-		return Event{InstanceID: watcher.instanceID, Generation: generation, Revision: watcher.revision, Snapshot: result.Snapshot}, nil
+		return Event{InstanceID: watcher.instanceID, Generation: generation, Revision: revision, Digest: previousDigest, Snapshot: result.Snapshot}, nil
 	}
 	if generation == 0 || result.Reset {
 		generation++
 	}
-	revision := watcher.revision + 1
-	if hasCurrent && generation == watcher.generation && watcher.revision == 0 {
-		revision = 1
-	}
-	if _, err := watcher.store.Save(ctx, watcher.instanceID, generation, revision, result.Snapshot, true); err != nil {
+	revision++
+	digest := chainDigest(watcher.instanceID, generation, revision, result.Snapshot.RID, previousDigest, delta.BodyDigest)
+	record, err := watcher.store.Commit(ctx, watcher.instanceID, generation, revision, result.Snapshot.RID, digest)
+	if err != nil {
 		return Event{}, fmt.Errorf("persist sync snapshot: %w", err)
 	}
-	event := Event{InstanceID: watcher.instanceID, Generation: generation, Revision: revision, Snapshot: result.Snapshot}
+	event := Event{InstanceID: watcher.instanceID, Generation: generation, Revision: revision, Digest: digest, Snapshot: result.Snapshot}
 	watcher.mu.Lock()
-	watcher.current, watcher.generation, watcher.revision, watcher.hasCurrent = result.Snapshot, generation, revision, true
+	watcher.current, watcher.record, watcher.hasCurrent = result.Snapshot, record, true
+	watcher.generation, watcher.revision, watcher.digest = generation, revision, digest
 	watcher.broadcastLocked(event)
 	watcher.mu.Unlock()
 	return event, nil
+}
+
+// Current returns the last committed snapshot and its record. The snapshot is
+// shared and must not be mutated.
+func (watcher *Watcher) Current() (syncmerge.Snapshot, snapshot.Record, bool) {
+	watcher.mu.Lock()
+	defer watcher.mu.Unlock()
+	return watcher.current, watcher.record, watcher.hasCurrent
+}
+
+// chainDigest identifies a revision without re-encoding the snapshot: it binds
+// the coordinates, the previous revision's digest and the raw response bytes.
+// Every revision has a new RID, so (as with the former content hash) no two
+// revisions share a digest.
+func chainDigest(instanceID string, generation, revision, rid uint64, previous, body string) string {
+	hasher := sha256.New()
+	fmt.Fprintf(hasher, "vertex-sync-v2\x00%s\x00%d\x00%d\x00%d\x00%s\x00%s", instanceID, generation, revision, rid, previous, body)
+	return hex.EncodeToString(hasher.Sum(nil))
 }
 
 func (watcher *Watcher) RegisterWaiter(generation, revision uint64) (Waiter, error) {
@@ -179,8 +207,4 @@ func (watcher *Watcher) broadcastLocked(event Event) {
 		close(entry.channel)
 		delete(watcher.waiters, id)
 	}
-}
-
-func containsNoReference(err error) bool {
-	return err != nil && (errors.Is(err, sql.ErrNoRows) || strings.Contains(err.Error(), "read latest snapshot coordinates") || strings.Contains(err.Error(), "read snapshot reference"))
 }

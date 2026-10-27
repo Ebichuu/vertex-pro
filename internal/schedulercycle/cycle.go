@@ -167,7 +167,7 @@ func (cycle *Cycle) discover(ctx context.Context, feed FeedRef) (Result, error) 
 		if link == "" {
 			link = entry.Link
 		}
-		entries = append(entries, rsssource.Entry{GUID: entry.ID, URL: link, Title: entry.Title, SizeBytes: entry.SizeBytes, PublishedAt: entry.Published})
+		entries = append(entries, rsssource.Entry{GUID: entry.ID, URL: link, Title: entry.Title, SizeBytes: entry.SizeBytes, PublishedAt: entry.Published, Category: entry.Category, Publisher: entry.Publisher})
 	}
 	dedupeResult, err := cycle.consumers.Discover(ctx, feed.SiteID, feed.FeedID, entries, feed.BaselineOnly, cycle.now())
 	if err != nil {
@@ -259,7 +259,7 @@ func (cycle *Cycle) attemptContext(ctx context.Context, work rsssource.Consumer)
 }
 
 func (cycle *Cycle) process(ctx context.Context, feed FeedRef, work rsssource.Consumer) (matchpipeline.Outcome, error) {
-	preview := matchpipeline.Item{Source: work.Source, FeedID: feed.FeedID, PublishedAt: parsePublished(work.Source.PublishedAt)}
+	preview := sourceItem(matchpipeline.Item{Source: work.Source}, feed, work)
 	if outcome, rejected, err := matchpipeline.Prefilter(ctx, cycle.pipeline, preview); err != nil || rejected {
 		return outcome, err
 	}
@@ -270,9 +270,17 @@ func (cycle *Cycle) process(ctx context.Context, feed FeedRef, work rsssource.Co
 	if !cycle.now().Before(work.Deadline) {
 		return matchpipeline.Outcome{}, fmt.Errorf("source processing deadline reached")
 	}
+	return matchpipeline.Process(ctx, cycle.pipeline, sourceItem(item, feed, work))
+}
+
+// sourceItem attaches the RSS-derived rule facts of this consumer's input.
+func sourceItem(item matchpipeline.Item, feed FeedRef, work rsssource.Consumer) matchpipeline.Item {
 	item.FeedID = feed.FeedID
 	item.PublishedAt = parsePublished(work.Source.PublishedAt)
-	return matchpipeline.Process(ctx, cycle.pipeline, item)
+	item.DiscoveredAt = work.DiscoveredAt
+	item.Category = work.Source.Category
+	item.Publisher = work.Source.Publisher
+	return item
 }
 
 func (cycle *Cycle) identify(ctx context.Context, source rsssource.Source, feed FeedRef) (matchpipeline.Item, error) {

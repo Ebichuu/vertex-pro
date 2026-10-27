@@ -37,7 +37,7 @@ func TestObservationSurvivesGenerationResetAndRequiresTwoMissingSnapshots(t *tes
 	}
 	runtime := &Runtime{Database: database}
 	left := int64(4096)
-	first := syncwatcher.Event{InstanceID: "2", Generation: 1, Revision: 8, Snapshot: syncmerge.Snapshot{Torrents: map[string]syncmerge.Torrent{"hash": {ID: "hash", AmountLeftState: "KNOWN", AmountLeft: &left, Fields: map[string]any{"name": "Download", "state": "downloading", "downloaded": int64(128)}}}}}
+	first := syncwatcher.Event{InstanceID: "2", Generation: 1, Revision: 8, Snapshot: syncmerge.Snapshot{Torrents: map[string]*syncmerge.Torrent{"hash": {ID: "hash", AmountLeftState: "KNOWN", AmountLeft: &left, Name: "Download", State: "downloading", Downloaded: 128, Known: syncmerge.FieldName | syncmerge.FieldState | syncmerge.FieldDownloaded | syncmerge.FieldAmountLeft}}}}
 	if err := runtime.observeJobs(ctx, first, time.Date(2026, 10, 23, 0, 0, 0, 0, time.UTC)); err != nil {
 		t.Fatal(err)
 	}
@@ -45,7 +45,7 @@ func TestObservationSurvivesGenerationResetAndRequiresTwoMissingSnapshots(t *tes
 	if err := database.QueryRow(`SELECT state FROM job_observations WHERE job_id='j'`).Scan(&state); err != nil || state != "DOWNLOADING" {
 		t.Fatalf("download state=%q err=%v", state, err)
 	}
-	missing := syncwatcher.Event{InstanceID: "2", Generation: 2, Revision: 1, Snapshot: syncmerge.Snapshot{Torrents: map[string]syncmerge.Torrent{}}}
+	missing := syncwatcher.Event{InstanceID: "2", Generation: 2, Revision: 1, Snapshot: syncmerge.Snapshot{Torrents: map[string]*syncmerge.Torrent{}}}
 	for _, event := range []syncwatcher.Event{missing, missing} {
 		if err := runtime.observeJobs(ctx, event, time.Date(2026, 10, 23, 0, 1, 0, 0, time.UTC)); err != nil {
 			t.Fatal(err)

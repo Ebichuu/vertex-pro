@@ -187,7 +187,7 @@ func (stage *Stage) recordAlreadyPresent(ctx context.Context, job jobRow, e Evid
 	s := stage.config.Storage
 	now := stage.config.Now().UTC()
 	torrent := e.Snapshot.Torrents[job.identityKey]
-	if torrent.AmountLeftState != "KNOWN" || torrent.AmountLeft == nil || *torrent.AmountLeft < 0 {
+	if torrent == nil || torrent.AmountLeftState != "KNOWN" || torrent.AmountLeft == nil || *torrent.AmountLeft < 0 {
 		return errors.New("existing torrent liability is unknown")
 	}
 	request := reservation.Request{JobID: job.jobID, AttemptID: "attempt-" + job.jobID, SubmitIntentID: "intent-" + job.jobID, ReservationID: "reservation-" + job.jobID, IdentityKey: job.identityKey, InstanceID: s.InstanceID, StorageTargetID: s.StorageTargetID, CapacityEpochID: c.ID, AllocationEpoch: c.AllocationEpoch, CapacityRevision: int64(e.Record.Revision), SnapshotGeneration: int64(e.Record.Generation), SnapshotRevision: int64(e.Record.Revision), SnapshotDigest: e.Record.Digest, RequestFingerprint: "fp-" + job.jobID, TargetFingerprint: "target-" + s.StorageTargetID, PreAddIdentityFact: reservation.IdentityPresent, PreAddQBTorrentID: torrent.ID, FinalCandidateRecheckRevision: int64(e.Record.Revision), MaxInflight: 1, Now: now.Format(time.RFC3339Nano)}

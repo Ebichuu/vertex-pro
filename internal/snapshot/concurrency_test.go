@@ -40,7 +40,7 @@ func TestSnapshotWaitsForWriterAndRechecksCoordinates(t *testing.T) {
 			done := make(chan struct{})
 			go func() {
 				defer close(done)
-				_, err := store.Save(ctx, "qb-1", 1, 1, syncmerge.Snapshot{RID: 1, Torrents: map[string]syncmerge.Torrent{}}, true)
+				_, err := store.Save(ctx, "qb-1", 1, 1, syncmerge.Snapshot{RID: 1, Torrents: map[string]*syncmerge.Torrent{}}, true)
 				result <- err
 			}()
 			// Drain the save before fixture cleanup, including assertion failures.
@@ -119,7 +119,7 @@ func TestSnapshotsPersistAcrossConcurrentInstances(t *testing.T) {
 		for _, id := range ids {
 			workers.Go(func() {
 				<-start
-				_, err := store.Save(ctx, id, 1, revision, syncmerge.Snapshot{RID: revision, Torrents: map[string]syncmerge.Torrent{}}, true)
+				_, err := store.Save(ctx, id, 1, revision, syncmerge.Snapshot{RID: revision, Torrents: map[string]*syncmerge.Torrent{}}, true)
 				results <- err
 			})
 		}

@@ -122,12 +122,12 @@ func run(ctx context.Context) error {
 	if !present {
 		return errors.New("retained test identity is not present")
 	}
-	state, _ := observed.Fields["state"].(string)
+	state := observed.State
 	inactive := strings.HasPrefix(strings.ToLower(state), "stopped") || strings.HasPrefix(strings.ToLower(state), "paused")
 	if !inactive {
 		return errors.New("retained test identity is not inactive")
 	}
-	amount, present := observed.Fields["amount_left"]
+	amount, present := observed.Value("amount_left")
 	amountValue := amountleft.ResolveFull(amountleft.Observation{Present: present, Raw: amount})
 	if amountValue.State != amountleft.StateKnown || amountValue.Value == nil {
 		return fmt.Errorf("retained test amount_left is not known: %s", amountValue.ErrorCode)

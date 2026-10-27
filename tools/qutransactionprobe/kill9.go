@@ -454,7 +454,7 @@ func stateOf(snapshot syncmerge.Snapshot, id string) string {
 	if !ok {
 		return ""
 	}
-	state, _ := torrent.Fields["state"].(string)
+	state := torrent.State
 	return state
 }
 

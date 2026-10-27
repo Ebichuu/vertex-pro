@@ -29,7 +29,7 @@ import (
 	"github.com/vertex-pro/vertex-pro/internal/syncwaiter"
 )
 
-func pipelineDatabase(t *testing.T) *sql.DB {
+func pipelineDatabase(t testing.TB) *sql.DB {
 	t.Helper()
 	database, err := db.Open(context.Background(), db.Config{Path: filepath.Join(t.TempDir(), "pipeline.db"), MaxOpenConns: 1, MaxIdleConns: 1})
 	if err != nil {
@@ -46,7 +46,7 @@ func pipelineDatabase(t *testing.T) *sql.DB {
 	return database
 }
 
-func seedSite(t *testing.T, database *sql.DB, siteID string) {
+func seedSite(t testing.TB, database *sql.DB, siteID string) {
 	t.Helper()
 	if _, err := database.Exec(`INSERT INTO sites(site_id, name, base_url, enabled, created_at, updated_at) VALUES (?, 'Site', 'https://site.example', 1, strftime('%Y-%m-%dT%H:%M:%SZ','now'), strftime('%Y-%m-%dT%H:%M:%SZ','now'))`, siteID); err != nil {
 		t.Fatal(err)
@@ -86,7 +86,7 @@ func missingFieldTree() json.RawMessage {
 	return payload
 }
 
-func seedRule(t *testing.T, service ruleservice.Service, siteID, name string, priority int, definition json.RawMessage) ruleservice.Rule {
+func seedRule(t testing.TB, service ruleservice.Service, siteID, name string, priority int, definition json.RawMessage) ruleservice.Rule {
 	t.Helper()
 	t.Helper()
 	rule, err := service.Create(context.Background(), ruleservice.CreateInput{SiteID: siteID, Name: name, Enabled: true, Priority: priority, Definition: definition})

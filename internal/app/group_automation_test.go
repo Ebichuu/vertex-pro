@@ -138,7 +138,7 @@ func TestGroupBatchLifecycleAndQuiPolicy(t *testing.T) {
 					w.WriteHeader(400)
 					return
 				}
-				if r.FormValue("stopped") != "false" || r.FormValue("autoTMM") != "false" || r.FormValue("savepath") != "/managed" || r.FormValue("category") != "fixture-group" || !strings.Contains(r.FormValue("tags"), "vertex-policy-") || r.FormValue("upLimit") != "100000000" || r.FormValue("sequentialDownload") != "true" || !bytes.Contains(payload, []byte("group-")) {
+				if r.FormValue("stopped") != "false" || r.FormValue("autoTMM") != "false" || r.FormValue("savepath") != "/managed" || r.FormValue("category") != "fixture-group" || !strings.Contains(r.FormValue("tags"), "vertex-policy-") || !strings.Contains(r.FormValue("tags"), "vertex-managed,vertex-site-s") || r.FormValue("upLimit") != "100000000" || r.FormValue("sequentialDownload") != "true" || !bytes.Contains(payload, []byte("group-")) {
 					invalidAdd++
 				}
 				adds[id]++

@@ -17,6 +17,8 @@ import {
   type VertexOperator,
   type VertexValue,
   type VertexValueType,
+  UNAVAILABLE_FIELD_SUFFIX,
+  unavailableFields,
   VERTEX_FIELDS,
 } from '../../features/rules/model'
 
@@ -83,8 +85,11 @@ function LeafEditor({ condition, onChange, onRemove, onCopy, onMove, canMoveUp, 
     const nextValue = condition.value?.type === nextValueType ? condition.value : defaultValue(nextValueType)
     onChange({ ...condition, operator, ...(operator === 'exists' || operator === 'not_exists' ? { value: undefined } : { value: nextValue }) })
   }
+  // A field without a live data source is listed only for the condition that
+  // already uses it, so the user can see and replace it; new conditions cannot pick it.
+  const fieldOptions = VERTEX_FIELDS.filter((field) => field.live || field.field === condition.field)
   return <div className="rule-leaf" data-testid="rule-leaf">
-    <select aria-label="字段" value={condition.field} onChange={(event) => changeField(event.target.value as VertexField)}>{VERTEX_FIELDS.map((field) => <option key={field.field} value={field.field}>{field.label}</option>)}</select>
+    <select aria-label="字段" value={condition.field} onChange={(event) => changeField(event.target.value as VertexField)}>{fieldOptions.map((field) => <option key={field.field} value={field.field}>{field.live ? field.label : field.label + UNAVAILABLE_FIELD_SUFFIX}</option>)}</select>
     <select aria-label="运算符" value={condition.operator} onChange={(event) => changeOperator(event.target.value as VertexOperator)}>{spec.operators.map((operator) => <option key={operator} value={operator}>{OPERATOR_LABELS[operator]}</option>)}</select>
     <ValueEditor condition={condition} spec={spec} onChange={onChange} />
     <div className="rule-node-actions">
@@ -134,6 +139,7 @@ export function VertexRuleEditor({ value = defaultTree(), onChange }: RuleEditor
   const simpleCompatible = isSimpleConditionTree(tree)
   const root = tree.root.kind === 'group' ? tree.root : { kind: 'group' as const, operator: 'and' as const, children: [tree.root] }
   const simpleView = mode === 'simple' && simpleCompatible
+  const unavailable = unavailableFields(tree)
   return <section className="vertex-rule-editor" aria-label="Vertex 规则编辑器">
     <div className="rule-editor-caption"><span>Vertex 条件树</span><span>v{tree.version}</span></div>
     <div className="rule-mode-switcher" role="tablist" aria-label="规则编辑模式">
@@ -141,6 +147,7 @@ export function VertexRuleEditor({ value = defaultTree(), onChange }: RuleEditor
       <Button type="button" role="tab" aria-selected={mode === 'advanced'} className={mode === 'advanced' ? 'active' : ''} onClick={() => setMode('advanced')}>高级模式</Button>
     </div>
     {mode === 'simple' && !simpleCompatible && <div className="rule-mode-warning" role="status">当前条件包含简单模式无法表达的高级语义，已保留原 AST；请切换到高级模式编辑。</div>}
+    {unavailable.length > 0 && <div className="rule-mode-warning" role="alert">以下字段暂无数据来源，生产匹配中永远不会命中，保存会被拒绝：{unavailable.map((field) => field.label).join('、')}。请删除或改用其他字段；这些字段仍可在 Dry-run 中使用。</div>}
     <p className="field-hint">大小按 GB 输入，1 GB = 1,000,000,000 bytes；区间和集合使用逗号分隔。</p>
     <SizeInputDrafts.Provider value={sizeDrafts}><GroupEditor condition={root} simple={simpleView} onChange={(nextRoot) => updateTree({ ...tree, root: nextRoot })} /></SizeInputDrafts.Provider>
   </section>

@@ -19,6 +19,9 @@ type Consumer struct {
 	ClaimGeneration int64
 	ResumeURL       string
 	Redirects       int
+	// DiscoveredAt is when discovery first persisted this consumer (zero for
+	// legacy rows); it anchors the discovery_delay rule fact.
+	DiscoveredAt time.Time
 }
 
 // DeferredConsumerStore persists a yielded HTTP preparation independently of

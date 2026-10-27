@@ -51,6 +51,18 @@ export class ApiClient {
     return this.request<T>(`/api/v1/jobs/${encodeURIComponent(id)}/acknowledge-unknown`, { method: "POST", body: JSON.stringify(opts?.body ?? {}), headers: {"Content-Type": "application/json", ...(opts?.headers ?? {})}, signal: opts?.signal }, opts?.query);
   }
 
+  async activateDeletionPolicy<T = JsonObject>(id: string, opts?: RequestOptions): Promise<T> {
+    return this.request<T>(`/api/v1/deletion/policies/${encodeURIComponent(id)}/activate`, { method: "POST", body: JSON.stringify(opts?.body ?? {}), headers: {"Content-Type": "application/json", ...(opts?.headers ?? {})}, signal: opts?.signal }, opts?.query);
+  }
+
+  async applyTagBackfill<T = JsonObject>(instance: string, opts?: RequestOptions): Promise<T> {
+    return this.request<T>(`/api/v1/deletion/tag-backfill/${encodeURIComponent(instance)}`, { method: "POST", body: JSON.stringify(opts?.body ?? {}), headers: {"Content-Type": "application/json", ...(opts?.headers ?? {})}, signal: opts?.signal }, opts?.query);
+  }
+
+  async archiveDeletionPolicy<T = JsonObject>(id: string, opts?: RequestOptions): Promise<T> {
+    return this.request<T>(`/api/v1/deletion/policies/${encodeURIComponent(id)}`, { method: "DELETE", headers: opts?.headers, signal: opts?.signal }, opts?.query);
+  }
+
   async archiveFeed<T = JsonObject>(id: string, opts?: RequestOptions): Promise<T> {
     return this.request<T>(`/api/v1/feeds/${encodeURIComponent(id)}`, { method: "DELETE", headers: opts?.headers, signal: opts?.signal }, opts?.query);
   }
@@ -63,6 +75,10 @@ export class ApiClient {
     return this.request<T>(`/api/v1/sites/${encodeURIComponent(id)}`, { method: "DELETE", headers: opts?.headers, signal: opts?.signal }, opts?.query);
   }
 
+  async createDeletionPolicy<T = JsonObject>(opts?: RequestOptions): Promise<T> {
+    return this.request<T>(`/api/v1/deletion/policies`, { method: "POST", body: JSON.stringify(opts?.body ?? {}), headers: {"Content-Type": "application/json", ...(opts?.headers ?? {})}, signal: opts?.signal }, opts?.query);
+  }
+
   async createFeed<T = JsonObject>(opts?: RequestOptions): Promise<T> {
     return this.request<T>(`/api/v1/feeds`, { method: "POST", body: JSON.stringify(opts?.body ?? {}), headers: {"Content-Type": "application/json", ...(opts?.headers ?? {})}, signal: opts?.signal }, opts?.query);
   }
@@ -73,6 +89,10 @@ export class ApiClient {
 
   async createSite<T = JsonObject>(opts?: RequestOptions): Promise<T> {
     return this.request<T>(`/api/v1/sites`, { method: "POST", body: JSON.stringify(opts?.body ?? {}), headers: {"Content-Type": "application/json", ...(opts?.headers ?? {})}, signal: opts?.signal }, opts?.query);
+  }
+
+  async deactivateDeletionPolicy<T = JsonObject>(id: string, opts?: RequestOptions): Promise<T> {
+    return this.request<T>(`/api/v1/deletion/policies/${encodeURIComponent(id)}/deactivate`, { method: "POST", body: JSON.stringify(opts?.body ?? {}), headers: {"Content-Type": "application/json", ...(opts?.headers ?? {})}, signal: opts?.signal }, opts?.query);
   }
 
   async dryRunRule<T = JsonObject>(id: string, opts?: RequestOptions): Promise<T> {
@@ -97,6 +117,14 @@ export class ApiClient {
 
   async getDashboard<T = JsonObject>(opts?: RequestOptions): Promise<T> {
     return this.request<T>(`/api/v1/dashboard`, { method: "GET", headers: opts?.headers, signal: opts?.signal }, opts?.query);
+  }
+
+  async getDeletionPolicy<T = JsonObject>(id: string, opts?: RequestOptions): Promise<T> {
+    return this.request<T>(`/api/v1/deletion/policies/${encodeURIComponent(id)}`, { method: "GET", headers: opts?.headers, signal: opts?.signal }, opts?.query);
+  }
+
+  async getDeletionSafety<T = JsonObject>(opts?: RequestOptions): Promise<T> {
+    return this.request<T>(`/api/v1/deletion/safety`, { method: "GET", headers: opts?.headers, signal: opts?.signal }, opts?.query);
   }
 
   async getDownloaderRealtime<T = JsonObject>(opts?: RequestOptions): Promise<T> {
@@ -135,6 +163,14 @@ export class ApiClient {
     return this.request<T>(`/api/v1/auth/initialize`, { method: "POST", body: JSON.stringify(opts?.body ?? {}), headers: {"Content-Type": "application/json", ...(opts?.headers ?? {})}, signal: opts?.signal }, opts?.query);
   }
 
+  async listDeletionAudit<T = JsonObject>(instance: string, opts?: RequestOptions): Promise<T> {
+    return this.request<T>(`/api/v1/deletion/audit/${encodeURIComponent(instance)}`, { method: "GET", headers: opts?.headers, signal: opts?.signal }, opts?.query);
+  }
+
+  async listDeletionPolicies<T = JsonObject>(opts?: RequestOptions): Promise<T> {
+    return this.request<T>(`/api/v1/deletion/policies`, { method: "GET", headers: opts?.headers, signal: opts?.signal }, opts?.query);
+  }
+
   async listFeedPreparations<T = JsonObject>(id: string, opts?: RequestOptions): Promise<T> {
     return this.request<T>(`/api/v1/feeds/${encodeURIComponent(id)}/preparations`, { method: "GET", headers: opts?.headers, signal: opts?.signal }, opts?.query);
   }
@@ -171,6 +207,14 @@ export class ApiClient {
     return this.request<T>(`/api/v1/auth/logout`, { method: "POST", body: JSON.stringify(opts?.body ?? {}), headers: {"Content-Type": "application/json", ...(opts?.headers ?? {})}, signal: opts?.signal }, opts?.query);
   }
 
+  async planTagBackfill<T = JsonObject>(instance: string, opts?: RequestOptions): Promise<T> {
+    return this.request<T>(`/api/v1/deletion/tag-backfill/${encodeURIComponent(instance)}`, { method: "GET", headers: opts?.headers, signal: opts?.signal }, opts?.query);
+  }
+
+  async previewDeletionPolicy<T = JsonObject>(id: string, opts?: RequestOptions): Promise<T> {
+    return this.request<T>(`/api/v1/deletion/policies/${encodeURIComponent(id)}/preview`, { method: "POST", body: JSON.stringify(opts?.body ?? {}), headers: {"Content-Type": "application/json", ...(opts?.headers ?? {})}, signal: opts?.signal }, opts?.query);
+  }
+
   async probeInstance<T = JsonObject>(id: string, opts?: RequestOptions): Promise<T> {
     return this.request<T>(`/api/v1/instances/${encodeURIComponent(id)}/probe`, { method: "POST", body: JSON.stringify(opts?.body ?? {}), headers: {"Content-Type": "application/json", ...(opts?.headers ?? {})}, signal: opts?.signal }, opts?.query);
   }
@@ -185,6 +229,14 @@ export class ApiClient {
 
   async testFeed<T = JsonObject>(id: string, opts?: RequestOptions): Promise<T> {
     return this.request<T>(`/api/v1/feeds/${encodeURIComponent(id)}/test`, { method: "POST", body: JSON.stringify(opts?.body ?? {}), headers: {"Content-Type": "application/json", ...(opts?.headers ?? {})}, signal: opts?.signal }, opts?.query);
+  }
+
+  async updateDeletionPolicy<T = JsonObject>(id: string, opts?: RequestOptions): Promise<T> {
+    return this.request<T>(`/api/v1/deletion/policies/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify(opts?.body ?? {}), headers: {"Content-Type": "application/json", ...(opts?.headers ?? {})}, signal: opts?.signal }, opts?.query);
+  }
+
+  async updateDeletionSafety<T = JsonObject>(opts?: RequestOptions): Promise<T> {
+    return this.request<T>(`/api/v1/deletion/safety`, { method: "PUT", body: JSON.stringify(opts?.body ?? {}), headers: {"Content-Type": "application/json", ...(opts?.headers ?? {})}, signal: opts?.signal }, opts?.query);
   }
 
   async updateFeed<T = JsonObject>(id: string, opts?: RequestOptions): Promise<T> {

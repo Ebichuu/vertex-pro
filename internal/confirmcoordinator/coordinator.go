@@ -26,7 +26,17 @@ type Event struct {
 	InstanceID string
 	Generation uint64
 	Revision   uint64
-	Snapshot   syncmerge.Snapshot
+	// Digest is the committed snapshot_digest; when empty it is derived from
+	// Snapshot with SnapshotDigest (a full re-encode).
+	Digest   string
+	Snapshot syncmerge.Snapshot
+}
+
+func (event Event) digest() string {
+	if event.Digest != "" {
+		return event.Digest
+	}
+	return SnapshotDigest(event.Snapshot)
 }
 
 // Outcome records what happened to one waiter this cycle.
@@ -156,7 +166,7 @@ func (coordinator *Coordinator) confirm(ctx context.Context, waiter syncwaiter.W
 		QBTorrentID:            waiter.IdentityKey,
 		SyncGeneration:         int64(event.Generation),
 		SnapshotRevision:       int64(event.Revision),
-		SnapshotDigest:         SnapshotDigest(event.Snapshot),
+		SnapshotDigest:         event.digest(),
 		PreAddSyncGeneration:   preGeneration,
 		PreAddSnapshotRevision: preRevision,
 		PreAddSnapshotDigest:   preDigest,
@@ -201,7 +211,7 @@ func (coordinator *Coordinator) sweep(ctx context.Context, event Event, now time
 	if len(chains) == 0 {
 		return nil, nil
 	}
-	digest := SnapshotDigest(event.Snapshot)
+	digest := event.digest()
 	// Fail closed on ambiguity: if the UNKNOWN chains for this instance
 	// disagree about identity presence in this snapshot, the reconciler gets
 	// no evidence and holds every chain instead of guessing.

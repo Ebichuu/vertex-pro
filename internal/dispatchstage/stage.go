@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/vertex-pro/vertex-pro/internal/db"
+	"github.com/vertex-pro/vertex-pro/internal/deletionpolicy"
 	"github.com/vertex-pro/vertex-pro/internal/dispatchflow"
 	"github.com/vertex-pro/vertex-pro/internal/dispatchorchestrator"
 	"github.com/vertex-pro/vertex-pro/internal/dispatchworker"
@@ -273,6 +274,10 @@ func (stage *Stage) dispatchJob(ctx context.Context, job jobRow) (*dispatchorche
 	if err != nil {
 		return nil, err
 	}
+	// Ownership and site tags are what deletion policies are scoped to; they
+	// are frozen with the queued params, so queued sends carry them too.
+	site, _, _ := strings.Cut(job.sourceID, "/")
+	params.Tags = deletionpolicy.DeliveryTags(params.Tags, site)
 	evidence, release, err := stage.config.Collect(ctx)
 	if release != nil {
 		defer release()

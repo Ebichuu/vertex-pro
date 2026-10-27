@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/vertex-pro/vertex-pro/internal/dispatchstage"
-	"github.com/vertex-pro/vertex-pro/internal/snapshot"
 )
 
 func (runtime *Runtime) startScheduler(config *SchedulerConfig) error {
@@ -53,11 +52,7 @@ func (runtime *Runtime) collectDispatchEvidenceLocked(ctx context.Context) (disp
 	if err != nil {
 		return dispatchstage.Evidence{}, release, err
 	}
-	store, err := snapshot.New(runtime.Database, runtime.snapshotRoot)
-	if err != nil {
-		return dispatchstage.Evidence{}, release, err
-	}
-	current, record, err := store.LoadLatest(ctx, runtime.instanceID)
+	current, record, err := runtime.currentSnapshot()
 	if err != nil {
 		return dispatchstage.Evidence{}, release, err
 	}

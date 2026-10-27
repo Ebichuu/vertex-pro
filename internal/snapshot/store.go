@@ -23,6 +23,10 @@ import (
 
 var instanceIDPattern = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
 
+// ErrNotPersisted means the revision was committed memory-only; read it from
+// the sync watcher instead.
+var ErrNotPersisted = errors.New("snapshot revision is memory-only")
+
 type Store struct {
 	database *sql.DB
 	root     string
@@ -78,11 +82,37 @@ func (store Store) Save(ctx context.Context, instanceID string, generation, revi
 		return Record{}, err
 	}
 
+	return store.commit(ctx, instanceID, generation, revision, snapshot.RID, digest, relativePath)
+}
+
+// Commit records a complete revision whose snapshot is held only in the sync
+// watcher's memory. The row keeps waiter, confirmation and history references
+// valid; qB stays the source of truth and a restart re-baselines from rid=0.
+func (store Store) Commit(ctx context.Context, instanceID string, generation, revision, rid uint64, digest string) (Record, error) {
+	if err := validateCoordinates(instanceID, generation, revision); err != nil {
+		return Record{}, err
+	}
+	if strings.TrimSpace(digest) == "" {
+		return Record{}, errors.New("snapshot digest is required")
+	}
+	return store.commit(ctx, instanceID, generation, revision, rid, digest, "")
+}
+
+// Coordinates returns the last committed revision for an instance.
+func (store Store) Coordinates(ctx context.Context, instanceID string) (generation, revision uint64, digest string, err error) {
+	if !instanceIDPattern.MatchString(instanceID) {
+		return 0, 0, "", errors.New("invalid instance ID")
+	}
+	err = store.database.QueryRowContext(ctx, `SELECT sync_generation, snapshot_revision, snapshot_digest FROM sync_instance_state WHERE instance_id = ?`, instanceID).Scan(&generation, &revision, &digest)
+	return generation, revision, digest, err
+}
+
+func (store Store) commit(ctx context.Context, instanceID string, generation, revision, rid uint64, digest, relativePath string) (Record, error) {
 	createdAt := time.Now().UTC().Format(time.RFC3339Nano)
 	// Acquire the writer before reading the coordinates. A deferred read
 	// transaction cannot safely upgrade while another instance is writing in
 	// WAL mode, even with busy_timeout set. File I/O remains outside this lock.
-	err = db.RunImmediate(ctx, store.database, func(ctx context.Context, transaction *db.ImmediateTx) error {
+	err := db.RunImmediate(ctx, store.database, func(ctx context.Context, transaction *db.ImmediateTx) error {
 		var stateGeneration, stateRevision int64
 		if err := transaction.QueryRowContext(ctx, "SELECT sync_generation, snapshot_revision FROM sync_instance_state WHERE instance_id = ?", instanceID).Scan(&stateGeneration, &stateRevision); err != nil {
 			return fmt.Errorf("read sync instance state: %w", err)
@@ -90,10 +120,10 @@ func (store Store) Save(ctx context.Context, instanceID string, generation, revi
 		if stateGeneration > int64(generation) || (stateGeneration == int64(generation) && stateRevision >= int64(revision)) {
 			return errors.New("snapshot coordinates are not newer than current state")
 		}
-		if _, err := transaction.ExecContext(ctx, `INSERT INTO sync_snapshots(instance_id, sync_generation, snapshot_revision, rid, snapshot_digest, snapshot_path, is_complete, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, instanceID, generation, revision, snapshot.RID, digest, relativePath, boolInt(complete), createdAt); err != nil {
+		if _, err := transaction.ExecContext(ctx, `INSERT INTO sync_snapshots(instance_id, sync_generation, snapshot_revision, rid, snapshot_digest, snapshot_path, is_complete, created_at) VALUES (?, ?, ?, ?, ?, ?, 1, ?)`, instanceID, generation, revision, rid, digest, relativePath, createdAt); err != nil {
 			return fmt.Errorf("insert snapshot reference: %w", err)
 		}
-		if _, err := transaction.ExecContext(ctx, `UPDATE sync_instance_state SET sync_generation = ?, rid = ?, snapshot_revision = ?, snapshot_digest = ?, updated_at = ? WHERE instance_id = ?`, generation, snapshot.RID, revision, digest, createdAt, instanceID); err != nil {
+		if _, err := transaction.ExecContext(ctx, `UPDATE sync_instance_state SET sync_generation = ?, rid = ?, snapshot_revision = ?, snapshot_digest = ?, updated_at = ? WHERE instance_id = ?`, generation, rid, revision, digest, createdAt, instanceID); err != nil {
 			return fmt.Errorf("update sync instance state: %w", err)
 		}
 		return nil
@@ -101,7 +131,7 @@ func (store Store) Save(ctx context.Context, instanceID string, generation, revi
 	if err != nil {
 		return Record{}, fmt.Errorf("persist snapshot transaction: %w", err)
 	}
-	return Record{InstanceID: instanceID, Generation: generation, Revision: revision, RID: snapshot.RID, Digest: digest, Path: relativePath, Complete: complete, CreatedAt: createdAt}, nil
+	return Record{InstanceID: instanceID, Generation: generation, Revision: revision, RID: rid, Digest: digest, Path: relativePath, Complete: true, CreatedAt: createdAt}, nil
 }
 
 func (store Store) Load(ctx context.Context, instanceID string, generation, revision uint64) (syncmerge.Snapshot, Record, error) {
@@ -114,6 +144,9 @@ func (store Store) Load(ctx context.Context, instanceID string, generation, revi
 		return syncmerge.Snapshot{}, Record{}, fmt.Errorf("read snapshot reference: %w", err)
 	}
 	record.Complete = complete == 1
+	if record.Path == "" {
+		return syncmerge.Snapshot{}, Record{}, ErrNotPersisted
+	}
 	absolutePath, err := store.resolvePath(record.Path)
 	if err != nil {
 		return syncmerge.Snapshot{}, Record{}, err
@@ -212,11 +245,4 @@ func writeAtomically(path string, payload []byte) error {
 		return fmt.Errorf("fsync snapshot directory: %w", err)
 	}
 	return nil
-}
-
-func boolInt(value bool) int {
-	if value {
-		return 1
-	}
-	return 0
 }

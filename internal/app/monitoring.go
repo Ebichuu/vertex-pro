@@ -77,7 +77,7 @@ func (runtime *Runtime) refreshTransferMonitoring(ctx context.Context, now time.
 	if selectedSnapshot != nil {
 		card.CountsKnown = true
 		for _, torrent := range selectedSnapshot.Torrents {
-			status, _ := torrent.Fields["state"].(string)
+			status := torrent.State
 			if status == "downloading" || status == "forcedDL" || status == "stalledDL" || status == "metaDL" || status == "forcedMetaDL" {
 				card.DownloadingCount++
 			}

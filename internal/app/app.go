@@ -14,6 +14,7 @@ import (
 	"github.com/vertex-pro/vertex-pro/internal/adminauth"
 	"github.com/vertex-pro/vertex-pro/internal/confirmcoordinator"
 	"github.com/vertex-pro/vertex-pro/internal/db"
+	"github.com/vertex-pro/vertex-pro/internal/deletionsync"
 	"github.com/vertex-pro/vertex-pro/internal/dispatchflow"
 	"github.com/vertex-pro/vertex-pro/internal/dispatchstage"
 	"github.com/vertex-pro/vertex-pro/internal/httpapi"
@@ -150,17 +151,19 @@ type Runtime struct {
 	// retentionCancel 停止保留策略 worker；与 qui 的 cancel 独立，
 	// 因为保留清理不依赖 qui 集成是否启用。
 	retentionCancel context.CancelFunc
-	workers         sync.WaitGroup
-	children        []*Runtime
-	proxyClient     *proxy.Client
-	startWorkers    func()
-	allocateWake    chan struct{}
-	prepareWake     chan struct{}
-	onObservation   func()
-	preparationMu   sync.Mutex
-	preparing       map[string]int
-	polling         map[string]bool
-	prepareCursor   int
+	// deletionCancel stops the deletion policy reconciler.
+	deletionCancel context.CancelFunc
+	workers        sync.WaitGroup
+	children       []*Runtime
+	proxyClient    *proxy.Client
+	startWorkers   func()
+	allocateWake   chan struct{}
+	prepareWake    chan struct{}
+	onObservation  func()
+	preparationMu  sync.Mutex
+	preparing      map[string]int
+	polling        map[string]bool
+	prepareCursor  int
 }
 
 // New opens and validates the database before exposing HTTP traffic. A fresh
@@ -298,6 +301,10 @@ func New(ctx context.Context, config Config) (*Runtime, error) {
 		Rules:  &rule,
 		Events: events,
 		Now:    now,
+		CurrentSnapshot: func(instanceID string) (syncmerge.Snapshot, snapshot.Record, bool) {
+			return runtime.currentSnapshotFor(instanceID)
+		},
+		Deletion: func() (deletionsync.Service, bool) { return runtime.deletionService() },
 	})
 
 	mux := http.NewServeMux()
@@ -371,6 +378,9 @@ func New(ctx context.Context, config Config) (*Runtime, error) {
 	}
 	if config.Retention != nil {
 		runtime.startRetention(config.Retention, now)
+	}
+	if runtime.controlClient != nil {
+		runtime.startDeletionReconciler(deletionReconcileInterval)
 	}
 	closeDatabase = false
 	initialized = true
@@ -453,6 +463,9 @@ func (runtime *Runtime) stopWorkers() {
 	}
 	if runtime.retentionCancel != nil {
 		runtime.retentionCancel()
+	}
+	if runtime.deletionCancel != nil {
+		runtime.deletionCancel()
 	}
 	runtime.workers.Wait()
 	if runtime.scheduler != nil {
@@ -905,6 +918,7 @@ func (runtime *Runtime) syncEvidenceLocked(ctx context.Context, now func() time.
 		InstanceID: event.InstanceID,
 		Generation: event.Generation,
 		Revision:   event.Revision,
+		Digest:     event.Digest,
 		Snapshot:   event.Snapshot,
 	}, now())
 	if confirmErr != nil {

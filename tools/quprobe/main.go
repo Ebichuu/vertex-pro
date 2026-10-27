@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -19,17 +21,32 @@ import (
 )
 
 type report struct {
-	Status   string            `json:"status"`
-	Safety   safetyReport      `json:"safety"`
-	Instance instanceReport    `json:"instance"`
-	Profile  qbprofile.Profile `json:"profile"`
-	Sync     syncReport        `json:"sync"`
+	Status      string             `json:"status"`
+	Safety      safetyReport       `json:"safety"`
+	Instance    instanceReport     `json:"instance"`
+	Profile     qbprofile.Profile  `json:"profile"`
+	Sync        syncReport         `json:"sync"`
+	Automations *automationsReport `json:"automations,omitempty"`
 }
 
 type safetyReport struct {
 	ReadOnly             bool `json:"read_only"`
 	WriteEndpointsCalled bool `json:"write_endpoints_called"`
 	SecretsRedacted      bool `json:"secrets_redacted"`
+	// A qui dry-run changes no torrent but appends a "dry-run" entry to
+	// qui's activity log; it only runs when explicitly requested.
+	ActivityLogWritten bool `json:"activity_log_written"`
+}
+
+// automationsReport checks the D1 deletion contract against a live qui with a
+// delete rule that cannot match any torrent.
+type automationsReport struct {
+	ActivityEntries   int    `json:"activity_entries"`
+	ActivityDeletions int    `json:"activity_deletions"`
+	ActivityDryRuns   int    `json:"activity_dry_runs"`
+	PreviewMatches    int    `json:"preview_matches"`
+	DryRunStatus      string `json:"dry_run_status,omitempty"`
+	DryRunActivities  int    `json:"dry_run_activities,omitempty"`
 }
 
 type instanceReport struct {
@@ -145,9 +162,69 @@ func run(ctx context.Context) error {
 			TaskSetUnchanged: sameTorrentSet(merged.Snapshot, next.Snapshot),
 		},
 	}
+	if os.Getenv("VERTEX_PRO_QUI_PROBE_AUTOMATIONS") == "1" {
+		dryRun := os.Getenv("VERTEX_PRO_QUI_PROBE_DRYRUN") == "1"
+		automations, err := probeAutomations(ctx, controlClient, instanceID, dryRun)
+		if err != nil {
+			return err
+		}
+		result.Automations = automations
+		result.Safety.ActivityLogWritten = dryRun
+	}
 	encoder := json.NewEncoder(os.Stdout)
 	encoder.SetIndent("", "  ")
 	return encoder.Encode(result)
+}
+
+// probeAutomations reads qui's activity log and previews (optionally
+// dry-runs) a delete rule scoped to a random tag no torrent carries. It never
+// saves an automation and never calls qui's forced-execution endpoint.
+func probeAutomations(ctx context.Context, client *control.Client, instanceID string, dryRun bool) (*automationsReport, error) {
+	activities, err := client.Activity(ctx, instanceID, 100)
+	if err != nil {
+		return nil, fmt.Errorf("read qui automation activity: %w", err)
+	}
+	report := &automationsReport{ActivityEntries: len(activities)}
+	for _, activity := range activities {
+		if activity.IsDeletion() {
+			report.ActivityDeletions++
+		}
+		if activity.IsDryRun() {
+			report.ActivityDryRuns++
+		}
+	}
+	nonce := make([]byte, 8)
+	if _, err := rand.Read(nonce); err != nil {
+		return nil, err
+	}
+	tag := "vertex-probe-" + hex.EncodeToString(nonce)
+	rule := control.Automation{Name: tag, TrackerPattern: "*", Enabled: true, IntervalSeconds: 60, Conditions: map[string]any{
+		"schemaVersion": "1",
+		"delete": map[string]any{"enabled": true, "mode": "delete", "condition": map[string]any{
+			"operator": "AND", "conditions": []any{map[string]any{"field": "TAGS", "operator": "EQUAL", "value": tag}},
+		}},
+	}}
+	preview, err := client.PreviewDelete(ctx, instanceID, rule, 10, 0, control.PreviewViewEligible)
+	if err != nil {
+		return nil, fmt.Errorf("preview probe delete rule: %w", err)
+	}
+	if preview.TotalMatches != 0 {
+		return nil, fmt.Errorf("probe delete rule unexpectedly matched %d torrents", preview.TotalMatches)
+	}
+	report.PreviewMatches = preview.TotalMatches
+	if dryRun {
+		result, err := client.DryRun(ctx, instanceID, rule)
+		if err != nil {
+			return nil, fmt.Errorf("dry-run probe delete rule: %w", err)
+		}
+		report.DryRunStatus, report.DryRunActivities = result.Status, len(result.Activities)
+		for _, activity := range result.Activities {
+			if activity.IsDeletion() {
+				return nil, errors.New("probe dry-run reported a deletion for a rule that matches nothing")
+			}
+		}
+	}
+	return report, nil
 }
 
 func sameTorrentSet(left, right syncmerge.Snapshot) bool {

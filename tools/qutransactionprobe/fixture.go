@@ -37,10 +37,10 @@ func rawToDelta(response map[string]any) (syncmerge.Delta, error) {
 		return syncmerge.Delta{}, err
 	}
 	var delta struct {
-		RID        uint64                    `json:"rid"`
-		FullUpdate bool                      `json:"full_update"`
-		Torrents   map[string]map[string]any `json:"torrents"`
-		Removed    []string                  `json:"torrents_removed"`
+		RID        uint64                            `json:"rid"`
+		FullUpdate bool                              `json:"full_update"`
+		Torrents   map[string]syncmerge.TorrentDelta `json:"torrents"`
+		Removed    []string                          `json:"torrents_removed"`
 	}
 	if err := json.Unmarshal(payload, &delta); err != nil {
 		return syncmerge.Delta{}, err
@@ -227,10 +227,10 @@ func runFixtureCapture(ctx context.Context, client *proxy.Client, profile qbprof
 	trackerRecord.Rows = trackerRows
 	trackerRecord.Redactions = "raw qB tracker rows for a trackerless task; no credentials present"
 
-	taskFields := current.Torrents[match.CandidateID].Fields
+	task := current.Torrents[match.CandidateID]
 	transfer := map[string]any{}
 	for _, field := range transferInfoFields {
-		if value, ok := taskFields[field]; ok {
+		if value, ok := task.Value(field); ok {
 			transfer[field] = value
 		}
 	}

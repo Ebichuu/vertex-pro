@@ -300,7 +300,7 @@ func run(ctx context.Context) error {
 				return err
 			}
 			if match.Status == identitymatcher.StatusMatched {
-				observedState, _ = current.Torrents[match.CandidateID].Fields["state"].(string)
+				observedState = current.Torrents[match.CandidateID].State
 				if inactiveState(observedState) {
 					break
 				}

@@ -80,6 +80,15 @@ describe('UI-05 Rule Editor', () => {
     expect(() => toRuleVersionPayload(invalid)).toThrow('整数字节')
   })
 
+  it('blocks saving conditions on fields without a live data source', () => {
+    const dead: RuleEditorDraft = { ...draft, conditionTree: { version: 1, root: { kind: 'group', operator: 'and', children: [
+      { kind: 'leaf', field: 'promotion', operator: 'equals', value: { type: 'boolean', boolean: true } },
+      { kind: 'leaf', field: 'storage_labels', operator: 'exists' },
+    ] } } }
+    expect(validateRuleDraft(dead).conditions).toContain('促销状态、存储标签')
+    expect(validateRuleDraft(draft).conditions).toBeUndefined()
+  })
+
   it('saves a size set in bytes and excludes UI input drafts from the payload', async () => {
     const onSave = vi.fn((payload) => fromRuleVersionPayload(payload))
     render(<RuleEditorPage initialDraft={sizeDraft} instances={instances} groups={groups} onSave={onSave} />)

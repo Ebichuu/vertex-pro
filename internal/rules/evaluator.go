@@ -106,11 +106,15 @@ func evaluateLeaf(node Node, facts Facts) Result {
 	if !present || !fact.Present {
 		return leafResult(UnknownState, "FIELD_MISSING", node)
 	}
-	field, _ := LookupField(node.Field)
-	if fact.Value.Type != field.ValueType {
+	valueType := fieldTypes[node.Field]
+	if fact.Value.Type != valueType {
 		return leafResult(UnknownState, "FACT_TYPE_MISMATCH", node)
 	}
-	state, code := compareValues(field.ValueType, node.Operator, fact.Value, *node.Value)
+	if valueType == StringValue && node.Operator == RegexOperator && node.pattern != nil && node.Value.String != nil {
+		state, code := boolResult(node.pattern.MatchString(*fact.Value.String))
+		return leafResult(state, code, node)
+	}
+	state, code := compareValues(valueType, node.Operator, fact.Value, *node.Value)
 	return leafResult(state, code, node)
 }
 

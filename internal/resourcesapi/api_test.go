@@ -93,7 +93,7 @@ func TestAcknowledgeUnknownWiresManualClosure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = store.Save(context.Background(), "qb-1", 5, 3, syncmerge.Snapshot{RID: 1, Torrents: map[string]syncmerge.Torrent{"identity-1": {ID: "identity-1", Fields: map[string]any{}}}}, true); err != nil {
+	if _, err = store.Save(context.Background(), "qb-1", 5, 3, syncmerge.Snapshot{RID: 1, Torrents: map[string]*syncmerge.Torrent{"identity-1": {ID: "identity-1"}}}, true); err != nil {
 		t.Fatal(err)
 	}
 	now := time.Date(2026, 8, 29, 8, 0, 0, 0, time.UTC)

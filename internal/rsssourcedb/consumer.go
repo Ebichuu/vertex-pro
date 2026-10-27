@@ -43,30 +43,38 @@ func (store *Store) Discover(ctx context.Context, site, feed string, entries []r
 				return err
 			}
 		}
-		seen := map[string]bool{}
+		unique := make([]rsssource.Source, 0, len(sources))
+		seen := make(map[string]bool, len(sources))
 		for _, source := range sources {
 			if seen[source.SourceKey] {
 				result.Duplicates++
 				continue
 			}
 			seen[source.SourceKey] = true
-			var fingerprint string
-			var legacy int
-			err := tx.QueryRowContext(ctx, `SELECT fingerprint,legacy_seen FROM rss_sources WHERE site_id=? AND source_key=?`, site, source.SourceKey).Scan(&fingerprint, &legacy)
-			if errors.Is(err, sql.ErrNoRows) {
-				_, err = tx.ExecContext(ctx, `INSERT INTO rss_sources(site_id,source_key,guid,url,title,size_bytes,fingerprint,first_seen_at,updated_at,legacy_seen) VALUES(?,?,?,?,?,?,?,?,?,0)`, site, source.SourceKey, source.GUID, source.URL, source.Title, source.SizeBytes, source.Fingerprint, stamp(now), stamp(now))
+			unique = append(unique, source)
+		}
+		existing, err := knownSources(ctx, tx, site, unique)
+		if err != nil {
+			return err
+		}
+		var inserts []rsssource.Source
+		consumers := make([]consumerRow, 0, len(unique))
+		for _, source := range unique {
+			known, exists := existing[source.SourceKey]
+			switch {
+			case !exists:
+				inserts = append(inserts, source)
 				result.New = append(result.New, source)
-			} else if err == nil && fingerprint != source.Fingerprint {
-				_, err = tx.ExecContext(ctx, `UPDATE rss_sources SET guid=?,url=?,title=?,size_bytes=?,fingerprint=?,updated_at=? WHERE site_id=? AND source_key=?`, source.GUID, source.URL, source.Title, source.SizeBytes, source.Fingerprint, stamp(now), site, source.SourceKey)
+			case known.fingerprint != source.Fingerprint:
+				if _, err := tx.ExecContext(ctx, `UPDATE rss_sources SET guid=?,url=?,title=?,size_bytes=?,fingerprint=?,updated_at=? WHERE site_id=? AND source_key=?`, source.GUID, source.URL, source.Title, source.SizeBytes, source.Fingerprint, stamp(now), site, source.SourceKey); err != nil {
+					return err
+				}
 				result.Updated = append(result.Updated, source)
-			} else if err == nil {
+			default:
 				result.Duplicates++
 			}
-			if err != nil {
-				return err
-			}
 			state := "PENDING"
-			if baseline || legacy == 1 {
+			if baseline || known.legacy {
 				state = "SKIPPED"
 			}
 			raw, err := json.Marshal(source)
@@ -75,11 +83,12 @@ func (store *Store) Discover(ctx context.Context, site, feed string, entries []r
 			}
 			// Keep each consumer's original input, including its URL/title/publication.
 			// Another overlapping feed may update the shared source, but not this work.
-			if _, err := tx.ExecContext(ctx, `INSERT INTO rss_source_consumers(site_id,feed_id,source_key,source_json,state,next_attempt_at,deadline_at,discovered_at) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(site_id,feed_id,source_key) DO NOTHING`, site, feed, source.SourceKey, string(raw), state, stamp(now), stamp(now.Add(rsssource.ConsumerLifetime)), stamp(now)); err != nil {
-				return err
-			}
+			consumers = append(consumers, consumerRow{key: source.SourceKey, json: string(raw), state: state})
 		}
-		return nil
+		if err := insertSources(ctx, tx, site, inserts, now); err != nil {
+			return err
+		}
+		return insertConsumers(ctx, tx, site, feed, consumers, now)
 	})
 	if err != nil {
 		return rsssource.Result{}, err
@@ -93,11 +102,11 @@ func (store *Store) Claim(ctx context.Context, site, feed string, now time.Time)
 		if _, err := tx.ExecContext(ctx, `UPDATE rss_source_consumers SET state='FAILED',last_error_code=CASE WHEN deadline_at<=? THEN 'PROCESSING_DEADLINE' ELSE 'PROCESSING_ATTEMPTS_EXHAUSTED' END WHERE site_id=? AND feed_id=? AND state='PENDING' AND (deadline_at<=? OR (attempts>=? AND next_attempt_at<=?))`, stamp(now), site, feed, stamp(now), rsssource.MaxConsumerAttempts, stamp(now)); err != nil {
 			return err
 		}
-		var raw, key, deadline, resume string
+		var raw, key, deadline, resume, discovered string
 		var attempts int
 		var generation int64
 		var redirects int
-		err := tx.QueryRowContext(ctx, `SELECT source_key,source_json,attempts,deadline_at,claim_generation,artifact_resume_url,artifact_redirects FROM rss_source_consumers WHERE site_id=? AND feed_id=? AND state='PENDING' AND attempts<? AND next_attempt_at<=? AND deadline_at>? AND (artifact_deferred_until IS NULL OR artifact_deferred_until<=?) ORDER BY next_attempt_at,source_key LIMIT 1`, site, feed, rsssource.MaxConsumerAttempts, stamp(now), stamp(now), stamp(time.Now())).Scan(&key, &raw, &attempts, &deadline, &generation, &resume, &redirects)
+		err := tx.QueryRowContext(ctx, `SELECT source_key,source_json,attempts,deadline_at,claim_generation,artifact_resume_url,artifact_redirects,discovered_at FROM rss_source_consumers WHERE site_id=? AND feed_id=? AND state='PENDING' AND attempts<? AND next_attempt_at<=? AND deadline_at>? AND (artifact_deferred_until IS NULL OR artifact_deferred_until<=?) ORDER BY next_attempt_at,source_key LIMIT 1`, site, feed, rsssource.MaxConsumerAttempts, stamp(now), stamp(now), stamp(time.Now())).Scan(&key, &raw, &attempts, &deadline, &generation, &resume, &redirects, &discovered)
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil
 		}
@@ -116,6 +125,10 @@ func (store *Store) Claim(ctx context.Context, site, feed string, now time.Time)
 			return err
 		}
 		result = &rsssource.Consumer{Source: source, FeedID: feed, Attempts: attempts + 1, Deadline: at, ClaimGeneration: generation + 1, ResumeURL: resume, Redirects: redirects}
+		// Legacy rows have an empty discovered_at: leave the fact unknown.
+		if at, err := time.Parse(time.RFC3339Nano, discovered); err == nil {
+			result.DiscoveredAt = at
+		}
 		return nil
 	})
 	return result, err
@@ -133,8 +146,7 @@ func (store *Store) Finish(ctx context.Context, work rsssource.Consumer, code st
 		if _, err := tx.ExecContext(ctx, `UPDATE rss_source_consumers SET state=?,last_error_code=?,next_attempt_at=?,matched=?,rate_wait_started_at=NULL,preparation_started_at=NULL,artifact_deferred_until=NULL,artifact_resume_url='',artifact_redirects=0 WHERE site_id=? AND feed_id=? AND source_key=? AND state='PENDING' AND attempts=? AND claim_generation=?`, state, code, stamp(now.Add(rsssource.ConsumerRetry(work.Attempts))), work.Matched && code == "", work.Source.SiteID, work.FeedID, work.Source.SourceKey, work.Attempts, work.ClaimGeneration); err != nil {
 			return err
 		}
-		_, err := tx.ExecContext(ctx, `UPDATE feed_runtime_state SET last_matched=(SELECT count(*) FROM rss_source_consumers c WHERE c.feed_id=feed_runtime_state.feed_id AND c.matched=1 AND julianday(c.discovered_at)>=julianday(feed_runtime_state.last_polled_at)) WHERE feed_id=?`, work.FeedID)
-		return err
+		return RefreshLastMatched(ctx, tx, work.FeedID)
 	})
 }
 

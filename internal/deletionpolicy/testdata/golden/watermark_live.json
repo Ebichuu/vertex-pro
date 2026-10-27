@@ -1,0 +1,161 @@
+[
+  {
+    "role": "watermark",
+    "automation": {
+      "name": "vertex-del-disk-watermark",
+      "trackerPattern": "*",
+      "enabled": true,
+      "dryRun": false,
+      "notify": false,
+      "sortOrder": 0,
+      "intervalSeconds": 120,
+      "conditions": {
+        "delete": {
+          "condition": {
+            "conditions": [
+              {
+                "field": "TAGS",
+                "operator": "EQUAL",
+                "value": "vertex-managed"
+              },
+              {
+                "field": "TAGS",
+                "operator": "STARTS_WITH",
+                "value": "vertex-site-"
+              },
+              {
+                "field": "TAGS",
+                "operator": "NOT_EQUAL",
+                "value": "vertex-keep"
+              },
+              {
+                "field": "CATEGORY",
+                "operator": "NOT_EQUAL",
+                "value": "archive"
+              },
+              {
+                "field": "CATEGORY",
+                "operator": "NOT_EQUAL",
+                "value": "keep"
+              },
+              {
+                "field": "TAGS",
+                "operator": "NOT_EQUAL",
+                "value": "vertex-site-siteC"
+              },
+              {
+                "field": "AMOUNT_LEFT",
+                "operator": "EQUAL",
+                "value": "0"
+              },
+              {
+                "conditions": [
+                  {
+                    "field": "TAGS",
+                    "operator": "NOT_EQUAL",
+                    "value": "vertex-site-siteA"
+                  },
+                  {
+                    "field": "SEEDING_TIME",
+                    "operator": "GREATER_THAN_OR_EQUAL",
+                    "value": "259200"
+                  },
+                  {
+                    "field": "RATIO",
+                    "operator": "GREATER_THAN_OR_EQUAL",
+                    "value": "1"
+                  }
+                ],
+                "operator": "OR"
+              },
+              {
+                "conditions": [
+                  {
+                    "field": "TAGS",
+                    "operator": "NOT_EQUAL",
+                    "value": "vertex-site-siteB"
+                  },
+                  {
+                    "field": "RATIO",
+                    "operator": "GREATER_THAN_OR_EQUAL",
+                    "value": "2"
+                  }
+                ],
+                "operator": "OR"
+              },
+              {
+                "field": "FREE_SPACE",
+                "operator": "LESS_THAN",
+                "value": "214748364800"
+              },
+              {
+                "field": "SEEDING_TIME",
+                "operator": "GREATER_THAN_OR_EQUAL",
+                "value": "3600"
+              }
+            ],
+            "operator": "AND"
+          },
+          "conditionMatchDurationSeconds": 600,
+          "enabled": true,
+          "mode": "deleteWithFiles"
+        },
+        "schemaVersion": "1"
+      },
+      "freeSpaceSource": {
+        "path": "/data",
+        "type": "path"
+      },
+      "sortingConfig": {
+        "direction": "DESC",
+        "schemaVersion": "1",
+        "scoreRules": [
+          {
+            "fieldMultiplier": {
+              "field": "SIZE",
+              "multiplier": 1e-9
+            },
+            "type": "field_multiplier"
+          },
+          {
+            "fieldMultiplier": {
+              "field": "SEEDING_TIME",
+              "multiplier": 0.001
+            },
+            "type": "field_multiplier"
+          },
+          {
+            "fieldMultiplier": {
+              "field": "UP_SPEED_AVG",
+              "multiplier": -0.0001
+            },
+            "type": "field_multiplier"
+          },
+          {
+            "conditional": {
+              "condition": {
+                "field": "TAGS",
+                "operator": "EQUAL",
+                "value": "vertex-site-siteA"
+              },
+              "score": -10
+            },
+            "type": "conditional"
+          },
+          {
+            "conditional": {
+              "condition": {
+                "field": "TAGS",
+                "operator": "EQUAL",
+                "value": "vertex-site-siteB"
+              },
+              "score": 5
+            },
+            "type": "conditional"
+          }
+        ],
+        "type": "score"
+      }
+    }
+  }
+]

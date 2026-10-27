@@ -13,11 +13,11 @@ func FuzzMerge(f *testing.F) {
 	f.Add(uint64(0), false, `{"t1":null}`, `[]`)
 	f.Add(uint64(3), false, `{"t1":{"amount_left":"not-a-number"}}`, `["t1"]`)
 	f.Fuzz(func(t *testing.T, rid uint64, fullUpdate bool, torrentsJSON string, removedJSON string) {
-		var torrents map[string]map[string]any
+		var torrents map[string]TorrentDelta
 		_ = json.Unmarshal([]byte(torrentsJSON), &torrents)
 		var removed []string
 		_ = json.Unmarshal([]byte(removedJSON), &removed)
-		previous := Snapshot{RID: 0, Torrents: map[string]Torrent{}}
+		previous := Snapshot{RID: 0, Torrents: map[string]*Torrent{}}
 		result, err := Merge(previous, Delta{RID: rid, FullUpdate: fullUpdate, Torrents: torrents, Removed: removed})
 		if err != nil {
 			return

@@ -1,0 +1,146 @@
+[
+  {
+    "role": "triggers",
+    "automation": {
+      "name": "vertex-del-brush-triggers",
+      "trackerPattern": "*",
+      "enabled": false,
+      "dryRun": true,
+      "notify": false,
+      "sortOrder": 0,
+      "intervalSeconds": 300,
+      "conditions": {
+        "delete": {
+          "condition": {
+            "conditions": [
+              {
+                "field": "TAGS",
+                "operator": "EQUAL",
+                "value": "vertex-managed"
+              },
+              {
+                "field": "TAGS",
+                "operator": "STARTS_WITH",
+                "value": "vertex-site-"
+              },
+              {
+                "field": "TAGS",
+                "operator": "NOT_EQUAL",
+                "value": "vertex-keep"
+              },
+              {
+                "field": "CATEGORY",
+                "operator": "NOT_EQUAL",
+                "value": "archive"
+              },
+              {
+                "field": "CATEGORY",
+                "operator": "NOT_EQUAL",
+                "value": "keep"
+              },
+              {
+                "field": "TAGS",
+                "operator": "NOT_EQUAL",
+                "value": "vertex-site-siteC"
+              },
+              {
+                "field": "AMOUNT_LEFT",
+                "operator": "EQUAL",
+                "value": "0"
+              },
+              {
+                "conditions": [
+                  {
+                    "field": "TAGS",
+                    "operator": "NOT_EQUAL",
+                    "value": "vertex-site-siteA"
+                  },
+                  {
+                    "field": "SEEDING_TIME",
+                    "operator": "GREATER_THAN_OR_EQUAL",
+                    "value": "259200"
+                  },
+                  {
+                    "field": "RATIO",
+                    "operator": "GREATER_THAN_OR_EQUAL",
+                    "value": "1"
+                  }
+                ],
+                "operator": "OR"
+              },
+              {
+                "conditions": [
+                  {
+                    "field": "TAGS",
+                    "operator": "NOT_EQUAL",
+                    "value": "vertex-site-siteB"
+                  },
+                  {
+                    "field": "RATIO",
+                    "operator": "GREATER_THAN_OR_EQUAL",
+                    "value": "2"
+                  }
+                ],
+                "operator": "OR"
+              },
+              {
+                "conditions": [
+                  {
+                    "conditions": [
+                      {
+                        "field": "SEEDING_TIME",
+                        "operator": "GREATER_THAN_OR_EQUAL",
+                        "value": "259200"
+                      }
+                    ],
+                    "operator": "AND"
+                  },
+                  {
+                    "conditions": [
+                      {
+                        "field": "RATIO",
+                        "operator": "GREATER_THAN_OR_EQUAL",
+                        "value": "3"
+                      }
+                    ],
+                    "operator": "AND"
+                  },
+                  {
+                    "conditions": [
+                      {
+                        "field": "SEEDING_TIME",
+                        "operator": "GREATER_THAN_OR_EQUAL",
+                        "value": "86400"
+                      },
+                      {
+                        "field": "UP_SPEED_AVG",
+                        "operator": "LESS_THAN",
+                        "value": "51200"
+                      }
+                    ],
+                    "operator": "AND"
+                  },
+                  {
+                    "conditions": [
+                      {
+                        "field": "IS_UNREGISTERED",
+                        "operator": "EQUAL",
+                        "value": "true"
+                      }
+                    ],
+                    "operator": "AND"
+                  }
+                ],
+                "operator": "OR"
+              }
+            ],
+            "operator": "AND"
+          },
+          "enabled": true,
+          "mode": "deleteWithFilesPreserveCrossSeeds"
+        },
+        "schemaVersion": "1"
+      }
+    }
+  }
+]

@@ -103,7 +103,7 @@ func run(ctx context.Context) error {
 		return err
 	}
 	if existing, exists := baseline.Snapshot.Torrents[strings.ToLower(identity.V1)]; exists {
-		state, _ := existing.Fields["state"].(string)
+		state := existing.State
 		inactive := inactiveState(state)
 		output := report{Status: "PASS", Profile: profile.ID}
 		output.Safety.ExplicitOptIn = true
@@ -175,7 +175,7 @@ func run(ctx context.Context) error {
 			return err
 		}
 		if match.Status == identitymatcher.StatusMatched {
-			state, _ = current.Torrents[match.CandidateID].Fields["state"].(string)
+			state = current.Torrents[match.CandidateID].State
 			inactive := inactiveState(state)
 			if inactive {
 				break
@@ -273,7 +273,7 @@ func inactiveState(state string) bool {
 	return strings.HasPrefix(normalized, "stopped") || strings.HasPrefix(normalized, "paused")
 }
 
-func containsAll(current, baseline map[string]syncmerge.Torrent) bool {
+func containsAll(current, baseline map[string]*syncmerge.Torrent) bool {
 	for id := range baseline {
 		if _, exists := current[id]; !exists {
 			return false

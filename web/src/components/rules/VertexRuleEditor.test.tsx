@@ -133,6 +133,36 @@ describe('VertexRuleEditor', () => {
     expect(screen.getByRole('status')).toHaveTextContent('高级语义')
   })
 
+  it('does not offer fields without a live data source for new conditions', () => {
+    render(<VertexRuleEditor />)
+    const options = Array.from(screen.getByLabelText('字段').querySelectorAll('option')).map((option) => option.textContent)
+    expect(options).toContain('分类')
+    expect(options).toContain('发布者')
+    for (const label of ['促销状态', 'Tags', 'qB Profile', '实例标签', '存储标签']) {
+      expect(options.some((text) => text?.startsWith(label))).toBe(false)
+    }
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('labels an existing unavailable field, warns, and clears once it is replaced', () => {
+    const initial: VertexConditionTree = { version: 1, root: { kind: 'group', operator: 'and', children: [
+      { kind: 'leaf', field: 'category', operator: 'equals', value: { type: 'string', string: 'Movies' } },
+      { kind: 'leaf', field: 'promotion', operator: 'equals', value: { type: 'boolean', boolean: true } },
+    ] } }
+    let latest = initial
+    render(<VertexRuleEditor value={initial} onChange={(nextValue) => { latest = nextValue }} />)
+    expect(isSimpleConditionTree(initial)).toBe(false)
+    expect(screen.getByRole('alert')).toHaveTextContent('促销状态')
+    expect(screen.getByRole('alert')).toHaveTextContent('Dry-run')
+    const promotionField = screen.getAllByLabelText('字段')[1]
+    expect(promotionField).toHaveValue('promotion')
+    expect(screen.getByRole('option', { name: '促销状态（暂无数据来源）' })).toBeInTheDocument()
+    fireEvent.change(promotionField, { target: { value: 'publisher' } })
+    expect(childrenOf(latest)[1]).toMatchObject({ field: 'publisher' })
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: '促销状态（暂无数据来源）' })).not.toBeInTheDocument()
+  })
+
   it('round-trips simple drafts without changing leaf semantics', () => {
     const tree = defaultTree()
     const draft = toSimpleDraft(tree)

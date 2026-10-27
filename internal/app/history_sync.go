@@ -2,13 +2,13 @@ package app
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"math"
 	"strings"
 	"time"
 
 	"github.com/vertex-pro/vertex-pro/internal/db"
+	"github.com/vertex-pro/vertex-pro/internal/syncmerge"
 	"github.com/vertex-pro/vertex-pro/internal/syncwatcher"
 )
 
@@ -56,19 +56,17 @@ func (runtime *Runtime) observeJobs(ctx context.Context, event syncwatcher.Event
 				}
 				continue
 			}
-			state, _ := torrent.Fields["state"].(string)
-			observation := observedTorrentState(state, torrent.AmountLeftState == "KNOWN" && torrent.AmountLeft != nil && *torrent.AmountLeft == 0)
-			title, _ := torrent.Fields["name"].(string)
+			observation := observedTorrentState(torrent.State, torrent.AmountLeftState == "KNOWN" && torrent.AmountLeft != nil && *torrent.AmountLeft == 0)
+			title := torrent.Name
 			completed := ""
-			if n, ok := historyNumber(torrent.Fields["completion_on"]); ok && n > 0 && n < float64(now.Unix()+60) {
-				completed = time.Unix(int64(n), 0).UTC().Format(time.RFC3339)
+			if torrent.Has(syncmerge.FieldCompletionOn) && torrent.CompletionOn > 0 && torrent.CompletionOn < now.Unix()+60 {
+				completed = time.Unix(torrent.CompletionOn, 0).UTC().Format(time.RFC3339)
 			}
-			downloaded := historyBytes(torrent.Fields["downloaded"])
-			uploaded := historyBytes(torrent.Fields["uploaded"])
-			ratio, ok := historyNumber(torrent.Fields["ratio"])
+			downloaded := historyBytes(torrent, syncmerge.FieldDownloaded, torrent.Downloaded)
+			uploaded := historyBytes(torrent, syncmerge.FieldUploaded, torrent.Uploaded)
 			var ratioValue any
-			if ok {
-				ratioValue = ratio
+			if torrent.Has(syncmerge.FieldRatio) && torrent.Ratio >= 0 && !math.IsNaN(torrent.Ratio) && !math.IsInf(torrent.Ratio, 0) && torrent.Ratio < float64(math.MaxInt64) {
+				ratioValue = torrent.Ratio
 			}
 			if observation != "" {
 				if _, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO job_observation_events(job_id,state,observed_at,snapshot_generation,snapshot_revision,snapshot_digest)
@@ -107,45 +105,10 @@ func observedTorrentState(state string, complete bool) string {
 	return ""
 }
 
-func historyNumber(value any) (float64, bool) {
-	var number float64
-	switch typed := value.(type) {
-	case float64:
-		number = typed
-	case int64:
-		number = float64(typed)
-	case int:
-		number = float64(typed)
-	case json.Number:
-		var err error
-		number, err = typed.Float64()
-		if err != nil {
-			return 0, false
-		}
-	default:
-		return 0, false
-	}
-	return number, number >= 0 && !math.IsNaN(number) && !math.IsInf(number, 0) && number < float64(math.MaxInt64)
-}
-
-func historyBytes(value any) any {
-	switch typed := value.(type) {
-	case int64:
-		if typed >= 0 {
-			return typed
-		}
-	case int:
-		if typed >= 0 {
-			return int64(typed)
-		}
-	case json.Number:
-		if bytes, err := typed.Int64(); err == nil && bytes >= 0 {
-			return bytes
-		}
-	}
-	number, ok := historyNumber(value)
-	if !ok || number != math.Trunc(number) {
+// historyBytes is NULL unless qB reported a valid non-negative byte count.
+func historyBytes(torrent *syncmerge.Torrent, field syncmerge.Field, value int64) any {
+	if !torrent.Has(field) || value < 0 {
 		return nil
 	}
-	return int64(number)
+	return value
 }

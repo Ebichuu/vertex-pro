@@ -1,10 +1,12 @@
 package control
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -95,11 +97,20 @@ func (info *TransferInfo) UnmarshalJSON(data []byte) error {
 type HTTPError struct {
 	StatusCode int
 	Status     string
+	// ValidationMessage is qui's bounded error text for a 400/422 rejection of
+	// a request payload. It is never part of Error(), so response bodies do not
+	// reach logs; callers that show it to an operator read it explicitly.
+	ValidationMessage string
 }
 
 func (e *HTTPError) Error() string {
 	return fmt.Sprintf("qui control request failed: %s", e.Status)
 }
+
+const (
+	maxErrorBodyBytes    = 4 << 10
+	maxResponseBodyBytes = 16 << 20
+)
 
 func New(ctx context.Context, config Config) (*Client, error) {
 	rawURL := strings.TrimSpace(config.BaseURL)
@@ -174,13 +185,32 @@ func (client *Client) Capabilities(ctx context.Context, instanceID string) (map[
 }
 
 func (client *Client) getJSON(ctx context.Context, path string, target any) error {
+	return client.doJSON(ctx, http.MethodGet, path, nil, target)
+}
+
+// doJSON sends an optional JSON body and decodes a bounded JSON response.
+// path may carry a query string.
+func (client *Client) doJSON(ctx context.Context, method, path string, body any, target any) error {
 	requestURL := *client.baseURL
-	requestURL.Path = strings.TrimRight(requestURL.Path, "/") + path
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL.String(), nil)
+	route, query, _ := strings.Cut(path, "?")
+	requestURL.Path = strings.TrimRight(requestURL.Path, "/") + route
+	requestURL.RawQuery = query
+	var payload io.Reader
+	if body != nil {
+		encoded, err := json.Marshal(body)
+		if err != nil {
+			return fmt.Errorf("encode qui request: %w", err)
+		}
+		payload = bytes.NewReader(encoded)
+	}
+	request, err := http.NewRequestWithContext(ctx, method, requestURL.String(), payload)
 	if err != nil {
 		return fmt.Errorf("build qui request: %w", err)
 	}
 	request.Header.Set("Accept", "application/json")
+	if body != nil {
+		request.Header.Set("Content-Type", "application/json")
+	}
 	request.Header.Set("X-API-Key", client.apiKey)
 	response, err := client.httpClient.Do(request)
 	if err != nil {
@@ -188,15 +218,43 @@ func (client *Client) getJSON(ctx context.Context, path string, target any) erro
 	}
 	defer response.Body.Close()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-
-		return &HTTPError{StatusCode: response.StatusCode, Status: response.Status}
+		httpErr := &HTTPError{StatusCode: response.StatusCode, Status: response.Status}
+		if response.StatusCode == http.StatusBadRequest || response.StatusCode == http.StatusUnprocessableEntity {
+			httpErr.ValidationMessage = errorMessage(response.Body)
+		}
+		return httpErr
 	}
 	if response.StatusCode == http.StatusNoContent {
 		return errors.New("qui response has no content")
 	}
-	decoder := json.NewDecoder(response.Body)
-	if err := decoder.Decode(target); err != nil {
+	limited := io.LimitReader(response.Body, maxResponseBodyBytes+1)
+	data, err := io.ReadAll(limited)
+	if err != nil {
+		return fmt.Errorf("read qui response: %w", err)
+	}
+	if len(data) > maxResponseBodyBytes {
+		return errors.New("qui response exceeds limit")
+	}
+	if err := json.Unmarshal(data, target); err != nil {
 		return fmt.Errorf("decode qui response: %w", err)
 	}
 	return nil
+}
+
+// errorMessage extracts qui's {"error": "..."} text, or a trimmed plain body.
+func errorMessage(body io.Reader) string {
+	data, _ := io.ReadAll(io.LimitReader(body, maxErrorBodyBytes))
+	var envelope struct {
+		Error   string `json:"error"`
+		Message string `json:"message"`
+	}
+	if json.Unmarshal(data, &envelope) == nil {
+		if envelope.Error != "" {
+			return envelope.Error
+		}
+		if envelope.Message != "" {
+			return envelope.Message
+		}
+	}
+	return strings.TrimSpace(string(data))
 }

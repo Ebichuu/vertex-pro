@@ -25,11 +25,11 @@ func TestLiveCapacityRejectsIncompleteOrUnrelatedEvidence(t *testing.T) {
 		{"temp folder enabled", func(e *Evidence) { e.Preferences["temp_path_enabled"] = true }, false},
 		{"temp setting unknown", func(e *Evidence) { delete(e.Preferences, "temp_path_enabled") }, false},
 		{"unknown unmanaged liability", func(e *Evidence) {
-			e.Snapshot.Torrents["external"] = syncmerge.Torrent{ID: "external", AmountLeftState: "UNKNOWN"}
+			e.Snapshot.Torrents["external"] = &syncmerge.Torrent{ID: "external", AmountLeftState: "UNKNOWN"}
 		}, false},
 		{"known unmanaged liability", func(e *Evidence) {
 			left := int64(128)
-			e.Snapshot.Torrents["external"] = syncmerge.Torrent{ID: "external", AmountLeftState: "KNOWN", AmountLeft: &left}
+			e.Snapshot.Torrents["external"] = &syncmerge.Torrent{ID: "external", AmountLeftState: "KNOWN", AmountLeft: &left}
 		}, true},
 		{"stale observation", func(e *Evidence) { e.CollectedAt = e.CollectedAt.Add(-time.Minute) }, false},
 		{"snapshot replaced", func(e *Evidence) { e.Record.Digest = "other" }, false},
@@ -52,7 +52,7 @@ func TestLiveCapacityRejectsIncompleteOrUnrelatedEvidence(t *testing.T) {
 				t.Fatal(err)
 			}
 			stage := Stage{database: database, config: Config{Storage: StorageConfig{InstanceID: "2", StorageTargetID: "disk", Path: "/managed", SafetyMarginBytes: 64}, Now: func() time.Time { return now }}}
-			e := Evidence{Record: snapshot.Record{InstanceID: "2", Generation: 1, Revision: 1, Digest: "digest", Complete: true}, Snapshot: syncmerge.Snapshot{Torrents: map[string]syncmerge.Torrent{}, ServerState: map[string]any{"free_space_on_disk": int64(1024)}}, Preferences: map[string]any{"save_path": "/managed", "temp_path_enabled": false}, CollectedAt: now}
+			e := Evidence{Record: snapshot.Record{InstanceID: "2", Generation: 1, Revision: 1, Digest: "digest", Complete: true}, Snapshot: syncmerge.Snapshot{Torrents: map[string]*syncmerge.Torrent{}, ServerState: map[string]any{"free_space_on_disk": int64(1024)}}, Preferences: map[string]any{"save_path": "/managed", "temp_path_enabled": false}, CollectedAt: now}
 			tc.change(&e)
 			capacity, err := stage.prepareCapacity(ctx, e)
 			if tc.valid {

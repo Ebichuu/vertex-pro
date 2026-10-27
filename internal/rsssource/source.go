@@ -19,8 +19,13 @@ type Entry struct {
 	URL         string
 	Title       string
 	SizeBytes   *int64
+	Category    string
+	Publisher   string
 }
 
+// Source is one deduped feed item. Category and Publisher are rule facts
+// carried in each consumer's input; they are not part of the dedupe key or
+// fingerprint, so adding them did not turn known items into "updated" ones.
 type Source struct {
 	PublishedAt string
 	SiteID      string
@@ -30,6 +35,8 @@ type Source struct {
 	Title       string
 	SizeBytes   *int64
 	Fingerprint string
+	Category    string `json:",omitempty"`
+	Publisher   string `json:",omitempty"`
 }
 
 type Result struct {
@@ -136,7 +143,8 @@ func normalize(siteID string, entry Entry) (Source, error) {
 		return Source{}, errors.New("source requires guid, URL, or title")
 	}
 	key := sourceKey(guid, feedURL, title, entry.SizeBytes)
-	return Source{PublishedAt: entry.PublishedAt, SiteID: siteID, SourceKey: key, GUID: guid, URL: feedURL, Title: title, SizeBytes: cloneSize(entry.SizeBytes), Fingerprint: fingerprint(guid, feedURL, title, entry.SizeBytes)}, nil
+	return Source{PublishedAt: entry.PublishedAt, SiteID: siteID, SourceKey: key, GUID: guid, URL: feedURL, Title: title, SizeBytes: cloneSize(entry.SizeBytes), Fingerprint: fingerprint(guid, feedURL, title, entry.SizeBytes),
+		Category: strings.Join(strings.Fields(entry.Category), " "), Publisher: strings.Join(strings.Fields(entry.Publisher), " ")}, nil
 }
 
 func sourceKey(guid, feedURL, title string, size *int64) string {

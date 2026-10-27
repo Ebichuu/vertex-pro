@@ -20,6 +20,10 @@ type Entry struct {
 	Published   string
 	DownloadURL string
 	SizeBytes   *int64
+	// Category is the first non-empty RSS <category> / Atom category label.
+	Category string
+	// Publisher is dc:creator, else <author> (Atom author name): the uploader.
+	Publisher string
 }
 type Preview struct {
 	FeedURL string
@@ -80,6 +84,9 @@ type rssItem struct {
 	Link       string      `xml:"link"`
 	Published  string      `xml:"pubDate"`
 	Enclosures []enclosure `xml:"enclosure"`
+	Categories []string    `xml:"category"`
+	Author     string      `xml:"author"`
+	Creator    string      `xml:"http://purl.org/dc/elements/1.1/ creator"`
 }
 type enclosure struct {
 	URL    string `xml:"url,attr"`
@@ -91,10 +98,18 @@ type atomFeed struct {
 	Entries []atomEntry `xml:"entry"`
 }
 type atomEntry struct {
-	ID      string     `xml:"id"`
-	Title   string     `xml:"title"`
-	Updated string     `xml:"updated"`
-	Links   []atomLink `xml:"link"`
+	ID         string         `xml:"id"`
+	Title      string         `xml:"title"`
+	Updated    string         `xml:"updated"`
+	Links      []atomLink     `xml:"link"`
+	Categories []atomCategory `xml:"category"`
+	Author     struct {
+		Name string `xml:"name"`
+	} `xml:"author"`
+}
+type atomCategory struct {
+	Term  string `xml:"term,attr"`
+	Label string `xml:"label,attr"`
 }
 type atomLink struct {
 	Href   string `xml:"href,attr"`
@@ -106,7 +121,7 @@ type atomLink struct {
 func rssEntries(items []rssItem, limit int) []Entry {
 	entries := make([]Entry, 0, min(limit, len(items)))
 	for _, item := range items[:min(limit, len(items))] {
-		entry := Entry{ID: strings.TrimSpace(item.GUID), Title: strings.TrimSpace(item.Title), Link: strings.TrimSpace(item.Link), Published: strings.TrimSpace(item.Published)}
+		entry := Entry{ID: strings.TrimSpace(item.GUID), Title: strings.TrimSpace(item.Title), Link: strings.TrimSpace(item.Link), Published: strings.TrimSpace(item.Published), Category: firstText(item.Categories...), Publisher: firstText(item.Creator, item.Author)}
 		for _, candidate := range item.Enclosures {
 			if candidate.Type == "application/x-bittorrent" || candidate.Type == "" {
 				entry.DownloadURL = strings.TrimSpace(candidate.URL)
@@ -128,7 +143,12 @@ func atomEntries(items []atomEntry, limit int) []Entry {
 				break
 			}
 		}
-		entry := Entry{ID: strings.TrimSpace(item.ID), Title: strings.TrimSpace(item.Title), Link: strings.TrimSpace(link), Published: strings.TrimSpace(item.Updated)}
+		entry := Entry{ID: strings.TrimSpace(item.ID), Title: strings.TrimSpace(item.Title), Link: strings.TrimSpace(link), Published: strings.TrimSpace(item.Updated), Publisher: firstText(item.Author.Name)}
+		for _, category := range item.Categories {
+			if entry.Category = firstText(category.Label, category.Term); entry.Category != "" {
+				break
+			}
+		}
 		for _, candidate := range item.Links {
 			if candidate.Rel == "enclosure" && (candidate.Type == "application/x-bittorrent" || candidate.Type == "") {
 				entry.DownloadURL = strings.TrimSpace(candidate.Href)
@@ -140,6 +160,18 @@ func atomEntries(items []atomEntry, limit int) []Entry {
 	}
 	return entries
 }
+
+// firstText returns the first value that is non-empty after collapsing
+// whitespace.
+func firstText(values ...string) string {
+	for _, value := range values {
+		if text := strings.Join(strings.Fields(value), " "); text != "" {
+			return text
+		}
+	}
+	return ""
+}
+
 func enclosureSize(raw string) *int64 {
 	value, err := strconv.ParseInt(raw, 10, 64)
 	if err != nil || value < 0 {

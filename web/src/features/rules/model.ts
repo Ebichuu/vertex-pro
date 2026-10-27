@@ -21,24 +21,44 @@ export type VertexCondition =
 
 export type VertexConditionTree = { version: typeof VERTEX_RULE_VERSION; root: VertexCondition }
 
-export type VertexFieldSpec = { field: VertexField; label: string; valueType: VertexValueType; operators: VertexOperator[] }
+// live mirrors the backend catalog (rules.FieldSpec.Live): whether production
+// matching supplies the fact. Saving a rule that uses a non-live field is
+// rejected; such fields remain usable in dry-run with caller-supplied facts.
+export type VertexFieldSpec = { field: VertexField; label: string; valueType: VertexValueType; operators: VertexOperator[]; live: boolean }
 
 export const VERTEX_FIELDS: VertexFieldSpec[] = [
-  { field: 'site', label: '站点', valueType: 'string', operators: ['equals', 'not_equals', 'contains', 'not_contains', 'in', 'not_in', 'exists', 'not_exists'] },
-  { field: 'rss', label: 'RSS 源', valueType: 'string', operators: ['equals', 'not_equals', 'contains', 'not_contains', 'in', 'not_in', 'exists', 'not_exists'] },
-  { field: 'title', label: '标题', valueType: 'string', operators: ['equals', 'not_equals', 'contains', 'not_contains', 'regex', 'in', 'not_in', 'exists', 'not_exists'] },
-  { field: 'size', label: '大小（GB）', valueType: 'number', operators: ['equals', 'not_equals', 'greater_than', 'greater_or_equal', 'less_than', 'less_or_equal', 'between', 'in', 'not_in', 'exists', 'not_exists'] },
-  { field: 'category', label: '分类', valueType: 'string', operators: ['equals', 'not_equals', 'contains', 'not_contains', 'in', 'not_in', 'exists', 'not_exists'] },
-  { field: 'published_at', label: '发布时间', valueType: 'time', operators: ['equals', 'not_equals', 'greater_than', 'greater_or_equal', 'less_than', 'less_or_equal', 'between', 'exists', 'not_exists'] },
-  { field: 'discovery_delay', label: '发现延迟（秒）', valueType: 'number', operators: ['equals', 'not_equals', 'greater_than', 'greater_or_equal', 'less_than', 'less_or_equal', 'between', 'in', 'not_in', 'exists', 'not_exists'] },
-  { field: 'promotion', label: '促销状态', valueType: 'boolean', operators: ['equals', 'not_equals', 'exists', 'not_exists'] },
-  { field: 'tags', label: 'Tags', valueType: 'string_set', operators: ['contains', 'not_contains', 'exists', 'not_exists'] },
-  { field: 'publisher', label: '发布者', valueType: 'string', operators: ['equals', 'not_equals', 'contains', 'not_contains', 'regex', 'in', 'not_in', 'exists', 'not_exists'] },
-  { field: 'group', label: '分组', valueType: 'string', operators: ['equals', 'not_equals', 'contains', 'not_contains', 'regex', 'in', 'not_in', 'exists', 'not_exists'] },
-  { field: 'qb_profile', label: 'qB Profile', valueType: 'string_set', operators: ['contains', 'not_contains', 'exists', 'not_exists'] },
-  { field: 'instance_labels', label: '实例标签', valueType: 'string_set', operators: ['contains', 'not_contains', 'exists', 'not_exists'] },
-  { field: 'storage_labels', label: '存储标签', valueType: 'string_set', operators: ['contains', 'not_contains', 'exists', 'not_exists'] },
+  { field: 'site', label: '站点', valueType: 'string', operators: ['equals', 'not_equals', 'contains', 'not_contains', 'in', 'not_in', 'exists', 'not_exists'], live: true },
+  { field: 'rss', label: 'RSS 源', valueType: 'string', operators: ['equals', 'not_equals', 'contains', 'not_contains', 'in', 'not_in', 'exists', 'not_exists'], live: true },
+  { field: 'title', label: '标题', valueType: 'string', operators: ['equals', 'not_equals', 'contains', 'not_contains', 'regex', 'in', 'not_in', 'exists', 'not_exists'], live: true },
+  { field: 'size', label: '大小（GB）', valueType: 'number', operators: ['equals', 'not_equals', 'greater_than', 'greater_or_equal', 'less_than', 'less_or_equal', 'between', 'in', 'not_in', 'exists', 'not_exists'], live: true },
+  { field: 'category', label: '分类', valueType: 'string', operators: ['equals', 'not_equals', 'contains', 'not_contains', 'in', 'not_in', 'exists', 'not_exists'], live: true },
+  { field: 'published_at', label: '发布时间', valueType: 'time', operators: ['equals', 'not_equals', 'greater_than', 'greater_or_equal', 'less_than', 'less_or_equal', 'between', 'exists', 'not_exists'], live: true },
+  { field: 'discovery_delay', label: '发现延迟（秒）', valueType: 'number', operators: ['equals', 'not_equals', 'greater_than', 'greater_or_equal', 'less_than', 'less_or_equal', 'between', 'in', 'not_in', 'exists', 'not_exists'], live: true },
+  { field: 'promotion', label: '促销状态', valueType: 'boolean', operators: ['equals', 'not_equals', 'exists', 'not_exists'], live: false },
+  { field: 'tags', label: 'Tags', valueType: 'string_set', operators: ['contains', 'not_contains', 'exists', 'not_exists'], live: false },
+  { field: 'publisher', label: '发布者', valueType: 'string', operators: ['equals', 'not_equals', 'contains', 'not_contains', 'regex', 'in', 'not_in', 'exists', 'not_exists'], live: true },
+  { field: 'group', label: '分组', valueType: 'string', operators: ['equals', 'not_equals', 'contains', 'not_contains', 'regex', 'in', 'not_in', 'exists', 'not_exists'], live: true },
+  { field: 'qb_profile', label: 'qB Profile', valueType: 'string_set', operators: ['contains', 'not_contains', 'exists', 'not_exists'], live: false },
+  { field: 'instance_labels', label: '实例标签', valueType: 'string_set', operators: ['contains', 'not_contains', 'exists', 'not_exists'], live: false },
+  { field: 'storage_labels', label: '存储标签', valueType: 'string_set', operators: ['contains', 'not_contains', 'exists', 'not_exists'], live: false },
 ]
+
+export const UNAVAILABLE_FIELD_SUFFIX = '（暂无数据来源）'
+
+// Distinct non-live fields used by the tree, in first-use order.
+export function unavailableFields(tree: VertexConditionTree): VertexFieldSpec[] {
+  const found: VertexFieldSpec[] = []
+  const walk = (condition: VertexCondition) => {
+    if (condition.kind === 'group') {
+      condition.children.forEach(walk)
+      return
+    }
+    const spec = fieldSpec(condition.field)
+    if (!spec.live && !found.includes(spec)) found.push(spec)
+  }
+  walk(tree.root)
+  return found
+}
 
 export const OPERATOR_LABELS: Record<VertexOperator, string> = {
   equals: '等于', not_equals: '不等于', contains: '包含', not_contains: '不包含', regex: '匹配正则',
@@ -91,7 +111,7 @@ export type SimpleRuleDraft = {
   conditions: Extract<VertexCondition, { kind: 'leaf' }>[]
 }
 
-const SIMPLE_FIELDS: VertexField[] = ['site', 'rss', 'title', 'size', 'category', 'promotion']
+const SIMPLE_FIELDS: VertexField[] = ['site', 'rss', 'title', 'size', 'category']
 const SIMPLE_OPERATORS: VertexOperator[] = ['equals', 'not_equals', 'contains', 'not_contains', 'greater_than', 'greater_or_equal', 'less_than', 'less_or_equal', 'between', 'exists', 'not_exists']
 
 export function isSimpleConditionTree(tree: VertexConditionTree): boolean {

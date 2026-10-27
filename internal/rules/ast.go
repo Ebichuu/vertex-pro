@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -53,6 +54,8 @@ type Node struct {
 	Children []Node   `json:"children,omitempty"`
 	Field    string   `json:"field,omitempty"`
 	Value    *Value   `json:"value,omitempty"`
+	// pattern is the precompiled regex of a regex leaf in a Compiled tree.
+	pattern *regexp.Regexp
 }
 
 type Value struct {

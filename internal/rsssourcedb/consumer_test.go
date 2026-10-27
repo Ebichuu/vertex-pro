@@ -13,7 +13,7 @@ import (
 	"github.com/vertex-pro/vertex-pro/internal/rsssource"
 )
 
-func consumerFeeds(t *testing.T, database *sql.DB) {
+func consumerFeeds(t testing.TB, database *sql.DB) {
 	t.Helper()
 	for _, id := range []string{"a", "b", "baseline"} {
 		if _, err := database.Exec(`INSERT INTO feeds(feed_id,site_id,name,feed_url,enabled,created_at,updated_at) VALUES(?,'site-1',?,?,1,'2026-01-01T00:00:00Z','2026-01-01T00:00:00Z')`, id, id, "https://site.example/"+id); err != nil {

@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/vertex-pro/vertex-pro/internal/racejob"
@@ -27,8 +28,10 @@ type Item struct {
 	Category    string
 	Publisher   string
 	PublishedAt time.Time
-	FeedID      string
-	TorrentBody []byte
+	// DiscoveredAt is when discovery persisted the item; zero if unknown.
+	DiscoveredAt time.Time
+	FeedID       string
+	TorrentBody  []byte
 }
 
 // MatchFactory converts a matched rule into an aggregate match. Target and
@@ -80,14 +83,15 @@ func Process(ctx context.Context, deps Deps, item Item) (Outcome, error) {
 	if now == nil {
 		now = func() time.Time { return time.Now().UTC() }
 	}
-	ruleList, err := deps.Rules.List(ctx, item.Source.SiteID)
+	ruleList, err := deps.Rules.ListCompiled(ctx, item.Source.SiteID)
 	if err != nil {
 		return Outcome{}, fmt.Errorf("list rules: %w", err)
 	}
 	facts := buildFacts(item)
 	outcome := Outcome{}
 	matches := make([]ruleaggregate.Match, 0, len(ruleList))
-	for _, rule := range ruleList {
+	for _, compiled := range ruleList {
+		rule := compiled.Rule
 		state := RuleState{RuleID: rule.ID, RuleName: rule.Name, Revision: rule.Revision}
 		if !rule.Enabled {
 			state.State = rules.FalseState
@@ -95,14 +99,10 @@ func Process(ctx context.Context, deps Deps, item Item) (Outcome, error) {
 			outcome.RuleStates = append(outcome.RuleStates, state)
 			continue
 		}
-		tree, err := ruleservice.ConditionTree(rule.Definition)
-		if err != nil {
-			return Outcome{}, fmt.Errorf("parse rule %s: %w", rule.ID, err)
+		if compiled.Err != nil {
+			return Outcome{}, fmt.Errorf("parse rule %s: %w", rule.ID, compiled.Err)
 		}
-		result, err := rules.Evaluate(tree, facts)
-		if err != nil {
-			return Outcome{}, fmt.Errorf("evaluate rule %s: %w", rule.ID, err)
-		}
+		result := compiled.Condition.Evaluate(facts)
 		state.State = result.State
 		state.ReasonCode = result.Reason.Code
 		state.WasConsidered = true
@@ -178,18 +178,26 @@ func buildFacts(item Item) rules.Facts {
 			facts[field] = rules.Fact{Present: true, Value: rules.Value{Type: rules.StringValue, String: &value}}
 		}
 	}
+	numberFact := func(field string, value float64) {
+		facts[field] = rules.Fact{Present: true, Value: rules.Value{Type: rules.NumberValue, Number: &value}}
+	}
 	stringFact("site", item.Source.SiteID)
 	stringFact("rss", item.FeedID)
 	stringFact("title", item.Source.Title)
 	stringFact("category", item.Category)
 	stringFact("publisher", item.Publisher)
+	stringFact("group", ReleaseGroup(item.Source.Title))
 	if item.Source.SizeBytes != nil {
-		number := float64(*item.Source.SizeBytes)
-		facts["size"] = rules.Fact{Present: true, Value: rules.Value{Type: rules.NumberValue, Number: &number}}
+		numberFact("size", float64(*item.Source.SizeBytes))
 	}
 	if !item.PublishedAt.IsZero() {
 		stamp := item.PublishedAt.UTC().Format(time.RFC3339)
 		facts["published_at"] = rules.Fact{Present: true, Value: rules.Value{Type: rules.TimeValue, Time: &stamp}}
+		if !item.DiscoveredAt.IsZero() {
+			// Seconds from publication to discovery; clock skew never yields
+			// a negative delay.
+			numberFact("discovery_delay", math.Max(0, math.Floor(item.DiscoveredAt.Sub(item.PublishedAt).Seconds())))
+		}
 	}
 	return facts
 }

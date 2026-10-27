@@ -115,7 +115,7 @@ func TestAutomationWorkersRouteTwoInstancesAndSurviveRestart(t *testing.T) {
 					w.WriteHeader(400)
 					return
 				}
-				if r.FormValue("stopped") != "false" || r.FormValue("autoTMM") != "false" || r.FormValue("savepath") != "/managed" || r.FormValue("category") != "fixture-"+id || r.FormValue("tags") != "vertex-fixture" || !bytes.Contains(payload, []byte("target"+id+"-")) {
+				if r.FormValue("stopped") != "false" || r.FormValue("autoTMM") != "false" || r.FormValue("savepath") != "/managed" || r.FormValue("category") != "fixture-"+id || r.FormValue("tags") != "vertex-fixture,vertex-managed,vertex-site-s" || !bytes.Contains(payload, []byte("target"+id+"-")) {
 					invalidAdd++
 				}
 				adds[id]++

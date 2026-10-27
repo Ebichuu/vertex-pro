@@ -1,4 +1,4 @@
-import { VERTEX_RULE_VERSION, type VertexConditionTree } from './model'
+import { unavailableFields, VERTEX_RULE_VERSION, type VertexConditionTree } from './model'
 import { validateSizeConditions } from './size-input'
 
 export type RuleTargetMode = 'FIXED_INSTANCE' | 'INSTANCE_GROUP'
@@ -73,6 +73,11 @@ export function validateRuleDraft(draft: RuleEditorDraft): RuleEditorErrors {
   const errors: RuleEditorErrors = {}
   const sizeError = validateSizeConditions(draft.conditionTree.root)
   if (sizeError) errors.conditions = sizeError
+  const unavailable = unavailableFields(draft.conditionTree)
+  if (!sizeError && unavailable.length > 0) {
+    // The server rejects these too; catch it before the round trip.
+    errors.conditions = `条件使用了暂无数据来源的字段：${unavailable.map((field) => field.label).join('、')}。请删除这些条件后再保存（投递目标的 qB Profile / 存储标签请在投递动作中设置）。`
+  }
   if (!draft.name.trim()) errors.name = '请输入规则名称。'
   if (!Number.isInteger(draft.priority) || draft.priority < 0 || draft.priority > 10_000) errors.priority = '优先级需为 0 到 10000 的整数。'
   if (draft.actions.targetMode === 'FIXED_INSTANCE' && !draft.actions.targetInstanceId) errors.target = '请选择目标 qB。'
